@@ -31,6 +31,8 @@ export interface IPlatformAdapter {
   connect(channelSlug: string): Promise<void>
   disconnect(): Promise<void>
   sendMessage(channelId: string, text: string, replyTo?: string): Promise<void | ChatSendReceipt>
+  /** Opens a sending connection ahead of the first message; adapters that send directly omit it. */
+  prepareSend?(): void
   getBroadcasterUserId?(): number | null
   getRoomState?(): RoomState | undefined
 

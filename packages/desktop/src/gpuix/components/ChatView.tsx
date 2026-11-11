@@ -1155,6 +1155,23 @@ export function ChatView({
       .catch(showSendError)
   }
 
+  function onPrepareSend(): void {
+    const preparing = watchedChannel
+      ? chatAccount
+        ? [
+            backend.api.prepareWatchedChannelSend({
+              id: watchedChannel.id,
+              accountId: chatAccount.id,
+            }),
+          ]
+        : []
+      : [...new Set(allChannels.map((target) => target.platform))].map((platform) =>
+          backend.api.prepareSend({ platform }),
+        )
+    for (const task of preparing)
+      task.catch((error: unknown) => console.warn('[chat] could not prepare sending', error))
+  }
+
   // ── Header data ────────────────────────────────────────────────────────────
 
   const allChannels = useMemo(() => ownChatSendTargets(accounts), [accounts])
@@ -2447,6 +2464,7 @@ export function ChatView({
             onOpenUserCard={setUserCardTarget}
             onSend={onSend}
             onSendWatched={onSendWatched}
+            onPrepareSend={onPrepareSend}
             onClearMessages={clearMessages}
             onCopyMessages={copyMessages}
             onPauseChange={changePause}

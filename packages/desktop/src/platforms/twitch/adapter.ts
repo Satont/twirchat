@@ -234,15 +234,29 @@ export class TwitchAdapter extends BasePlatformAdapter {
     if (!this.isConnected) throw new Error(t('misc.twitchAdapter.notConnected'))
 
     const channel = twitchIrcChannelName(channelId)
-    if (channel === this.channelName && !this.writerRetained) {
-      this.senders.retain(accountId, channel)
-      this.writerRetained = true
-    }
+    if (channel === this.channelName) this.retainWriter(accountId)
     return this.senders.send({ id: accountId, username: login }, channel, text, replyTo, () => {
       if (identityRevision !== this.identityRevision)
         throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
       if (!this.isConnected) throw new Error(t('misc.twitchAdapter.notConnected'))
     })
+  }
+
+  /** Opens the sending connection and joins this chat before the first message. */
+  prepareSend(): void {
+    const { accountId } = this
+    if (this.anonymous || !accountId || !this.login) return
+    this.retainWriter(accountId)
+    runInBackground(
+      this.senders.warm({ id: accountId }, this.channelName),
+      'Could not prepare the Twitch chat connection',
+    )
+  }
+
+  private retainWriter(accountId: string): void {
+    if (this.writerRetained) return
+    this.senders.retain(accountId, this.channelName)
+    this.writerRetained = true
   }
 
   private releaseWriter(): void {

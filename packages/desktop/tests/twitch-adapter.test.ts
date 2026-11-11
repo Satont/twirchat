@@ -472,6 +472,69 @@ describe('Twitch writer and reader', () => {
     }
   })
 
+  test('preparing opens the writer once and the first message reuses it', async () => {
+    const calls: string[] = []
+    const joined = Promise.withResolvers<void>()
+    const closed = Promise.withResolvers<void>()
+    const senders = createTwitchSenderPool({
+      token: async () => 'fixture',
+      refreshToken: async () => 'fixture',
+      acquire: async () => {},
+      outcomeTimeoutMs: 1,
+      createClient: () => ({
+        connect() {
+          calls.push('connect')
+        },
+        quit() {
+          calls.push('quit')
+          closed.resolve()
+        },
+        async join(channel) {
+          calls.push(`join ${channel}`)
+          joined.resolve()
+        },
+        part() {},
+        async say(_channel, text) {
+          calls.push(`say ${text}`)
+        },
+        onConnect: (handler) => queueMicrotask(handler),
+        onDisconnect() {},
+        onAuthenticationFailure() {},
+        onUserState() {},
+        onRejected() {},
+      }),
+    })
+    const { adapter } = readerFixture('viewer', 'another', senders)
+    adapter.prepareSend()
+    adapter.prepareSend()
+    await joined.promise
+    adapter.prepareSend()
+    await adapter.sendMessage('another', 'first')
+    expect(calls).toEqual(['connect', 'join another', 'say first'])
+
+    await adapter.disconnect()
+    await closed.promise
+    expect(calls.at(-1)).toBe('quit')
+  })
+
+  test('an anonymous reader does not open a writer', async () => {
+    let created = 0
+    const senders = createTwitchSenderPool({
+      token: async () => 'fixture',
+      refreshToken: async () => 'fixture',
+      acquire: async () => {},
+      createClient: () => {
+        created++
+        throw new Error('anonymous readers must not connect a writer')
+      },
+    })
+    const { adapter } = readerFixture('viewer', 'another', senders)
+    Object.assign(adapter, { anonymous: true })
+    adapter.prepareSend()
+    await Bun.sleep(0)
+    expect(created).toBe(0)
+  })
+
   test('disconnecting the last reader cancels the wait for a send acknowledgment', async () => {
     const written = Promise.withResolvers<void>()
     const senders = writerFixture(async () => written.resolve())
