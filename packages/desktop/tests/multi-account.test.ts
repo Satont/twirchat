@@ -58,7 +58,7 @@ afterEach(() => {
   getDb().close()
   rmSync(directory, { recursive: true, force: true })
 })
-function save(platform: Platform, id: string, activate = true, expiresAt = 4_000_000_000) {
+function save(platform: Platform, id: string, select = true, expiresAt = 4_000_000_000) {
   AccountStore.upsert({
     id: `${platform}:${id}`,
     platform,
@@ -68,8 +68,8 @@ function save(platform: Platform, id: string, activate = true, expiresAt = 4_000
     accessToken: `token-${id}`,
     refreshToken: `refresh-${id}`,
     expiresAt,
-    activate,
   })
+  if (select) AccountStore.setActive(platform, `${platform}:${id}`)
   return required(AccountStore.findById(`${platform}:${id}`))
 }
 function gate<T>() {
@@ -244,16 +244,29 @@ describe('saved and active accounts', () => {
     ).toBe(raw)
   })
 
-  test('anonymous remains anonymous after restart, token refresh and saving another inactive identity', () => {
+  test('anonymous remains anonymous after restart and token refresh', () => {
     const first = save('twitch', '1')
     AccountStore.setActive('twitch', null)
     AccountStore.updateTokens(first.id, 'refreshed-old-user')
-    save('twitch', '2', false)
     getDb().close()
     initDb(path)
     expect(AccountStore.findByPlatform('twitch')).toBeNull()
-    expect(AccountStore.findAllSaved()).toHaveLength(2)
     expect(AccountStore.getTokens(first.id)?.accessToken).toBe('refreshed-old-user')
+  })
+
+  test('adding another identity keeps the current selection and only fills an empty one', () => {
+    const first = save('twitch', '1', false)
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(first.id)
+    const second = save('twitch', '2', false)
+    save('twitch', '2', false)
+    getDb().close()
+    initDb(path)
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(first.id)
+    expect(AccountStore.getTokens(second.id)?.accessToken).toBe('token-2')
+
+    AccountStore.setActive('twitch', null)
+    const third = save('twitch', '3', false)
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(third.id)
   })
 
   test('migrates legacy rows once, deterministically, without touching credential bytes', () => {

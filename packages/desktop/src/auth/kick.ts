@@ -186,7 +186,6 @@ export async function handleKickCallback(url: URL): Promise<{
   const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
 
   AccountStore.upsert({
-    activate: true,
     accessToken: tokens.accessToken,
     avatarUrl: user.profile_picture,
     displayName: user.name,
