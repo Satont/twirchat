@@ -1,7 +1,13 @@
+import { SettingsSectionContext } from '@gpuix/components/settings/SettingsLayout'
 import { useT } from '@gpuix/i18n'
+import type { StyleDesc } from '@gpuix/native/host'
+import { highlightParts } from '@gpuix/settings-highlight'
 import { useFont, useTheme } from '@gpuix/theme-context'
+import { formatMessageTime } from '@gpuix/timestamp-format'
 import type { TimestampFormat } from '@twirchat/shared/types'
-import type { ReactNode } from 'react'
+import { useContext, useMemo, type ReactNode } from 'react'
+
+const SAMPLE_TIME = new Date(2026, 0, 1, 21, 41, 2, 123)
 
 interface TimestampFormatOption {
   readonly value: TimestampFormat
@@ -26,9 +32,24 @@ interface ChatTimestampFormatSettingsProps {
 interface TimestampSettingsRowProps {
   first?: boolean
   last?: boolean
-  center?: boolean
+  centerControl?: boolean
+  label: string
+  hint?: string
   testId?: string
   children: ReactNode
+}
+
+interface HighlightedTextProps {
+  text: string
+  query: string
+  textStyle: StyleDesc
+  highlightColor: string
+}
+
+interface KeyedHighlightPart {
+  readonly text: string
+  readonly highlighted: boolean
+  readonly key: number
 }
 
 interface TimestampSwitchProps {
@@ -43,22 +64,53 @@ interface TimestampFormatToggleProps {
   onChange: (value: TimestampFormat) => void
 }
 
+function HighlightedText({ text, query, textStyle, highlightColor }: HighlightedTextProps) {
+  const parts = useMemo(() => {
+    const keyed: KeyedHighlightPart[] = []
+    let offset = 0
+    for (const part of highlightParts(text, query)) {
+      keyed.push({ ...part, key: offset })
+      offset += part.text.length
+    }
+    return keyed
+  }, [text, query])
+  if (!parts.some((part) => part.highlighted)) {
+    return <div style={textStyle}>{text}</div>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', ...textStyle }}>
+      {parts.map((part) => (
+        <div
+          key={part.key}
+          style={part.highlighted ? { ...textStyle, color: highlightColor } : textStyle}
+        >
+          {part.text}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function TimestampSettingsRow({
   first,
   last,
-  center,
+  centerControl,
+  label,
+  hint,
   testId,
   children,
 }: TimestampSettingsRowProps) {
   const theme = useTheme()
+  const font = useFont()
+  const { narrow, query } = useContext(SettingsSectionContext)
   return (
     <div
       testId={testId}
       style={{
         display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: center ? 'center' : 'flex-end',
+        flexDirection: narrow ? 'column' : 'row',
+        alignItems: narrow ? 'stretch' : 'center',
+        justifyContent: 'space-between',
         gap: 16,
         paddingTop: first ? 0 : 12,
         paddingBottom: last ? 0 : 10,
@@ -66,7 +118,43 @@ function TimestampSettingsRow({
         borderColor: theme.border,
       }}
     >
-      {children}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          minWidth: 0,
+          ...(narrow ? {} : { flexBasis: 220, flexShrink: 0 }),
+        }}
+      >
+        <HighlightedText
+          text={label}
+          query={query}
+          highlightColor={theme.link}
+          textStyle={{ fontFamily: font, fontSize: 14, fontWeight: 500, color: theme.text }}
+        />
+        {hint ? (
+          <HighlightedText
+            text={hint}
+            query={query}
+            highlightColor={theme.link}
+            textStyle={{ fontFamily: font, fontSize: 11, fontWeight: 400, color: theme.text2 }}
+          />
+        ) : null}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: centerControl ? 'center' : 'flex-end',
+          flexGrow: centerControl ? 1 : 0,
+          flexShrink: 1,
+          minWidth: 0,
+        }}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -211,17 +299,28 @@ export function ChatTimestampFormatSettings({
   onTimestampFormatChange,
 }: ChatTimestampFormatSettingsProps) {
   const { t } = useT()
+  const example = formatMessageTime(SAMPLE_TIME, timestampFormat)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <TimestampSettingsRow first>
+      <TimestampSettingsRow
+        first
+        label={t('settings.chat.showTimestamp')}
+        hint={t('settings.chat.showTimestampHint')}
+      >
         <TimestampSwitch
           checked={showTimestamp}
           label={t('settings.chat.showTimestamp')}
           onChange={onShowTimestampChange}
         />
       </TimestampSettingsRow>
-      <TimestampSettingsRow last center testId="timestamp-format-row">
+      <TimestampSettingsRow
+        last
+        centerControl
+        testId="timestamp-format-row"
+        label={t('settings.chat.timestampFormat')}
+        hint={t('settings.chat.timestampFormatHint', { example })}
+      >
         <TimestampFormatToggle
           label={t('settings.chat.timestampFormat')}
           value={timestampFormat}
