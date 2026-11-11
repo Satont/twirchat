@@ -1,6 +1,6 @@
 /**
  * Moderation drag rail — port of MessageModerationRail.vue.
- * Grab the 16px strip on the message's left edge and drag right:
+ * Grab the 14px strip on the message's left edge and drag right:
  * ≥32px delete, then timeout presets every 42px, then ban.
  * GPUIX pointer capture (onMouseDown + onMouseMove) keeps the gesture alive
  * after the pointer leaves the rail.
@@ -13,19 +13,37 @@ import {
   moderationActionForDrag,
   type ModerationDragAction,
 } from '../../views/main/utils/moderation-drag'
+import { createDragMotion, useDragCancellation } from '../hooks/use-drag-motion'
 import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Text } from './ui/Text'
 
 const MAX_DISTANCE = 420
 
+interface RailDrag {
+  startX: number
+  motion: ReturnType<typeof createDragMotion>
+}
+
+function dragDistance(startX: number, x: number | undefined): number {
+  return Math.min(MAX_DISTANCE, Math.max(0, (x ?? startX) - startX))
+}
+
+/** Mounted only during a drag, so idle rows hold no window-activity subscription. */
+function RailDragCancellation({ onCancel }: { onCancel: () => void }) {
+  useDragCancellation(true, 'moderation-rail', onCancel)
+  return null
+}
+
 export function MessageModerationRail({
   platform,
+  messageDeleted,
   disabled,
   rowHovered,
   onModerate,
 }: {
   platform: 'twitch' | 'kick'
+  messageDeleted?: boolean
   disabled?: boolean
   /** The grip only shows while its message row is hovered. */
   rowHovered: boolean
@@ -33,11 +51,19 @@ export function MessageModerationRail({
 }) {
   const theme = useTheme()
   const [hovered, setHovered] = useState(false)
-  const [distance, setDistance] = useState(0)
-  const dragStartX = useRef<number | null>(null)
+  // null while idle; the drag preview is painted from this coalesced value.
+  const [distance, setDistance] = useState<number | null>(null)
+  const drag = useRef<RailDrag | null>(null)
 
-  const preview = moderationActionForDrag(platform, distance)
+  const preview =
+    distance === null ? null : moderationActionForDrag(platform, distance, { messageDeleted })
   const color = moderationActionColor(preview?.action ?? null)
+
+  const cancel = () => {
+    drag.current?.motion.cancel()
+    drag.current = null
+    setDistance(null)
+  }
 
   return (
     <div
@@ -45,18 +71,33 @@ export function MessageModerationRail({
       onMouseLeave={() => setHovered(false)}
       onMouseDown={(event) => {
         if (disabled || event.button !== 0) return
-        dragStartX.current = event.x ?? 0
+        cancel()
+        const startX = event.x ?? 0
+        drag.current = {
+          startX,
+          motion: createDragMotion(({ x }) => setDistance(dragDistance(startX, x))),
+        }
         setDistance(0)
       }}
       onMouseMove={(event) => {
-        if (dragStartX.current === null) return
-        setDistance(Math.min(MAX_DISTANCE, Math.max(0, (event.x ?? 0) - dragStartX.current)))
+        const current = drag.current
+        if (!current) return
+        // A release we never saw (outside the window) must not leave the gesture armed.
+        if (event.pressedButton !== 0 || disabled) {
+          cancel()
+          return
+        }
+        current.motion.schedule({ x: event.x ?? current.startX, y: event.y ?? 0 })
       }}
-      onMouseUp={() => {
-        if (dragStartX.current === null) return
-        dragStartX.current = null
-        setDistance(0)
-        if (preview) onModerate(preview)
+      onMouseUp={(event) => {
+        const current = drag.current
+        if (event.button !== 0 || !current) return
+        // Commit what the pointer points at now, not the last coalesced frame.
+        const action = moderationActionForDrag(platform, dragDistance(current.startX, event.x), {
+          messageDeleted,
+        })
+        cancel()
+        if (action) onModerate(action)
       }}
       style={{
         position: 'absolute',
@@ -68,8 +109,11 @@ export function MessageModerationRail({
         userSelect: 'none',
       }}
     >
+      {distance !== null ? <RailDragCancellation onCancel={cancel} /> : null}
       {/* Grip line — painted transparent (not unmounted) outside row hover,
-          so the hitbox stays put and GPUI sees no mount churn. */}
+          so GPUI sees no mount churn. A painted child takes the hit test from
+          its parent, so it must not catch the pointer or the rail's middle
+          goes dead. */}
       <div
         style={{
           position: 'absolute',
@@ -79,21 +123,22 @@ export function MessageModerationRail({
           width: 3,
           borderRadius: 2,
           backgroundColor:
-            dragStartX.current !== null || hovered
+            distance !== null || hovered
               ? theme.text2
               : rowHovered
                 ? withAlpha(theme.text2, 0.35)
                 : 'transparent',
+          pointerEvents: 'none',
         }}
       />
-      {distance > 0 ? (
+      {distance !== null && distance > 0 ? (
         <div
           style={{
             position: 'absolute',
             left: 0,
             top: 0,
             bottom: 0,
-            width: Math.min(distance, MAX_DISTANCE),
+            width: distance,
             backgroundColor: withAlpha(color, 0.18),
             borderLeftWidth: 3,
             borderColor: color,

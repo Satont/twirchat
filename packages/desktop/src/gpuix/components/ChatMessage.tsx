@@ -630,6 +630,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       <MessageModerationRail
         disabled={props.moderationPending}
         platform={message.platform}
+        messageDeleted={isTombstone}
         rowHovered={hovered}
         onModerate={(action) => props.onModerate?.(message, action)}
       />

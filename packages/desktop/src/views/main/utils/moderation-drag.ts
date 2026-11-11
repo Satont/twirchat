@@ -11,14 +11,22 @@ export type ModerationDragAction =
   | { action: 'timeout'; durationSeconds: number; label: string }
   | { action: 'ban'; label: string }
 
+export interface ModerationDragTarget {
+  /** A deleted message cannot be deleted again; its delete zone stays inert. */
+  messageDeleted?: boolean
+}
+
 export function moderationActionForDrag(
   platform: ModerationPlatform,
   distance: number,
+  target: ModerationDragTarget = {},
 ): ModerationDragAction | null {
   const clampedDistance = Math.max(0, distance)
   if (clampedDistance < activationDistance) return null
   if (clampedDistance < deleteDistance) {
-    return { action: 'delete_message', label: t('commands.moderation.delete') }
+    return target.messageDeleted
+      ? null
+      : { action: 'delete_message', label: t('commands.moderation.delete') }
   }
 
   // Kick caps timeouts at seven days; Twitch accepts a larger maximum. All
