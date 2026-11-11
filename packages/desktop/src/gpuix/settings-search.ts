@@ -138,6 +138,7 @@ export type SettingsSectionId =
   | 'updates'
   | 'notifications'
   | 'timestamps'
+  | 'replies'
   | 'rules'
   | 'history'
   | 'image-uploader'
@@ -177,6 +178,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'timestamp time clock format seconds milliseconds 12-hour 24-hour AM PM showTimestamp timestampFormat HH:MM:SS HH:MM HH:MM:SS.sss hh:MM A hh:MM:SS A время часы минуты секунды формат отображать сообщения',
+  },
+  {
+    id: 'replies',
+    category: 'chat',
+    title: 'Replies',
+    saveMode: 'section',
+    keywords:
+      'reply replies double click double-click mouse message answer thread replyOnDoubleClick ответ ответить двойной клик дабл клик мышь сообщение',
   },
   {
     id: 'similarity',

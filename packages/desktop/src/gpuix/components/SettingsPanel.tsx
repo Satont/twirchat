@@ -96,6 +96,7 @@ type AppSettingsSectionId = Extract<
   | 'appearance'
   | 'updates'
   | 'timestamps'
+  | 'replies'
   | 'self-ping'
   | 'overlay'
   | 'shortcuts'
@@ -110,6 +111,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'appearance',
   'updates',
   'timestamps',
+  'replies',
   'self-ping',
   'overlay',
   'shortcuts',
@@ -140,6 +142,8 @@ function appSectionFields(
         showTimestamp: source.showTimestamp,
         timestampFormat: source.timestampFormat,
       }
+    case 'replies':
+      return { replyOnDoubleClick: source.replyOnDoubleClick }
     case 'self-ping':
       return { selfPing: { ...source.selfPing } }
     case 'overlay':
@@ -1034,6 +1038,29 @@ export function SettingsPanel() {
                       }
                     />
                     {appFooter('timestamps')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="replies"
+                    title={t('settings.section.replies')}
+                    desc={t('settings.section.replies.desc')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.chat.replyOnDoubleClick')}
+                      hint={t('settings.chat.replyOnDoubleClickHint')}
+                    >
+                      <Switch
+                        testId="settings-reply-on-double-click"
+                        checked={local.replyOnDoubleClick}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.replyOnDoubleClick = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('replies')}
                   </SettingsSection>
                   <SettingsSection
                     id="pause"

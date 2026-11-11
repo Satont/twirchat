@@ -2346,6 +2346,7 @@ export function ChatView({
                     moderationOutcome={outcome}
                     onOpenUserCard={setUserCardTarget}
                     onReply={replyFromRow}
+                    replyOnDoubleClick={settings?.replyOnDoubleClick}
                     onOpenThread={showThread}
                     onSearch={openSearch}
                     canModerate={

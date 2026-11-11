@@ -15,6 +15,7 @@ import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { claimMessageRowClick } from '../message-row-click'
 import { buildMessageTokens, mergePlainText } from '../message-tokens'
 import { accountsStore, authorEmoteStore, emoteStore } from '../state/app'
 import { chatPauseStore } from '../state/chat-pause'
@@ -181,6 +182,7 @@ export const MessageTokens = memo(function MessageTokens({
           key={index}
           tabIndex={0}
           onClick={(event) => {
+            claimMessageRowClick(event)
             if (
               event.button === 2 ||
               event.isRightClick ||

@@ -8,6 +8,7 @@
  * because parent `hover` styles do not reach children.
  */
 
+import type { EventPayload } from '@gpuix/react'
 import type {
   Account,
   NormalizedChatMessage,
@@ -31,6 +32,7 @@ import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
 import { t, tPlural, useLanguage } from '../i18n'
 import { icons } from '../icons'
+import { claimMessageRowClick, isMessageRowDoubleClick } from '../message-row-click'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
@@ -281,7 +283,14 @@ function ReplyPreview({
       role={open ? 'button' : undefined}
       aria-label={open ? t('chat.thread.open') : undefined}
       tabIndex={open ? 0 : undefined}
-      onClick={open ? () => open(message) : undefined}
+      onClick={
+        open
+          ? (event) => {
+              claimMessageRowClick(event)
+              open(message)
+            }
+          : undefined
+      }
       onKeyDown={
         open
           ? (event) => {
@@ -372,7 +381,10 @@ function ActionButton({
       testId={testId}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
-      onClick={onClick}
+      onClick={(event) => {
+        claimMessageRowClick(event)
+        onClick()
+      }}
       style={{
         borderRadius: 4,
         padding: 3,
@@ -500,6 +512,8 @@ export interface ChatMessageProps {
   renderModerationRail?: (rowHovered: boolean) => import('react').ReactNode
   onOpenUserCard?: (target: UserCardTarget) => void
   onReply?: (message: NormalizedChatMessage) => void
+  /** A primary double-click on the row calls `onReply`. */
+  replyOnDoubleClick?: boolean
   onOpenThread?: (message: NormalizedChatMessage) => void
   hideReplyPreview?: boolean
   onSearch?: (query: string) => void
@@ -662,6 +676,14 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       badges: message.author.badges,
     })
   }
+
+  const onReply = props.onReply
+  const replyOnRowDoubleClick =
+    props.replyOnDoubleClick && onReply && !isTombstone
+      ? (event: EventPayload) => {
+          if (isMessageRowDoubleClick(event)) onReply(message)
+        }
+      : undefined
 
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
@@ -841,6 +863,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
           }
         }}
+        onClick={replyOnRowDoubleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
@@ -1008,6 +1031,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
         }
       }}
+      onClick={replyOnRowDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

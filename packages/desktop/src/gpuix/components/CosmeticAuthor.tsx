@@ -3,6 +3,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import type { CosmeticPaint, UserCosmetics } from '../../services/cosmetics'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
 import { t } from '../i18n'
+import { claimMessageRowClick } from '../message-row-click'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
 import { useFont } from '../theme-context'
@@ -46,7 +47,10 @@ export function CosmeticAuthorName({
       role="button"
       aria-label={t('misc.userCard.openFor', { name })}
       tabIndex={0}
-      onClick={onClick}
+      onClick={(event) => {
+        claimMessageRowClick(event)
+        onClick()
+      }}
       onKeyDown={(event) => {
         if (event.key === 'enter' || event.key === 'space') {
           event.preventDefault()
