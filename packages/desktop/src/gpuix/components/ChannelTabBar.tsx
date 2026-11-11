@@ -358,6 +358,16 @@ function ChannelTabs({
                 action(() => reorderChatTab(backend, current.id, targetIndex))
             },
           }
+        // Browser-style middle-click closes the tab without selecting it.
+        // GPUIX does not always populate `button` for aux clicks, so an
+        // auxiliary click that is not a right click is the middle button.
+        const onAuxClick: Props['onAuxClick'] = (event) => {
+          if (event.isRightClick || (event.button !== undefined && event.button !== 1) || locked)
+            return
+          cancelDrag()
+          setMenuId(null)
+          onRemoveChannel(channel.id)
+        }
         return (
           <div
             key={channel.id}
@@ -390,6 +400,7 @@ function ChannelTabs({
             <Tab
               testId={`tab-${channel.id}`}
               interaction={interaction}
+              onAuxClick={onAuxClick}
               label={label}
               active={active}
               activeColor={color}
@@ -619,6 +630,7 @@ function Tab({
   onClick,
   testId,
   interaction,
+  onAuxClick,
 }: {
   label: string
   icon?: ReactNode
@@ -629,6 +641,7 @@ function Tab({
   onClick: () => void
   testId?: string
   interaction?: Pick<Props, 'onKeyDown' | 'onMouseDown' | 'onMouseMove' | 'onMouseUp'>
+  onAuxClick?: Props['onAuxClick']
 }) {
   const theme = useTheme()
   const [hovered, setHovered] = useState(false)
@@ -636,6 +649,7 @@ function Tab({
     <div
       testId={testId}
       {...interaction}
+      onAuxClick={onAuxClick}
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(event) => {

@@ -327,6 +327,19 @@ try {
   await until(() => app.activeWatchedTabStore.get() !== 'home', 'native shortcut creates empty tab')
   const emptyTab = app.activeWatchedTabStore.get()
   assert.equal(allPanels(layoutStore.get().get(emptyTab)?.layout ?? null)[0]?.content.type, 'empty')
+  await click('tab-home')
+  await until(() => app.activeWatchedTabStore.get() === 'home', 'home tab selected')
+  const emptyTabNode = find(main, `tab-${emptyTab}`)
+  assert.ok(emptyTabNode, 'empty tab is painted')
+  const emptyTabBounds = main.getElementBounds(emptyTabNode.id)
+  assert.ok(emptyTabBounds, 'empty tab has painted bounds')
+  main.simulateClick(
+    emptyTabBounds.x + emptyTabBounds.width / 2,
+    emptyTabBounds.y + emptyTabBounds.height / 2,
+    1,
+  )
+  await until(() => !app.tabChannelIdsStore.get().includes(emptyTab), 'middle click closes the tab')
+  assert.equal(app.activeWatchedTabStore.get(), 'home', 'middle click does not select the tab')
   await action('window', 'openSettings')
   await until(
     () => app.activeTabStore.get() === 'settings' && !!find(main, 'settings-search'),
