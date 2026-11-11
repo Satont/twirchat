@@ -672,6 +672,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       displayName: message.author.displayName,
       username: message.author.username,
       avatarUrl: avatarUrlFor(message),
+      color: message.author.color,
       currentAlias: props.alias,
       badges: message.author.badges,
     })

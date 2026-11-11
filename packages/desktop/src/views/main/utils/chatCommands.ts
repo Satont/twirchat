@@ -9,6 +9,7 @@ export interface UserCardTarget {
   displayName: string
   username?: string
   avatarUrl?: string
+  color?: string
   currentAlias?: string
   badges?: Badge[]
 }
@@ -74,6 +75,7 @@ export function resolveUserCardCommand(
       displayName: msg.author.displayName,
       username: msg.author.username,
       avatarUrl: msg.author.avatarUrl,
+      color: msg.author.color,
       currentAlias: getAlias(aliasMap, msg.platform, msg.author.id),
     })
   }

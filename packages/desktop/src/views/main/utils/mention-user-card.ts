@@ -18,7 +18,10 @@ function normalizeUsername(username: string): string {
 
 function mentionedAuthor(
   author:
-    | Pick<NormalizedChatMessage['author'], 'id' | 'username' | 'displayName' | 'avatarUrl'>
+    | Pick<
+        NormalizedChatMessage['author'],
+        'id' | 'username' | 'displayName' | 'avatarUrl' | 'color'
+      >
     | undefined,
   username: string,
 ): MentionUser | undefined {
@@ -28,6 +31,7 @@ function mentionedAuthor(
         username: author.username,
         displayName: author.displayName,
         avatarUrl: author.avatarUrl,
+        color: author.color,
       }
     : undefined
 }
