@@ -40,6 +40,8 @@ export const chatMessages = {
   'chatMessages.notice.cheerGift': 'Cheer gift',
   'chatMessages.notice.cheer': 'Cheer',
   'chatMessages.notice.moderation': 'Moderation',
+  'chatMessages.notice.modiversary': 'Moderator anniversary',
+  'chatMessages.notice.watchStreak': 'Watch streak',
 
   'chatMessages.autoMod.submitting': 'Submitting…',
   'chatMessages.autoMod.reason.category':

@@ -38,7 +38,16 @@ export interface Emote {
 // ============================================================
 
 export interface TwitchChatNotice {
-  kind: 'sub' | 'resub' | 'gift_sub' | 'community_gift' | 'raid' | 'reward_gift' | 'moderation'
+  kind:
+    | 'sub'
+    | 'resub'
+    | 'gift_sub'
+    | 'community_gift'
+    | 'raid'
+    | 'reward_gift'
+    | 'moderation'
+    | 'modiversary'
+    | 'watch_streak'
   detail?: string
 }
 

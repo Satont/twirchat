@@ -7,9 +7,11 @@ interface TwitchSystemMessageInput {
   text: string
   notice: TwitchChatNotice
   author?: Omit<NormalizedChatMessage['author'], 'badges'>
+  sharedChat?: NonNullable<NormalizedChatMessage['metadata']>['sharedChat']
 }
 
 export function buildTwitchSystemMessage(input: TwitchSystemMessageInput): NormalizedChatMessage {
+  const kind = input.notice.kind
   return {
     id: `twitch:notice:${input.id || crypto.randomUUID()}`,
     channelId: input.channelId.replace(/^#/, '').toLowerCase(),
@@ -24,7 +26,13 @@ export function buildTwitchSystemMessage(input: TwitchSystemMessageInput): Norma
     emotes: [],
     metadata: {
       twitchNotice: input.notice,
-      flags: input.notice.kind === 'moderation' ? { moderation_action: true } : undefined,
+      flags:
+        kind === 'moderation'
+          ? { moderation_action: true }
+          : kind === 'watch_streak'
+            ? { watch_streak: true }
+            : undefined,
+      ...(input.sharedChat ? { sharedChat: input.sharedChat } : {}),
     },
   }
 }

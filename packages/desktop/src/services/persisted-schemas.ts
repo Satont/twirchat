@@ -127,6 +127,8 @@ export const normalizedChatMessageSchema = z.toZod<NormalizedChatMessage>()(
               'raid',
               'reward_gift',
               'moderation',
+              'modiversary',
+              'watch_streak',
             ]),
             detail: z.string().optional(),
           })

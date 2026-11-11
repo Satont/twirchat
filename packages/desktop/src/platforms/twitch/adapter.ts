@@ -13,14 +13,8 @@ import { logger } from '@twirchat/shared/logger'
  */
 import type { Badge, ChatSendReceipt, NormalizedEvent } from '@twirchat/shared/types'
 import { StaticAuthProvider } from '@twurple/auth'
-import { ChatClient, RoomState as TwitchRoomState } from '@twurple/chat'
-import type {
-  ChatMessage,
-  ChatRaidInfo,
-  ChatSubGiftInfo,
-  ChatSubInfo,
-  UserNotice,
-} from '@twurple/chat'
+import { ChatClient, RoomState as TwitchRoomState, UserNotice } from '@twurple/chat'
+import type { ChatMessage, ChatRaidInfo, ChatSubGiftInfo, ChatSubInfo } from '@twurple/chat'
 import { LogLevel } from '@twurple/chat'
 
 import { refreshTwitchToken } from '../../auth/twitch'
@@ -454,6 +448,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
         notice: { kind: 'reward_gift' },
       })
     })
+    client.irc.onTypedMessage(UserNotice, (msg) => {
+      if (!current()) return
+      this.handleMilestoneNotice(msg)
+    })
 
     // Raids
     client.onRaid((channel, user, raidInfo, msg) => {
@@ -690,6 +688,53 @@ export class TwitchAdapter extends BasePlatformAdapter {
         id: msg.tags.get('id'),
         timestamp: msg.date,
         text: msg.tags.get('system-msg')?.trim() || input.text,
+      }),
+    )
+  }
+
+  private handleMilestoneNotice(msg: UserNotice): void {
+    const { tags } = msg
+    const noticeId = tags.get('msg-id')
+    const shared = noticeId === 'sharedchatnotice'
+    const modiversary = (shared ? tags.get('source-msg-id') : noticeId) === 'modiversary'
+    const watchStreak =
+      noticeId === 'viewermilestone' && tags.get('msg-param-category') === 'watch-streak'
+    if (!modiversary && !watchStreak) return
+
+    const username = tags.get('login')
+    const name = tags.get('display-name') || username || t('misc.twitchAdapter.someone')
+    const count = Number(tags.get(modiversary ? 'msg-param-months' : 'msg-param-value'))
+    const hasCount = Number.isSafeInteger(count) && count > 0
+    let text: string
+    if (modiversary) {
+      text = hasCount
+        ? t('misc.twitchAdapter.modiversary', {
+            name,
+            months: tPlural('misc.twitchAdapter.months', count),
+          })
+        : t('misc.twitchAdapter.modiversaryUnknown', { name })
+    } else {
+      text = hasCount
+        ? tPlural('misc.twitchAdapter.watchStreak', count, { name })
+        : t('misc.twitchAdapter.watchStreakUnknown', { name })
+    }
+
+    const sourceChannelId = shared ? tags.get('source-room-id') : undefined
+    this.emit(
+      'notice',
+      buildTwitchSystemMessage({
+        channelId: msg.channel,
+        id: msg.id,
+        timestamp: msg.date,
+        author: { id: tags.get('user-id') ?? '', username, displayName: name },
+        text,
+        notice: {
+          kind: modiversary ? 'modiversary' : 'watch_streak',
+          detail: msg.text || undefined,
+        },
+        sharedChat: sourceChannelId
+          ? { sourceChannelId, sourceMessageId: tags.get('source-id') }
+          : undefined,
       }),
     )
   }
