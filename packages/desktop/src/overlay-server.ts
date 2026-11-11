@@ -98,25 +98,30 @@ export function pushOverlayPluginMessage(
   msg: PluginTransportMessage,
 ): void {
   if (!clients.size || msg.historical) return
-  broadcastOverlayChat({
-    message: {
-      id: `${channel.id}:${msg.id}`,
-      platform: channel.platform,
-      channelId: channel.channelSlug,
-      author: {
-        id: msg.author.id,
-        username: msg.author.username,
-        displayName: msg.author.name,
-        color: msg.author.color,
-        badges: [],
-      },
-      text: msg.text,
-      emotes: [],
-      timestamp: new Date(msg.timestamp ?? Date.now()),
-      type: 'message',
+  const message: OverlayChatPayload['message'] = {
+    id: `${channel.id}:${msg.id}`,
+    platform: channel.platform,
+    channelId: channel.channelSlug,
+    author: {
+      id: msg.author.id,
+      username: msg.author.username,
+      displayName: msg.author.name,
+      color: msg.author.color,
+      badges: [],
     },
-    parts: [{ type: 'text', content: msg.text }],
-  })
+    text: msg.text,
+    emotes: [],
+    timestamp: new Date(msg.timestamp ?? Date.now()),
+    type: 'message',
+  }
+  if (msg.emotes?.length) {
+    const backendUrl = getBackendUrl()
+    message.emotes = msg.emotes.map((emote) => ({
+      ...emote,
+      imageUrl: proxiedProviderImage(emote.imageUrl, backendUrl),
+    }))
+  }
+  broadcastOverlayChat({ message, parts: buildMessageParts(message) })
 }
 
 function broadcastOverlayChat(data: OverlayChatPayload): void {

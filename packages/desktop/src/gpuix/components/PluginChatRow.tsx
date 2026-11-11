@@ -2,10 +2,12 @@ import { DEFAULT_SETTINGS, type TimestampFormat } from '@twirchat/shared/types'
 import { memo, type ReactNode } from 'react'
 
 import { chunkGraphemes, sanitizeDisplayText } from '../../views/shared/utils/display-text'
+import { buildMessageParts } from '../../views/shared/utils/messageParts'
 import type { PluginChannelMessage } from '../../watched-channels/plugin-channels'
 import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
+import { EmoteArtwork } from './ui/EmoteArtwork'
 
 interface PluginChatRowProps {
   message: PluginChannelMessage
@@ -53,20 +55,38 @@ export const PluginChatRow = memo(function PluginChatRow({
   }
   const testId = `plugin-chat-message-${message.id.toWellFormed()}`
   const style = { fontSize, fontFamily, color: textColor, lineHeight: Math.round(fontSize * 1.45) }
-  const text = sanitizeDisplayText(message.text).trimStart()
-  const words = text.match(/\S+ ?/g) ?? []
+  const parts = buildMessageParts({ text: message.text, emotes: message.emotes ?? [] }, 'all')
   const runs: ReactNode[] = []
-  let position = 0
-  for (const word of words) {
-    const parts =
-      word.length > MAX_WORD_GRAPHEMES ? chunkGraphemes(word, MAX_WORD_GRAPHEMES) : [word]
-    for (const part of parts) {
+  const emoteHeight = Math.round(fontSize * 2)
+  for (const [index, part] of parts.entries()) {
+    const emote = part.emote
+    if (emote) {
+      const width = Math.max(1, Math.round(emoteHeight * Math.min(3, emote.aspectRatio ?? 1)))
+      const marginRight = /^\s/u.test(parts[index + 1]?.content ?? '') ? 4 : 0
       runs.push(
-        <text key={position} style={style}>
-          {part}
-        </text>,
+        <div key={runs.length} style={{ marginRight, flexShrink: 0 }}>
+          <EmoteArtwork
+            url={emote.imageUrl}
+            width={width}
+            height={emoteHeight}
+            fallback={<text style={style}>{sanitizeDisplayText(part.alias ?? emote.name)}</text>}
+          />
+        </div>,
       )
-      position += part.length
+      continue
+    }
+
+    const words = sanitizeDisplayText(part.content ?? '').match(/\S+ ?/g) ?? []
+    for (const word of words) {
+      const chunks =
+        word.length > MAX_WORD_GRAPHEMES ? chunkGraphemes(word, MAX_WORD_GRAPHEMES) : [word]
+      for (const chunk of chunks) {
+        runs.push(
+          <text key={runs.length} style={style}>
+            {chunk}
+          </text>,
+        )
+      }
     }
   }
 

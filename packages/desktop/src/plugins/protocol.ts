@@ -4,6 +4,7 @@ import type {
   PluginChannel,
   PluginCommandContext,
   PluginEventMap,
+  PluginTransportEmote,
   PluginTransportMessage,
   PluginTransportStatus,
 } from './api'
@@ -26,6 +27,7 @@ export const transportIdSchema = z.string().regex(/^[a-z][a-z\d-]{0,31}$/u)
 const id = z.string().min(1).max(256)
 const name = z.string().trim().min(1).max(256)
 const text = z.string().max(16_384)
+const MAX_EMOTE_POSITIONS = 64
 const timestamp = z.number().min(0).max(8.64e15)
 const requestId = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
 const failure = z.string().min(1).max(1000)
@@ -56,13 +58,46 @@ export const transportStatusSchema = z.object({
   status,
   error: failure.optional(),
 }) satisfies z.ZodType<PluginTransportStatus>
-export const transportMessageSchema = z.object({
+const transportEmoteSchema = z.object({
   id,
-  author,
-  text: text.min(1),
-  timestamp: timestamp.optional(),
-  historical: z.boolean().optional(),
-}) satisfies z.ZodType<PluginTransportMessage>
+  name,
+  imageUrl: z
+    .string()
+    .max(2048)
+    .refine((value) => {
+      const url = URL.parse(value)
+      return (
+        value.startsWith('https://') && url?.protocol === 'https:' && !url.username && !url.password
+      )
+    }),
+  positions: z
+    .array(z.object({ start: z.number().int().nonnegative(), end: z.number().int().nonnegative() }))
+    .min(1)
+    .max(MAX_EMOTE_POSITIONS),
+  aspectRatio: z.number().positive().optional(),
+}) satisfies z.ZodType<PluginTransportEmote>
+export const transportMessageSchema = z
+  .object({
+    id,
+    author,
+    text: text.min(1),
+    emotes: z.array(transportEmoteSchema).max(MAX_EMOTE_POSITIONS).optional(),
+    timestamp: timestamp.optional(),
+    historical: z.boolean().optional(),
+  })
+  .refine(
+    ({ text, emotes }) => {
+      if (!emotes) return true
+      let count = 0
+      for (const { positions } of emotes) {
+        count += positions.length
+        if (count > MAX_EMOTE_POSITIONS) return false
+        if (positions.some(({ start, end }) => start > end || end >= text.length)) return false
+      }
+      return true
+    },
+    { path: ['emotes'], message: 'Invalid emote positions.' },
+  ) satisfies z.ZodType<PluginTransportMessage>
 export const eventNameSchema = z.enum([
   'message',
   'channelStatus',

@@ -6,13 +6,27 @@ import { createStreamxTransport } from '../../../plugins/streamx'
 import type { PluginTransportMessage, PluginTransportStatus } from '../src/plugins/api'
 import { transportMessageSchema } from '../src/plugins/protocol'
 
-function message(id: string, words: string[], seconds: string, senderColor?: string) {
+const image = {
+  id: '7tv-emote',
+  name: 'KEKW',
+  url: '//cdn.7tv.app/emote/7tv-emote/1x.webp',
+  width: 56,
+  height: 28,
+}
+const emote = { content: 'KEKW', emote: image }
+
+function message(
+  id: string,
+  parts: (string | typeof emote)[],
+  seconds: string,
+  senderColor?: string,
+) {
   return {
     id,
     createdAt: `2026-01-01T00:00:${seconds}Z`,
     sender: { id: 'sender-id', name: 'sender', displayName: 'Sender' },
     senderColor,
-    segments: words.map((content) => ({ content })),
+    segments: parts.map((part) => (typeof part === 'string' ? { content: part } : part)),
   }
 }
 
@@ -51,7 +65,7 @@ test('subscribes before loading history, merges overlapping chat and closes the 
       return Response.json({
         data: {
           chatMessagesLatest: [
-            message('old', ['Earlier', 'message'], '01', 'red'),
+            message('old', ['Earlier', 'message', emote], '01', 'red'),
             message('overlap', ['History', 'copy'], '02'),
           ],
         },
@@ -105,7 +119,7 @@ test('subscribes before loading history, merges overlapping chat and closes the 
     expect(queries).toEqual([
       { query: expect.stringContaining('fetchUserByName'), variables: { channelName: 'example' } },
       {
-        query: expect.stringContaining('chatMessagesLatest'),
+        query: expect.stringMatching(/chatMessagesLatest[\s\S]*\.\.\. on MessageSegmentEmote/u),
         variables: { channelID: 'channel-id', limit: 50 },
       },
     ])
@@ -115,7 +129,7 @@ test('subscribes before loading history, merges overlapping chat and closes the 
         id: '1',
         type: 'subscribe',
         payload: {
-          query: expect.stringContaining('chatMessages('),
+          query: expect.stringMatching(/chatMessages\([\s\S]*\.\.\. on MessageSegmentEmote/u),
           variables: { channelID: 'channel-id' },
         },
       },
@@ -123,20 +137,44 @@ test('subscribes before loading history, merges overlapping chat and closes the 
     ])
     expect(statuses).toEqual([{ status: 'connecting' }, { status: 'connected' }])
     expect(messages.map(({ id, text, historical }) => [id, text, historical])).toEqual([
-      ['old', 'Earlier message', true],
+      ['old', 'Earlier message KEKW', true],
       ['overlap', 'Live copy', undefined],
     ])
 
     expect(messages[0]?.author.color).toBeUndefined()
+    const artwork = {
+      id: image.id,
+      name: image.name,
+      imageUrl: `https:${image.url}`,
+      aspectRatio: 2,
+    }
+    expect(messages[0]?.emotes).toEqual([{ ...artwork, positions: [{ start: 16, end: 19 }] }])
+    expect(messages[1]?.emotes).toBeUndefined()
     push(
       await subscribed.promise,
-      message('new', ['Привет,', 'мир!', 'KEKW', 'https://example.org'], '03', '#6dA2fB'),
+      message(
+        'new',
+        [
+          '🙂',
+          'Привет,',
+          emote,
+          emote,
+          { content: 'bad', emote: { ...image, url: 'file:///tmp/emote.webp' } },
+          'https://example.org',
+        ],
+        '03',
+        '#6dA2fB',
+      ),
     )
     await live.promise
     expect(messages[2]).toEqual({
       id: 'new',
       author: { id: 'sender-id', name: 'Sender', username: 'sender', color: '#6dA2fB' },
-      text: 'Привет, мир! KEKW https://example.org',
+      text: '🙂 Привет, KEKW KEKW bad https://example.org',
+      emotes: [
+        { ...artwork, positions: [{ start: 11, end: 14 }] },
+        { ...artwork, positions: [{ start: 16, end: 19 }] },
+      ],
       timestamp: Date.parse('2026-01-01T00:00:03Z'),
     })
     abort.abort()

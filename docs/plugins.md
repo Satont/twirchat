@@ -23,7 +23,8 @@ To show only StreamX, add `platforms=plugin:streamx:chat` to the overlay URL. Up
 to version 0.2.1 or later to keep the recent history loaded on connection out of the overlay.
 
 The plugin loads up to 50 recent messages and receives new ones without a StreamX account.
-Chat is read-only and shows nickname colors and emote names. It uses the same internal GraphQL
+Chat is read-only and shows nickname colors. StreamX 0.2.2 and a compatible TwirChat release
+display emote images in chat history, live chat and the OBS overlay. It uses the same internal GraphQL
 endpoint as [LeChat](https://github.com/le-xot/lechat/blob/f68e4311d7595603aac603b530b18763fffb66c0/src/providers/streamx.rs).
 
 ## A TypeScript plugin
@@ -114,10 +115,14 @@ identifier to send messages. Channel identifiers preserve case. TwirChat saves c
 tabs, splits and the combined **My channels** feed, and shares the connection across these views.
 For sources in **My channels**, set `historical: true` on any backfilled message to keep it
 out of the live OBS overlay.
+To display emote images, keep their names in `text` and pass `emotes` with each emote's `id`,
+`name`, HTTPS `imageUrl`, inclusive UTF-16 `positions` and optional `aspectRatio` (width divided
+by height). Each position is `{ start, end }` in the original message text. A message can carry
+up to 64 positions.
 Messages in the combined feed can be read there. To send through a writable plugin transport,
 open its channel in a tab or split.
 
-The v1 contract includes the APIs above and a text chat pane for third-party transports. Lua compatibility and fork-specific APIs for custom UI, rich message mutation and completion providers are outside this contract.
+The v1 contract includes the APIs above and a chat pane for third-party transports. Lua compatibility and fork-specific APIs for custom UI, rich message mutation and completion providers are outside this contract.
 
 ## Remote installation and updates
 
