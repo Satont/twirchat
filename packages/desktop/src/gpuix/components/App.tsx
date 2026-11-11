@@ -617,7 +617,7 @@ export function App() {
             }}
           >
             <ChannelTabBar
-              leading={<AppNavigation />}
+              leading={<AppNavigation onSearchAll={() => setShowAllChatSearch(true)} />}
               tabs={
                 activeTab === 'chat' && presentation.tabVisibility !== 'off'
                   ? {
@@ -628,7 +628,6 @@ export function App() {
                       tabChannelNames,
                       onSelectTab: selectWatchedTab,
                       onAddChannel: () => setShowAddModal(true),
-                      onSearchAll: () => setShowAllChatSearch(true),
                       onRemoveChannel: (id) => void onRemoveChannel(id),
                     }
                   : undefined

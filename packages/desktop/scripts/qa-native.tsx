@@ -66,7 +66,6 @@ function Harness() {
     onSelectTab: (id) => app.activeWatchedTabStore.set(id),
     onAddChannel: () => {},
     onRemoveChannel: (id) => void tabs.closeChatTab(backend, id),
-    onSearchAll: () => {},
   })
 }
 const renderer = createRenderer()
