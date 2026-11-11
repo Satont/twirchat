@@ -1,13 +1,7 @@
-import { SettingsSectionContext } from '@gpuix/components/settings/SettingsLayout'
 import { useT } from '@gpuix/i18n'
-import type { StyleDesc } from '@gpuix/native/host'
-import { highlightParts } from '@gpuix/settings-highlight'
 import { useFont, useTheme } from '@gpuix/theme-context'
-import { formatMessageTime } from '@gpuix/timestamp-format'
 import type { TimestampFormat } from '@twirchat/shared/types'
-import { useContext, useMemo, type ReactNode } from 'react'
-
-const SAMPLE_TIME = new Date(2026, 0, 1, 21, 41, 2, 123)
+import type { ReactNode } from 'react'
 
 interface TimestampFormatOption {
   readonly value: TimestampFormat
@@ -32,23 +26,9 @@ interface ChatTimestampFormatSettingsProps {
 interface TimestampSettingsRowProps {
   first?: boolean
   last?: boolean
-  alignTop?: boolean
-  label: string
-  hint?: string
+  center?: boolean
+  testId?: string
   children: ReactNode
-}
-
-interface HighlightedTextProps {
-  text: string
-  query: string
-  textStyle: StyleDesc
-  highlightColor: string
-}
-
-interface KeyedHighlightPart {
-  readonly text: string
-  readonly highlighted: boolean
-  readonly key: number
 }
 
 interface TimestampSwitchProps {
@@ -63,74 +43,29 @@ interface TimestampFormatToggleProps {
   onChange: (value: TimestampFormat) => void
 }
 
-function HighlightedText({ text, query, textStyle, highlightColor }: HighlightedTextProps) {
-  const parts = useMemo(() => {
-    const keyed: KeyedHighlightPart[] = []
-    let offset = 0
-    for (const part of highlightParts(text, query)) {
-      keyed.push({ ...part, key: offset })
-      offset += part.text.length
-    }
-    return keyed
-  }, [text, query])
-  if (!parts.some((part) => part.highlighted)) {
-    return <div style={textStyle}>{text}</div>
-  }
-  return (
-    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', ...textStyle }}>
-      {parts.map((part) => (
-        <div
-          key={part.key}
-          style={part.highlighted ? { ...textStyle, color: highlightColor } : textStyle}
-        >
-          {part.text}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 function TimestampSettingsRow({
   first,
   last,
-  alignTop,
-  label,
-  hint,
+  center,
+  testId,
   children,
 }: TimestampSettingsRowProps) {
   const theme = useTheme()
-  const font = useFont()
-  const { narrow, query } = useContext(SettingsSectionContext)
   return (
     <div
+      testId={testId}
       style={{
         display: 'flex',
-        flexDirection: narrow ? 'column' : 'row',
-        alignItems: narrow ? 'stretch' : alignTop ? 'flex-start' : 'center',
-        justifyContent: 'space-between',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: center ? 'center' : 'flex-end',
         gap: 16,
-        paddingTop: first ? 0 : alignTop ? 12 : 10,
+        paddingTop: first ? 0 : 12,
         paddingBottom: last ? 0 : 10,
         borderBottomWidth: last ? 0 : 1,
         borderColor: theme.border,
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-        <HighlightedText
-          text={label}
-          query={query}
-          highlightColor={theme.link}
-          textStyle={{ fontFamily: font, fontSize: 14, fontWeight: 500, color: theme.text }}
-        />
-        {hint ? (
-          <HighlightedText
-            text={hint}
-            query={query}
-            highlightColor={theme.link}
-            textStyle={{ fontFamily: font, fontSize: 11, fontWeight: 400, color: theme.text2 }}
-          />
-        ) : null}
-      </div>
       {children}
     </div>
   )
@@ -193,10 +128,11 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
     <div
       role="group"
       aria-label={label}
+      testId="timestamp-format-options"
       style={{
         display: 'flex',
         flexDirection: 'row',
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
         maxWidth: '100%',
         minWidth: 0,
         borderWidth: 1,
@@ -224,6 +160,9 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
             }}
             onClick={() => onChange(option.value)}
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               paddingTop: 5,
               paddingBottom: 5,
               paddingLeft: 12,
@@ -232,6 +171,8 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
               backgroundColor: active ? theme.accent.tint20 : undefined,
               borderLeftWidth: index === 0 ? 0 : 1,
               borderColor: theme.border,
+              flexShrink: 1,
+              minWidth: 0,
               hover: { backgroundColor: active ? theme.accent.tint25 : theme.fillHover },
               focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
             }}
@@ -242,6 +183,11 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
                 fontSize: 12,
                 fontWeight: 500,
                 color: active ? theme.accent.primary : theme.text2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                flexShrink: 1,
+                minWidth: 0,
               }}
             >
               {option.value}
@@ -265,33 +211,23 @@ export function ChatTimestampFormatSettings({
   onTimestampFormatChange,
 }: ChatTimestampFormatSettingsProps) {
   const { t } = useT()
-  const example = formatMessageTime(SAMPLE_TIME, timestampFormat)
 
   return (
-    <>
-      <TimestampSettingsRow
-        first
-        label={t('settings.chat.showTimestamp')}
-        hint={t('settings.chat.showTimestampHint')}
-      >
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <TimestampSettingsRow first>
         <TimestampSwitch
           checked={showTimestamp}
           label={t('settings.chat.showTimestamp')}
           onChange={onShowTimestampChange}
         />
       </TimestampSettingsRow>
-      <TimestampSettingsRow
-        last
-        alignTop
-        label={t('settings.chat.timestampFormat')}
-        hint={t('settings.chat.timestampFormatHint', { example })}
-      >
+      <TimestampSettingsRow last center testId="timestamp-format-row">
         <TimestampFormatToggle
           label={t('settings.chat.timestampFormat')}
           value={timestampFormat}
           onChange={onTimestampFormatChange}
         />
       </TimestampSettingsRow>
-    </>
+    </div>
   )
 }
