@@ -890,7 +890,6 @@ export function SettingsPanel() {
                     </SettingsRow>
                     {appFooter('appearance')}
                   </SettingsSection>
-
                   <SettingsSection
                     id="commands"
                     title={t('settings.section.commands')}
@@ -1003,6 +1002,14 @@ export function SettingsPanel() {
                     <RetainedSettingsEditor component={StreamerModeSettings} />
                   </SettingsSection>
                   <SettingsSection
+                    id="similarity"
+                    title={t('settings.section.similarity')}
+                    desc={t('settings.section.similarity.desc')}
+                  >
+                    <RetainedSettingsEditor component={SimilaritySettings} />
+                  </SettingsSection>
+                  {/* Message timestamps */}
+                  <SettingsSection
                     id="timestamps"
                     title={t('settings.section.timestamps')}
                     desc={t('settings.section.timestamps.desc')}
@@ -1022,13 +1029,6 @@ export function SettingsPanel() {
                       }
                     />
                     {appFooter('timestamps')}
-                  </SettingsSection>
-                  <SettingsSection
-                    id="similarity"
-                    title={t('settings.section.similarity')}
-                    desc={t('settings.section.similarity.desc')}
-                  >
-                    <RetainedSettingsEditor component={SimilaritySettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="pause"
@@ -1054,7 +1054,6 @@ export function SettingsPanel() {
                   >
                     <RetainedSettingsEditor component={ChatRulesSettings} />
                   </SettingsSection>
-
                   <SettingsSection id="emotes" title={t('settings.section.emotes')}>
                     <RetainedSettingsEditor component={EmoteProviderSettings} />
                   </SettingsSection>
@@ -1085,7 +1084,6 @@ export function SettingsPanel() {
                     </SettingsRow>
                     <RetainedSettingsEditor component={ModerationSettings} />
                   </SettingsSection>
-
                   {/* Self-Ping Highlight */}
                   <SettingsSection
                     id="self-ping"
@@ -1172,7 +1170,6 @@ export function SettingsPanel() {
                     </SettingsRow>
                     {appFooter('self-ping')}
                   </SettingsSection>
-
                   {/* Updates */}
                   <SettingsSection
                     id="updates"
@@ -1240,7 +1237,6 @@ export function SettingsPanel() {
                     </SettingsRow>
                     {appFooter('updates')}
                   </SettingsSection>
-
                   {/* OBS Overlay */}
                   <SettingsSection
                     id="overlay"
@@ -1497,7 +1493,6 @@ export function SettingsPanel() {
                     </SettingsRow>
                     {appFooter('overlay')}
                   </SettingsSection>
-
                   {/* Keyboard Shortcuts */}
                   <SettingsSection id="shortcuts" title={t('settings.section.shortcuts')}>
                     <ActionHotkeySettings />
