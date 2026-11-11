@@ -245,6 +245,13 @@ const themeSchema = z.enum([
 ])
 const themeModeSchema = z.enum(['dark', 'light'])
 const languageSchema = z.toZod<Language>()(z.union([z.literal('en'), z.literal('ru')]))
+const timestampFormatSchema = z.union([
+  z.literal('HH:MM:SS'),
+  z.literal('HH:MM'),
+  z.literal('HH:MM:SS.sss'),
+  z.literal('hh:MM A'),
+  z.literal('hh:MM:SS A'),
+])
 const paletteColorSchema = z.string().transform((input, ctx) => {
   const color = normalizePaletteColor(input)
   if (color) return color
@@ -274,6 +281,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showPlatformColorStripe: z.boolean(),
     showPlatformIcon: z.boolean(),
     showTimestamp: z.boolean(),
+    timestampFormat: timestampFormatSchema.default('HH:MM:SS'),
     showAvatars: z.boolean(),
     showBadges: z.boolean(),
     showChannelLabel: z.boolean(),
@@ -563,6 +571,7 @@ export const partialAppSettingsSchema = appSettingsSchema.partial().extend({
   theme: themeSchema.optional().catch(DEFAULT_SETTINGS.theme),
   themeMode: themeModeSchema.optional().catch(DEFAULT_SETTINGS.themeMode),
   customPalette: customPaletteSchema.optional().catch(undefined),
+  timestampFormat: timestampFormatSchema.optional(),
   overlay: overlayConfigSchema.partial().optional(),
   hotkeys: hotkeySettingsSchema.partial().optional(),
   selfPing: selfPingConfigSchema.partial().optional(),

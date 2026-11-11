@@ -115,8 +115,8 @@ import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
 import { platformColor, semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { ChatAppearanceDialog } from './chat-settings/ChatAppearanceDialog'
 import { PaneAccountChip } from './ChatAccountControl'
-import { ChatAppearanceDialog } from './ChatAppearanceDialog'
 import { ChatFeedHeader, ChatFeedTargetPicker } from './ChatFeedControls'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
@@ -2211,6 +2211,7 @@ export function ChatView({
                       }
                       fontSize={settings?.fontSize}
                       showTimestamp={settings?.showTimestamp}
+                      timestampFormat={settings?.timestampFormat}
                       chatTheme={settings?.chatTheme}
                     />
                   )
@@ -2221,6 +2222,7 @@ export function ChatView({
                       donation={message.donation}
                       fontSize={settings?.fontSize}
                       showTimestamp={settings?.showTimestamp}
+                      timestampFormat={settings?.timestampFormat}
                       chatTheme={settings?.chatTheme}
                     />
                   )
@@ -2236,6 +2238,7 @@ export function ChatView({
                       }
                       fontSize={settings?.fontSize}
                       showTimestamp={settings?.showTimestamp}
+                      timestampFormat={settings?.timestampFormat}
                       chatTheme={settings?.chatTheme}
                     />
                   )
@@ -2275,6 +2278,7 @@ export function ChatView({
                     }
                     showPlatformIcon={!singleChannel && !feedChannels && settings?.showPlatformIcon}
                     showTimestamp={settings?.showTimestamp}
+                    timestampFormat={settings?.timestampFormat}
                     showAvatar={settings?.showAvatars}
                     showBadges={settings?.showBadges}
                     fontSize={settings?.fontSize}

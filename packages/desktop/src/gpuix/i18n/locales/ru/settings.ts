@@ -78,6 +78,8 @@ export const ruSettings = {
   'settings.section.streamer-mode.desc': 'Скрывайте личные данные во время стрима',
   'settings.section.similarity': 'Похожие сообщения',
   'settings.section.similarity.desc': 'Управляйте повторами и почти одинаковыми сообщениями',
+  'settings.section.timestamps': 'Время сообщений',
+  'settings.section.timestamps.desc': 'Настройте отображение времени в чате',
   'settings.section.pause': 'Пауза чата',
   'settings.section.pause.desc': 'Останавливайте чат, пока читаете или открываете ссылки',
   'settings.section.twitch-session': 'Дополнительная сессия Twitch',
@@ -110,6 +112,11 @@ export const ruSettings = {
   'settings.appearance.font.inter': 'Inter',
   'settings.appearance.font.manrope': 'Manrope',
   'settings.appearance.font.system': 'Системный',
+
+  'settings.chat.showTimestamp': 'Показывать время',
+  'settings.chat.showTimestampHint': 'Показывать время рядом с каждым сообщением',
+  'settings.chat.timestampFormat': 'Формат времени',
+  'settings.chat.timestampFormatHint': 'Пример: {example}. 12-часовые форматы содержат AM/PM.',
 
   'settings.twir.suggest': 'Подсказывать команды Twir',
   'settings.twir.suggestHint': 'Показывать публичные команды выбранного чата при вводе !',

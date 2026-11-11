@@ -244,6 +244,9 @@ export interface CustomPalette {
 /** Supported UI languages. */
 export type Language = 'en' | 'ru'
 
+/** Message timestamp formats supported by the desktop chat. */
+export type TimestampFormat = 'HH:MM:SS' | 'HH:MM' | 'HH:MM:SS.sss' | 'hh:MM A' | 'hh:MM:SS A'
+
 export interface AppSettings {
   /** UI language; new installs start in English. */
   language: Language
@@ -256,6 +259,7 @@ export interface AppSettings {
   showPlatformColorStripe: boolean
   showPlatformIcon: boolean
   showTimestamp: boolean
+  timestampFormat: TimestampFormat
   showAvatars: boolean
   showBadges: boolean
   showChannelLabel: boolean
@@ -326,6 +330,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPlatformColorStripe: true,
   showPlatformIcon: true,
   showTimestamp: true,
+  timestampFormat: 'HH:MM:SS',
   theme: 'dark',
   themeMode: 'dark',
   twirIntegrationEnabled: true,

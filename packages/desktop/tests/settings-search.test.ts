@@ -16,7 +16,7 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and a save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(24)
+    expect(SETTINGS_SECTIONS).toHaveLength(25)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
     )
@@ -55,6 +55,8 @@ describe('settings search index', () => {
       ['ShareX headers', 'image-uploader'],
       ['буфер изображений', 'image-uploader'],
       ['selfPing rgba', 'self-ping'],
+      ['timestamp format', 'timestamps'],
+      ['HH:MM', 'timestamps'],
       ['zero width', 'emotes'],
       ['FFZ', 'emotes'],
       ['FFZ:AP', 'emotes'],

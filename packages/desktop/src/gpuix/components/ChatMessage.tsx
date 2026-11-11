@@ -13,6 +13,7 @@ import type {
   NormalizedChatMessage,
   Platform,
   SevenTvSystemAction,
+  TimestampFormat,
   WatchedChannel,
 } from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
@@ -35,6 +36,7 @@ import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches
 import { useStoreSelector } from '../state/create-store'
 import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
 import { ChatAnnouncement } from './ChatAnnouncement'
 import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
 import { MessageActionsMenu } from './MessageActionsMenu'
@@ -51,12 +53,6 @@ import { hexMix } from './user-card/format'
 
 const DEFAULT_FONT_SIZE = 14
 const MAX_NAME_GRAPHEMES = 32
-const timeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-})
 
 function badgeSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.15))
@@ -64,10 +60,6 @@ function badgeSize(fontSize: number): number {
 
 function platformIconSize(fontSize: number): number {
   return Math.max(9, Math.round(fontSize * 0.85))
-}
-
-export function timestampSize(fontSize: number): number {
-  return Math.max(10, Math.round(fontSize * 0.78))
 }
 
 // Avatars scale with the chat font size (28/18px at the 14px default).
@@ -112,10 +104,6 @@ function modernLeading(fontSize: number, showIcon: boolean, showAvatar: boolean)
 
 function compactAvatarSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.3))
-}
-
-export function formatMessageTime(ts: Date): string {
-  return Number.isNaN(ts.getTime()) ? t('chatMessages.invalidDate') : timeFormatter.format(ts)
 }
 
 // ── Avatar (fallback circle with the image layered on top once decoded) ─────
@@ -492,6 +480,7 @@ export interface ChatMessageProps {
   showPlatformColorStripe?: boolean
   showPlatformIcon?: boolean
   showTimestamp?: boolean
+  timestampFormat?: TimestampFormat
   showAvatar?: boolean
   showBadges?: boolean
   visible?: boolean
@@ -710,7 +699,11 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           fontSize={fontSize}
           summary={message.text}
           detail={notice.detail}
-          time={props.showTimestamp ? formatMessageTime(message.timestamp) : undefined}
+          time={
+            props.showTimestamp
+              ? formatMessageTime(message.timestamp, props.timestampFormat)
+              : undefined
+          }
         />
       )
       return sourceLabel ? (
@@ -792,7 +785,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         </div>
         {props.showTimestamp ? (
           <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2, flexShrink: 0 }}>
-            {formatMessageTime(message.timestamp)}
+            {formatMessageTime(message.timestamp, props.timestampFormat)}
           </Text>
         ) : null}
       </div>
@@ -888,13 +881,13 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
                 fontSize: tsSize,
                 color: theme.text2,
                 whiteSpace: 'nowrap',
-                width: Math.ceil(tsSize * 4.6),
+                width: timestampColumnWidth(fontSize, props.timestampFormat ?? 'HH:MM:SS'),
                 textAlign: 'right',
                 flexShrink: 0,
                 marginRight: 6,
               }}
             >
-              {formatMessageTime(message.timestamp)}
+              {formatMessageTime(message.timestamp, props.timestampFormat)}
             </Text>
           ) : null}
           {sourceLabel}
@@ -1114,7 +1107,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
                 marginLeft: 2,
               }}
             >
-              {formatMessageTime(message.timestamp)}
+              {formatMessageTime(message.timestamp, props.timestampFormat)}
             </Text>
           ) : null}
           {!isTombstone ? (

@@ -22,7 +22,8 @@ const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { UserChatHistoryPanel } =
   await import('../src/gpuix/components/user-card-dialog/UserChatHistoryPanel')
 const { ChatHistoryPanel } = await import('../src/gpuix/components/ChatHistoryPanel')
-const { ChatLoggingSettings } = await import('../src/gpuix/components/ChatLoggingSettings')
+const { ChatLoggingSettings } =
+  await import('../src/gpuix/components/chat-settings/ChatLoggingSettings')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
