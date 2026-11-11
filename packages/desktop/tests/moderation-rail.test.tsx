@@ -1,9 +1,12 @@
 import { expect, test } from 'bun:test'
 
-import { createTestRoot, type TestRenderer } from '@gpuix/react/testing'
+import { createTestRoot, hasNativeTestRenderer, type TestRenderer } from '@gpuix/react/testing'
 
 import { MessageModerationRail } from '../src/gpuix/components/MessageModerationRail'
 import type { ModerationDragAction } from '../src/views/main/utils/moderation-drag'
+
+// The offscreen renderer exists on macOS and Windows only; Linux CI cannot read back a frame.
+const nativeTest = test.skipIf(!hasNativeTestRenderer)
 
 const ROW_HEIGHT = 40
 const Y = ROW_HEIGHT / 2
@@ -42,7 +45,7 @@ function drag(renderer: TestRenderer, fromX: number, toX: number) {
 // x = 5..8 is the painted grip line; it used to swallow the press.
 for (const rowHovered of [false, true]) {
   for (const x of [1, 6, 7, 12]) {
-    test(`the rail grabs at x=${x} (row hovered: ${rowHovered})`, () => {
+    nativeTest(`the rail grabs at x=${x} (row hovered: ${rowHovered})`, () => {
       const { renderer, actions, unmount } = renderRail({ rowHovered })
       drag(renderer, x, x + 50)
       unmount()
@@ -51,14 +54,14 @@ for (const rowHovered of [false, true]) {
   }
 }
 
-test('a faded (moderated) row keeps the whole rail grabbable', () => {
+nativeTest('a faded (moderated) row keeps the whole rail grabbable', () => {
   const { renderer, actions, unmount } = renderRail({ opacity: 0.48 })
   drag(renderer, 6, 56)
   unmount()
   expect(actions.map((action) => action.action)).toEqual(['delete_message'])
 })
 
-test('a release outside the window disarms the gesture', () => {
+nativeTest('a release outside the window disarms the gesture', () => {
   const { renderer, actions, unmount } = renderRail()
   renderer.nativeSimulateMouseMove(6, Y)
   renderer.nativeSimulateMouseDown(6, Y)
@@ -73,7 +76,7 @@ test('a release outside the window disarms the gesture', () => {
   expect(actions.map((action) => action.action)).toEqual(['delete_message'])
 })
 
-test('a deleted message offers no second delete but still times out', () => {
+nativeTest('a deleted message offers no second delete but still times out', () => {
   const { renderer, actions, unmount } = renderRail({ messageDeleted: true })
   drag(renderer, 6, 56)
   expect(actions).toEqual([])
@@ -83,7 +86,7 @@ test('a deleted message offers no second delete but still times out', () => {
   expect(actions).toEqual([{ action: 'timeout', durationSeconds: 300, label: 'Timeout 5m' }])
 })
 
-test('a left drag from the window edge reaches unban', () => {
+nativeTest('a left drag from the window edge reaches unban', () => {
   const { renderer, actions, unmount } = renderRail()
   // Pressed at x=12 the screen may end 12px to the left; 10px arms unban.
   drag(renderer, 12, 6)
