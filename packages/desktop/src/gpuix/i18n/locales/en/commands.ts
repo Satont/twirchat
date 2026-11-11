@@ -115,6 +115,8 @@ export const commands = {
   'commands.moderation.delete': 'Delete message',
   'commands.moderation.timeout': 'Timeout {duration}',
   'commands.moderation.ban': 'Ban permanently',
+  'commands.moderation.unban': 'Unban / untimeout',
+  'commands.moderation.notBanned': 'User is not banned or timed out.',
   'commands.moderation.minutes': '{count}m',
   'commands.moderation.hours': '{count}h',
   'commands.moderation.days': '{count}d',

@@ -82,3 +82,14 @@ test('a deleted message offers no second delete but still times out', () => {
   unmount()
   expect(actions).toEqual([{ action: 'timeout', durationSeconds: 300, label: 'Timeout 5m' }])
 })
+
+test('a left drag from the window edge reaches unban', () => {
+  const { renderer, actions, unmount } = renderRail()
+  // Pressed at x=12 the screen may end 12px to the left; 10px arms unban.
+  drag(renderer, 12, 6)
+  expect(actions).toEqual([])
+
+  drag(renderer, 12, 0)
+  unmount()
+  expect(actions).toEqual([{ action: 'unban', label: 'Unban / untimeout' }])
+})

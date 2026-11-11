@@ -314,6 +314,20 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
   publishModerationView()
 }
 
+/** An unban lifts the faded ban/timeout rows; deleted messages stay deleted. */
+export function clearModerationSanction({
+  platform,
+  channelId,
+  targetUserId,
+}: {
+  platform: Platform
+  channelId: string
+  targetUserId: string
+}): void {
+  if (userSanctions.delete(moderationUserKey(platform, channelId, targetUserId)))
+    publishModerationView()
+}
+
 function createModerationView(): ModerationView {
   if (deletedMessages.size === 0 && userSanctions.size === 0 && channelClears.size === 0)
     return EMPTY_MODERATION_VIEW

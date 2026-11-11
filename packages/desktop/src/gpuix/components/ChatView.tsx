@@ -62,6 +62,7 @@ import {
   channelStatusStore,
   chatActivityStore,
   chatMessageRate,
+  clearModerationSanction,
   homeMessagesStore,
   moderationViewStore,
   savedAccountsStore,
@@ -144,6 +145,11 @@ const FONT_WHEEL_INTERVAL_MS = 50
 const FONT_WHEEL_SETTLE_MS = 120
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
 const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
+
+/** Twitch: "The user specified in the user_id field is not banned." */
+function isNotBannedError(error: unknown): boolean {
+  return error instanceof Error && /\bnot (?:banned|timed out)\b/i.test(error.message)
+}
 
 interface PausedChat {
   messages: NormalizedChatMessage[]
@@ -1057,12 +1063,34 @@ export function ChatView({
       }
 
       const pendingKey = feedChannels ? chatMessageIdentity(message) : message.id
+      const accountId = source ? feedAccounts?.get(source.id)?.id : paneAccountId
       setModerationPendingIds((current) => new Set(current).add(pendingKey))
       try {
+        if (action.action === 'unban') {
+          // The ban state is unknown here; a user who was not banned is a no-op, not a failure.
+          try {
+            await backend.api.executePlatformCommand({
+              accountId,
+              platform,
+              channelSlug,
+              text: `/unban ${message.author.id}`,
+            })
+            showNotice('success', t('misc.moderation.unbanned'), 3500)
+          } catch (error) {
+            if (!isNotBannedError(error)) throw error
+            showNotice('info', t('commands.moderation.notBanned'), 3500)
+          }
+          clearModerationSanction({
+            platform,
+            channelId: message.channelId,
+            targetUserId: message.author.id,
+          })
+          return
+        }
         await backend.api.moderateMessage({
           action: action.action,
           channelSlug,
-          accountId: source ? feedAccounts?.get(source.id)?.id : paneAccountId,
+          accountId,
           messageId: message.id,
           platform,
           targetUserId: message.author.id,

@@ -123,6 +123,8 @@ export const ruCommands = {
   'commands.moderation.delete': 'Удалить сообщение',
   'commands.moderation.timeout': 'Тайм-аут {duration}',
   'commands.moderation.ban': 'Забанить навсегда',
+  'commands.moderation.unban': 'Разбан / снять тайм-аут',
+  'commands.moderation.notBanned': 'Пользователь не в бане и не в тайм-ауте.',
   'commands.moderation.minutes': '{count} мин',
   'commands.moderation.hours': '{count} ч',
   'commands.moderation.days': '{count} д',
