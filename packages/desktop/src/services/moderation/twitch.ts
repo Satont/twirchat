@@ -58,10 +58,13 @@ export async function banUser(
   const isPermanent = request.duration === null || request.duration === undefined
 
   try {
+    // Helix reads the ban from a `data` envelope; a permanent ban omits `duration`.
     const body = {
-      user_id: request.user_id,
-      reason: request.reason,
-      duration: request.duration,
+      data: {
+        user_id: request.user_id,
+        ...(isPermanent ? {} : { duration: request.duration }),
+        ...(request.reason ? { reason: request.reason } : {}),
+      },
     }
 
     log.debug('Banning user', {

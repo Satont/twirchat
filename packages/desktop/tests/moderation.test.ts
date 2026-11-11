@@ -11,7 +11,7 @@ import { afterEach, describe, it, expect, mock } from 'bun:test'
  */
 
 import * as Twitch from '../src/services/moderation/twitch.ts'
-import { fetchUrl } from './fixture-values'
+import { fetchUrl, textBody } from './fixture-values'
 
 const originalFetch = globalThis.fetch
 
@@ -88,6 +88,38 @@ describe('Twitch Moderation', () => {
     expect(result.success).toBe(true)
     expect(result.isPermanent).toBe(false)
     expect(result.durationSeconds).toBe(600)
+  })
+
+  it('sends bans and timeouts in the Helix data envelope', async () => {
+    const requests: { url: string; body: unknown }[] = []
+    global.fetch = Object.assign(
+      mock(async (url: string | URL | Request, init?: RequestInit) => {
+        requests.push({ url: fetchUrl(url), body: JSON.parse(textBody(init?.body)) })
+        return Response.json({ data: [{ user_id: '98765', created_at: '2026-04-07T12:00:00Z' }] })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
+
+    await Twitch.banUser(TWITCH_CREDENTIALS, TWITCH_BROADCASTER_ID, TWITCH_MODERATOR_ID, {
+      user_id: '98765',
+      duration: null,
+    })
+    await Twitch.banUser(TWITCH_CREDENTIALS, TWITCH_BROADCASTER_ID, TWITCH_MODERATOR_ID, {
+      user_id: '98765',
+      reason: 'Spamming',
+      duration: 600,
+    })
+
+    expect(requests).toEqual([
+      {
+        url: 'https://api.twitch.tv/helix/moderation/bans?broadcaster_id=123456&moderator_id=654321',
+        body: { data: { user_id: '98765' } },
+      },
+      {
+        url: 'https://api.twitch.tv/helix/moderation/bans?broadcaster_id=123456&moderator_id=654321',
+        body: { data: { user_id: '98765', duration: 600, reason: 'Spamming' } },
+      },
+    ])
   })
 
   it('should handle 409 conflict when user already banned', async () => {
