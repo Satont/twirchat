@@ -186,6 +186,14 @@ export function SettingsRow({
 }
 
 /**
+ * Keeps a content-sized control compact when SettingsRow switches to its
+ * narrow column layout, where the row stretches its children horizontally.
+ */
+export function SettingsRowControl({ children }: { children?: ReactNode }) {
+  return <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>{children}</div>
+}
+
+/**
  * Shared visual contract for every section: state on the left, extra actions
  * on the right. Inside SettingsPanel the footer only registers the draft with
  * the panel-wide Save/Discard; standalone editors keep local Save/Discard.
