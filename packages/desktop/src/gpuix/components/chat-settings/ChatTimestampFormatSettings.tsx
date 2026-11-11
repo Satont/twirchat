@@ -1,129 +1,19 @@
 import { SettingsSectionContext } from '@gpuix/components/settings/SettingsLayout'
 import { useT } from '@gpuix/i18n'
-import type { KeyEvent, StyleDesc } from '@gpuix/native/host'
-import { highlightParts } from '@gpuix/settings-highlight'
 import { useFont, useTheme } from '@gpuix/theme-context'
 import { formatMessageTime } from '@gpuix/timestamp-format'
-import type { TimestampFormat } from '@twirchat/shared/types'
-import { useContext, useMemo, type ReactNode } from 'react'
+import { useContext } from 'react'
 
-const SAMPLE_TIME = new Date(2026, 0, 1, 21, 41, 2, 123)
-
-const TOGGLE = {
-  radius: 8,
-  edgeRadius: 7,
-  width: 40,
-  height: 22,
-  knob: 16,
-  inset: 3,
-}
-
-interface TimestampFormatOptionDefinition {
-  readonly value: TimestampFormat
-  readonly testId: string
-}
-
-const TIMESTAMP_FORMAT_OPTIONS: readonly TimestampFormatOptionDefinition[] = [
-  { value: 'HH:MM:SS', testId: 'timestamp-format-hh-mm-ss' },
-  { value: 'HH:MM', testId: 'timestamp-format-hh-mm' },
-  { value: 'HH:MM:SS.sss', testId: 'timestamp-format-hh-mm-ss-sss' },
-  { value: 'hh:MM A', testId: 'timestamp-format-hh-mm-a' },
-  { value: 'hh:MM:SS A', testId: 'timestamp-format-hh-mm-ss-a' },
-]
-
-interface ChatTimestampFormatSettingsProps {
-  showTimestamp: boolean
-  timestampFormat: TimestampFormat
-  onShowTimestampChange: (value: boolean) => void
-  onTimestampFormatChange: (value: TimestampFormat) => void
-}
-
-interface TimestampSettingsRowProps {
-  first?: boolean
-  last?: boolean
-  centerControl?: boolean
-  label: string
-  hint?: string
-  testId?: string
-  children: ReactNode
-}
-
-interface HighlightedTextProps {
-  text: string
-  query: string
-  textStyle: StyleDesc
-  highlightColor: string
-}
-
-interface KeyedHighlightPart {
-  readonly text: string
-  readonly highlighted: boolean
-  readonly key: number
-}
-
-interface TimestampSwitchProps {
-  checked: boolean
-  label: string
-  onChange: (value: boolean) => void
-}
-
-interface TimestampFormatOptionProps {
-  value: TimestampFormat
-  active: boolean
-  first: boolean
-  last: boolean
-  testId: string
-  onChange: (value: TimestampFormat) => void
-}
-
-interface TimestampFormatToggleProps {
-  label: string
-  value: TimestampFormat
-  onChange: (value: TimestampFormat) => void
-}
-
-function handleActivation(event: KeyEvent, callback: () => void) {
-  if (event.key !== 'enter' && event.key !== 'space') return
-
-  event.preventDefault()
-  callback()
-}
-
-function HighlightedText({ text, query, textStyle, highlightColor }: HighlightedTextProps) {
-  const parts = useMemo(() => {
-    const keyed: KeyedHighlightPart[] = []
-    let offset = 0
-    for (const part of highlightParts(text, query)) {
-      keyed.push({ ...part, key: offset })
-      offset += part.text.length
-    }
-    return keyed
-  }, [text, query])
-
-  if (!parts.some(({ highlighted }) => highlighted)) {
-    return <div style={textStyle}>{text}</div>
-  }
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        ...textStyle,
-      }}
-    >
-      {parts.map((part) => (
-        <div
-          key={part.key}
-          style={part.highlighted ? { ...textStyle, color: highlightColor } : textStyle}
-        >
-          {part.text}
-        </div>
-      ))}
-    </div>
-  )
-}
+import { HighlightText } from '../ui/HighlightText'
+import { SAMPLE_TIME, TIMESTAMP_FORMAT_OPTIONS, TOGGLE } from './consts'
+import type {
+  ChatTimestampFormatSettingsProps,
+  TimestampFormatOptionProps,
+  TimestampFormatToggleProps,
+  TimestampSettingsRowProps,
+  TimestampSwitchProps,
+} from './types'
+import { handleActivation } from './utils'
 
 function TimestampSettingsRow({
   first,
@@ -135,22 +25,7 @@ function TimestampSettingsRow({
   children,
 }: TimestampSettingsRowProps) {
   const theme = useTheme()
-  const font = useFont()
   const { narrow, query } = useContext(SettingsSectionContext)
-
-  const labelStyle: StyleDesc = {
-    fontFamily: font,
-    fontSize: 14,
-    fontWeight: 500,
-    color: theme.text,
-  }
-
-  const hintStyle: StyleDesc = {
-    fontFamily: font,
-    fontSize: 11,
-    fontWeight: 400,
-    color: theme.text2,
-  }
 
   return (
     <div
@@ -176,19 +51,17 @@ function TimestampSettingsRow({
           ...(narrow ? {} : { flexBasis: 220, flexShrink: 0 }),
         }}
       >
-        <HighlightedText
+        <HighlightText
           text={label}
           query={query}
-          highlightColor={theme.link}
-          textStyle={labelStyle}
+          style={{ fontSize: 14, fontWeight: 500, color: theme.text }}
         />
 
         {hint ? (
-          <HighlightedText
+          <HighlightText
             text={hint}
             query={query}
-            highlightColor={theme.link}
-            textStyle={hintStyle}
+            style={{ fontSize: 11, fontWeight: 400, color: theme.text2 }}
           />
         ) : null}
       </div>
@@ -363,11 +236,6 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
   )
 }
 
-/**
- * Chat timestamp controls built from plain divs. The parent settings panel owns
- * the draft and the save footer, so changing a value here only updates the
- * shared app settings preview; nothing is persisted until the section is saved.
- */
 export function ChatTimestampFormatSettings({
   showTimestamp,
   timestampFormat,
