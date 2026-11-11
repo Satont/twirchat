@@ -58,6 +58,7 @@ import {
   SettingsDirtyReporterContext,
   SettingsFooter,
   SettingsRow,
+  SettingsRowControl,
   SettingsSaveRegistryContext,
   SettingsSection,
   SettingsSectionContext,
@@ -845,19 +846,21 @@ export function SettingsPanel() {
                       label={t('settings.appearance.language')}
                       hint={t('settings.appearance.languageHint')}
                     >
-                      <ToggleGroup
-                        label={t('settings.appearance.language')}
-                        value={local.language}
-                        options={[
-                          { value: 'en', label: t('common.language.en') },
-                          { value: 'ru', label: t('common.language.ru') },
-                        ]}
-                        onChange={(value) =>
-                          patch((draft) => {
-                            draft.language = value
-                          })
-                        }
-                      />
+                      <SettingsRowControl>
+                        <ToggleGroup
+                          label={t('settings.appearance.language')}
+                          value={local.language}
+                          options={[
+                            { value: 'en', label: t('common.language.en') },
+                            { value: 'ru', label: t('common.language.ru') },
+                          ]}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.language = value
+                            })
+                          }
+                        />
+                      </SettingsRowControl>
                     </SettingsRow>
                     <SettingsRow label={t('settings.appearance.theme')}>
                       <ThemeSettings
@@ -873,20 +876,22 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
                     <SettingsRow last label={t('settings.appearance.font')}>
-                      <ToggleGroup
-                        label={t('settings.appearance.fontFamily')}
-                        value={local.fontFamily}
-                        options={[
-                          { value: 'inter', label: t('settings.appearance.font.inter') },
-                          { value: 'manrope', label: t('settings.appearance.font.manrope') },
-                          { value: 'system', label: t('settings.appearance.font.system') },
-                        ]}
-                        onChange={(value) =>
-                          patch((draft) => {
-                            draft.fontFamily = value
-                          })
-                        }
-                      />
+                      <SettingsRowControl>
+                        <ToggleGroup
+                          label={t('settings.appearance.fontFamily')}
+                          value={local.fontFamily}
+                          options={[
+                            { value: 'inter', label: t('settings.appearance.font.inter') },
+                            { value: 'manrope', label: t('settings.appearance.font.manrope') },
+                            { value: 'system', label: t('settings.appearance.font.system') },
+                          ]}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.fontFamily = value
+                            })
+                          }
+                        />
+                      </SettingsRowControl>
                     </SettingsRow>
                     {appFooter('appearance')}
                   </SettingsSection>
@@ -1438,36 +1443,40 @@ export function SettingsPanel() {
                     </SettingsRow>
 
                     <SettingsRow label={t('settings.overlay.animation')}>
-                      <ToggleGroup
-                        label={t('settings.overlay.animationLabel')}
-                        value={local.overlay.animation}
-                        options={[
-                          { value: 'slide', label: t('settings.overlay.animation.slide') },
-                          { value: 'fade', label: t('settings.overlay.animation.fade') },
-                          { value: 'none', label: t('settings.overlay.animation.none') },
-                        ]}
-                        onChange={(value) =>
-                          patch((draft) => {
-                            draft.overlay.animation = value
-                          })
-                        }
-                      />
+                      <SettingsRowControl>
+                        <ToggleGroup
+                          label={t('settings.overlay.animationLabel')}
+                          value={local.overlay.animation}
+                          options={[
+                            { value: 'slide', label: t('settings.overlay.animation.slide') },
+                            { value: 'fade', label: t('settings.overlay.animation.fade') },
+                            { value: 'none', label: t('settings.overlay.animation.none') },
+                          ]}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.overlay.animation = value
+                            })
+                          }
+                        />
+                      </SettingsRowControl>
                     </SettingsRow>
 
                     <SettingsRow label={t('settings.overlay.position')}>
-                      <ToggleGroup
-                        label={t('settings.overlay.positionLabel')}
-                        value={local.overlay.position}
-                        options={[
-                          { value: 'bottom', label: t('settings.overlay.position.bottom') },
-                          { value: 'top', label: t('settings.overlay.position.top') },
-                        ]}
-                        onChange={(value) =>
-                          patch((draft) => {
-                            draft.overlay.position = value
-                          })
-                        }
-                      />
+                      <SettingsRowControl>
+                        <ToggleGroup
+                          label={t('settings.overlay.positionLabel')}
+                          value={local.overlay.position}
+                          options={[
+                            { value: 'bottom', label: t('settings.overlay.position.bottom') },
+                            { value: 'top', label: t('settings.overlay.position.top') },
+                          ]}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.overlay.position = value
+                            })
+                          }
+                        />
+                      </SettingsRowControl>
                     </SettingsRow>
 
                     <SettingsRow label={t('settings.overlay.showPlatformIcon')}>
