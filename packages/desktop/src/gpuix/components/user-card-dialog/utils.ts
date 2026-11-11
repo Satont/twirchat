@@ -1,4 +1,17 @@
+import { withAlpha, type Theme } from '@gpuix/theme'
+import type { LinearGradientBackground } from '@gpuix/react'
 import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
+import { initialsOf } from '@views/shared/utils/display-text'
+
+import { hexMix } from '../user-card/format'
+
+export function initials(name: string): string {
+  return initialsOf(name, 2)
+}
+
+export function formatDisplayUsername(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
 
 function badgeKey(badge: Badge): string {
   return `${badge.type}/${badge.id}`
@@ -50,4 +63,33 @@ export function collectUserBadges(
   }
 
   return result
+}
+
+export function userCardPanelColor(theme: Theme): string {
+  return theme.isLight ? theme.surface : hexMix(theme.accent.deep, theme.surface, 0.05)
+}
+
+export function userCardWellColor(theme: Theme): string {
+  return theme.isLight ? theme.fill : hexMix(theme.accent.deep, theme.bg, 0.05)
+}
+
+export function accentGradient(theme: Theme): LinearGradientBackground {
+  return {
+    type: 'linear-gradient',
+    angle: 135,
+    stops: [
+      { color: theme.accent.primary, position: 0 },
+      { color: theme.accent.deep, position: 1 },
+    ],
+  }
+}
+
+export function accentGlow(theme: Theme) {
+  return {
+    offsetX: 0,
+    offsetY: 0,
+    blurRadius: 14,
+    spreadRadius: 0,
+    color: withAlpha(theme.accent.primary, 0.32),
+  }
 }

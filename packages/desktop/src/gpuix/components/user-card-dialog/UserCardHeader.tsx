@@ -1,39 +1,70 @@
-import { Badge } from '@gpuix/components/ui/Badge'
-import { PlatformIcon, Icon } from '@gpuix/components/ui/Icon'
+import { PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { hexMix } from '@gpuix/components/user-card/format'
 import { useT } from '@gpuix/i18n'
-import { platformColor } from '@gpuix/theme'
+import type { LinearGradientBackground } from '@gpuix/react'
+import { platformColor, withAlpha, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
-import type { Badge as BadgeData } from '@twirchat/shared/types'
-import { initialsOf } from '@views/shared/utils/display-text'
 
+import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
 import { GhostButton, HeaderPill as HeaderPillUI } from './UserCardUI'
+import { formatDisplayUsername, initials } from './utils'
 
-interface UserCardHeaderProps {
-  target: {
-    platform: string
-    platformUserId: string
-    displayName: string
-    username?: string
-    avatarUrl?: string
-    badges?: BadgeData[]
+function headerGradient(
+  theme: Theme,
+  accent: UserCardHeaderAccent | undefined,
+): LinearGradientBackground {
+  const from = accent?.from ?? (theme.isLight ? theme.accent.primary : theme.accent.deep)
+  const to = accent?.to ?? (theme.isLight ? theme.accent.primary : theme.accent.deep)
+  return {
+    type: 'linear-gradient',
+    angle: 135,
+    stops: [
+      {
+        color: theme.isLight
+          ? hexMix(from, theme.dialog, accent ? 0.3 : 0.4)
+          : hexMix(from, theme.dialog, accent ? 0.32 : 0.68),
+        position: 0,
+      },
+      {
+        color: theme.isLight
+          ? hexMix(to, theme.dialog, accent ? 0.08 : 0.14)
+          : hexMix(to, theme.dialog, accent ? 0.14 : 0.18),
+        position: 1,
+      },
+    ],
   }
-  hideAvatar: boolean
-  channelUrl: string | undefined
-  openingPublicChannel: boolean
-  openPublicChannel: () => void
-  onAvatarClick: () => void
-  effectiveAlias?: string
 }
 
-function initials(name: string): string {
-  return initialsOf(name, 2)
-}
-
-function formatDisplayUsername(name: string): string {
-  return name.charAt(0).toUpperCase() + name.slice(1)
+function AvatarFallback({
+  name,
+  size,
+  color,
+  background,
+}: {
+  name: string
+  size: number
+  color: string
+  background: string
+}) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        backgroundColor: background,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontWeight: 800, fontSize: Math.round(size * 0.32), color }}>
+        {initials(name)}
+      </Text>
+    </div>
+  )
 }
 
 export function UserCardHeader({
@@ -44,44 +75,97 @@ export function UserCardHeader({
   openPublicChannel,
   onAvatarClick,
   effectiveAlias,
+  accent,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
+  const headerText = theme.isLight ? theme.text : '#ffffff'
+  const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
+  const headerBorder = theme.isLight
+    ? withAlpha(theme.accent.deep, 0.18)
+    : withAlpha('#ffffff', 0.14)
+  const headerButtonBg = theme.isLight ? withAlpha('#ffffff', 0.6) : withAlpha('#000000', 0.2)
+  const headerButtonHover = theme.isLight ? withAlpha('#ffffff', 0.82) : withAlpha('#000000', 0.3)
+  const avatarBorder = theme.isLight ? withAlpha('#ffffff', 0.85) : withAlpha('#ffffff', 0.6)
+  const avatarBackground = theme.isLight ? withAlpha('#ffffff', 0.55) : withAlpha('#000000', 0.24)
+  const avatarGlow = accent?.from ?? theme.accent.primary
+  const showAvatar = !hideAvatar && Boolean(target.avatarUrl)
 
   return (
     <div
       style={{
+        position: 'relative',
+        overflow: 'hidden',
+        flexShrink: 0,
         display: 'flex',
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 16,
         padding: 20,
-        marginBottom: 18,
-        background: {
-          type: 'linear-gradient',
-          angle: 135,
-          stops: [
-            {
-              color: theme.isLight
-                ? hexMix(platformColor(target.platform), theme.dialog, 0.22)
-                : hexMix(platformColor(target.platform), '#101012', 0.72),
-              position: 0,
-            },
-            { color: theme.dialog, position: 1 },
-          ],
+        marginLeft: 16,
+        marginRight: 16,
+        marginTop: 16,
+        marginBottom: 16,
+        background: headerGradient(theme, accent),
+        borderWidth: 1,
+        borderColor: headerBorder,
+        borderRadius: 16,
+        boxShadow: {
+          offsetX: 0,
+          offsetY: 12,
+          blurRadius: 30,
+          spreadRadius: 0,
+          color: theme.isLight ? withAlpha(theme.accent.deep, 0.16) : '#00000066',
         },
-        borderBottomWidth: 1,
-        borderColor: theme.hairline,
-        borderTopLeftRadius: 14,
-        borderTopRightRadius: 14,
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, paddingLeft: 14 }}>
+      {/* GPUI clips overflow to a rectangle, so keep the glows clear of the rounded corners. */}
+      <div
+        style={{
+          position: 'absolute',
+          top: -76,
+          right: 24,
+          width: 230,
+          height: 230,
+          borderRadius: 115,
+          backgroundColor: theme.isLight
+            ? withAlpha(theme.accent.deep, 0.09)
+            : withAlpha('#ffffff', 0.08),
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          bottom: -96,
+          left: 140,
+          width: 220,
+          height: 220,
+          borderRadius: 110,
+          backgroundColor: theme.isLight
+            ? withAlpha(theme.accent.deep, 0.06)
+            : withAlpha('#ffffff', 0.05),
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          minWidth: 0,
+          flexGrow: 1,
+          flexBasis: 320,
+        }}
+      >
         <div
           testId="user-card-avatar"
-          tabIndex={!hideAvatar && target.avatarUrl ? 0 : undefined}
+          tabIndex={showAvatar ? 0 : undefined}
           onClick={onAvatarClick}
           onKeyDown={(event) => {
             if (event.key === 'enter' || event.key === 'space') {
@@ -91,204 +175,193 @@ export function UserCardHeader({
           }}
           style={{
             flexShrink: 0,
-            cursor: !hideAvatar && target.avatarUrl ? 'pointer' : 'default',
+            width: 78,
+            height: 78,
+            borderRadius: 999,
+            borderWidth: 2,
+            borderColor: avatarBorder,
+            backgroundColor: avatarBackground,
+            overflow: 'hidden',
+            cursor: showAvatar ? 'pointer' : 'default',
+            boxShadow: {
+              offsetX: 0,
+              offsetY: 0,
+              blurRadius: 20,
+              spreadRadius: 1,
+              color: withAlpha(avatarGlow, 0.45),
+            },
           }}
         >
-          {!hideAvatar && target.avatarUrl ? (
+          {showAvatar ? (
             <RemoteImage
               url={target.avatarUrl}
-              thumbnailSize={72}
+              thumbnailSize={156}
               objectFit="cover"
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 999,
-                backgroundColor: theme.fill,
-              }}
+              style={{ width: 74, height: 74, borderRadius: 999 }}
+              fallback={
+                <AvatarFallback
+                  name={target.displayName}
+                  size={74}
+                  color={headerText}
+                  background={avatarBackground}
+                />
+              }
             />
           ) : (
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 999,
-                backgroundColor: hexMix(platformColor(target.platform), '#000', 0.5),
-                borderWidth: 1,
-                borderColor: theme.border,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontWeight: 800, fontSize: 24, color: theme.text }}>
-                {initials(target.displayName)}
-              </Text>
-            </div>
+            <AvatarFallback
+              name={target.displayName}
+              size={74}
+              color={headerText}
+              background={avatarBackground}
+            />
           )}
         </div>
 
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
           <div
             style={{
-              minWidth: 0,
               display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+              minWidth: 0,
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontSize: 18,
-                    fontWeight: 900,
-                    color: theme.text,
-                  }}
-                >
-                  {formatDisplayUsername(target.displayName)}
-                  {target.badges && target.badges.length > 0 ? (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      {target.badges.slice(0, 4).map((badge, index) => (
-                        <div
-                          key={`${badge.id}-${index}`}
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 3,
-                            overflow: 'hidden',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {badge.imageUrl ? (
-                            <RemoteImage
-                              url={badge.imageUrl}
-                              style={{ width: 18, height: 18, objectFit: 'cover' }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: 18,
-                                height: 18,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 10,
-                                fontWeight: 700,
-                                backgroundColor: theme.fill,
-                                color: theme.text,
-                              }}
-                            >
-                              {badge.text[0]?.toUpperCase() ?? '?'}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {target.badges.length > 4 && (
-                        <div
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 3,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            backgroundColor: theme.fill,
-                            color: theme.text2,
-                          }}
-                        >
-                          +{target.badges.length - 4}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    fontSize: 13,
-                    color: theme.text2,
-                  }}
-                >
-                  @{titleHandle}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                flexShrink: 0,
-              }}
-            >
-              <Badge
-                size="sm"
-                backgroundColor={hexMix(platformColor(target.platform), '#000', 0.4)}
-                color="#fff"
+            <Text style={{ fontSize: 20, fontWeight: 800, color: headerText }}>
+              {formatDisplayUsername(target.displayName)}
+            </Text>
+            {target.badges && target.badges.length > 0 ? (
+              <div
                 style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
                   gap: 4,
-                  paddingLeft: 6,
-                  paddingRight: 6,
-                  paddingTop: 3,
-                  paddingBottom: 3,
-                  borderRadius: 999,
                 }}
               >
-                <PlatformIcon platform={target.platform} size={12} color="#fff" />
+                {target.badges.slice(0, 4).map((badge, index) => (
+                  <div
+                    key={`${badge.id}-${index}`}
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 5,
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      borderWidth: 1,
+                      borderColor: withAlpha('#ffffff', 0.18),
+                    }}
+                  >
+                    {badge.imageUrl ? (
+                      <RemoteImage
+                        url={badge.imageUrl}
+                        objectFit="cover"
+                        style={{ width: 18, height: 18 }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 18,
+                          height: 18,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          backgroundColor: withAlpha('#000000', 0.2),
+                          color: headerText,
+                        }}
+                      >
+                        {badge.text[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {target.badges.length > 4 ? (
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      backgroundColor: withAlpha('#000000', 0.2),
+                      color: headerMuted,
+                    }}
+                  >
+                    +{target.badges.length - 4}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+              minWidth: 0,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: headerMuted }}>@{titleHandle}</Text>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                minHeight: 22,
+                paddingLeft: 8,
+                paddingRight: 8,
+                borderRadius: 999,
+                backgroundColor: withAlpha(
+                  platformColor(target.platform),
+                  theme.isLight ? 0.14 : 0.24,
+                ),
+                borderWidth: 1,
+                borderColor: withAlpha(platformColor(target.platform), 0.36),
+              }}
+            >
+              <PlatformIcon
+                platform={target.platform}
+                size={12}
+                color={theme.isLight ? theme.text : '#ffffff'}
+              />
+              <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
                 {target.platform.toUpperCase()}
-              </Badge>
+              </Text>
             </div>
           </div>
 
           {effectiveAlias ? (
-            <HeaderPillUI accent>
-              {t('userCard.alias.pill', { alias: effectiveAlias })}
-            </HeaderPillUI>
+            <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
           ) : null}
         </div>
       </div>
-      <div>
+
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {channelUrl ? (
           <GhostButton
             disabled={openingPublicChannel}
             onClick={openPublicChannel}
+            icon="externalLink"
             style={{
-              backgroundColor: hexMix(platformColor(target.platform), '#000', 0.5),
-              borderRadius: 16,
-              paddingTop: 4,
-              paddingBottom: 4,
-              paddingLeft: 10,
-              paddingRight: 10,
+              backgroundColor: headerButtonBg,
+              borderColor: headerBorder,
+              borderRadius: 10,
+              paddingLeft: 14,
+              paddingRight: 14,
+              hover: { backgroundColor: headerButtonHover },
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-              {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-              <Icon name="externalLink" size={12} color="#fff" />
-            </div>
+            {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
           </GhostButton>
         ) : null}
       </div>

@@ -1,58 +1,87 @@
-import { ActionButton } from '@gpuix/components/ui/Form'
-import { useT, type MessageKey } from '@gpuix/i18n'
+import { Icon } from '@gpuix/components/ui/Icon'
+import { Text } from '@gpuix/components/ui/Text'
+import { useT } from '@gpuix/i18n'
+import { useTheme } from '@gpuix/theme-context'
 
-type TabName = 'profile' | 'actions' | 'notes' | 'history'
-
-interface TabConfig {
-  id: TabName
-  labelKey: MessageKey
-}
-
-const TABS: TabConfig[] = [
-  { id: 'profile', labelKey: 'userCard.tab.profile' },
-  { id: 'actions', labelKey: 'userCard.tab.actions' },
-  { id: 'notes', labelKey: 'userCard.tab.notes' },
-  { id: 'history', labelKey: 'userCard.tab.history' },
-]
-
-interface UserCardTabsProps {
-  tab: TabName
-  setTab: (tab: TabName) => void
-}
+import { TABS } from './consts'
+import type { UserCardTabsProps } from './types'
+import { userCardWellColor, accentGradient, accentGlow } from './utils'
 
 export function UserCardTabs({ tab, setTab }: UserCardTabsProps) {
+  const theme = useTheme()
   const { t } = useT()
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: 4,
         marginBottom: 16,
         padding: 4,
-        borderRadius: 10,
+        borderRadius: 12,
         borderWidth: 1,
+        borderColor: theme.hairline,
+        backgroundColor: userCardWellColor(theme),
       }}
     >
-      {TABS.map(({ id, labelKey }) => (
-        <ActionButton
-          key={id}
-          primary={tab === id}
-          onClick={() => setTab(id)}
-          style={{
-            paddingTop: 8,
-            paddingBottom: 8,
-            paddingLeft: 16,
-            paddingRight: 16,
-            justifyContent: 'center',
-            borderRadius: 8,
-            flex: 1,
-          }}
-          textStyle={{ fontSize: 13, fontWeight: 500 }}
-        >
-          {t(labelKey)}
-        </ActionButton>
-      ))}
+      {TABS.map(({ id, labelKey, icon }) => {
+        const active = tab === id
+        return (
+          <div
+            key={id}
+            testId={`user-card-tab-${id}`}
+            tabIndex={0}
+            onClick={() => setTab(id)}
+            onKeyDown={(event) => {
+              if (event.key === 'enter' || event.key === 'space') {
+                event.preventDefault()
+                setTab(id)
+              }
+            }}
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              flexGrow: 1,
+              flexBasis: 140,
+              minHeight: 36,
+              paddingTop: 8,
+              paddingBottom: 8,
+              paddingLeft: 10,
+              paddingRight: 10,
+              borderRadius: 9,
+              background: active ? accentGradient(theme) : 'transparent',
+              borderWidth: 1,
+              borderColor: active ? theme.accent.deep : 'transparent',
+              boxShadow: active ? accentGlow(theme) : undefined,
+              cursor: 'pointer',
+              userSelect: 'none',
+              hover: active ? {} : { backgroundColor: theme.fillHover },
+              active: { opacity: 0.82 },
+              focusVisible: {
+                outlineWidth: 2,
+                outlineColor: theme.accent.primary,
+                outlineOffset: 2,
+              },
+            }}
+          >
+            <Icon name={icon} size={14} color={active ? theme.accent.onDeep : theme.text2} />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: active ? 700 : 600,
+                textAlign: 'center',
+                color: active ? theme.accent.onDeep : theme.text2,
+              }}
+            >
+              {t(labelKey)}
+            </Text>
+          </div>
+        )
+      })}
     </div>
   )
 }

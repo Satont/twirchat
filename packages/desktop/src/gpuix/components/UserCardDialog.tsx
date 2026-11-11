@@ -1,7 +1,8 @@
 import type { ModerationPlatform } from '@gpuix/backend/api'
+import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
-import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
+import { useGpuixRequired, motion, type PublicInstance } from '@gpuix/react'
 import { showNotice } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
@@ -12,15 +13,17 @@ import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
+import type { MetadataItem, UserCardTab } from './user-card-dialog'
 import {
   UserCardHeader,
   UserCardAliasSection,
   UserCardTabs,
   UserCardProfileTab,
+  userCardHeaderAccent,
   useUserCardAlias,
   useUserCardMetadata,
+  useUserCardProfile,
   useUserCardPublicChannel,
 } from './user-card-dialog'
 import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
@@ -61,6 +64,17 @@ export function UserCardDialog({
     (url?: string) => setProfileAvatar({ key: avatarKey, url }),
     [avatarKey],
   )
+  const profileState = useUserCardProfile({
+    target,
+    hideAvatar,
+    onAvatarChange: updateProfileAvatar,
+  })
+  const headerAccent = userCardHeaderAccent(
+    profileState.profile?.color,
+    target.color,
+    profileState.cosmetics,
+    profileState.paintsEnabled,
+  )
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [localPinned, setLocalPinned] = useState(false)
   const nativeUserWindow = standalone && windows?.descriptor.kind === 'user'
@@ -72,7 +86,8 @@ export function UserCardDialog({
   const historyViewport = useRef<PublicInstance | null>(null)
   const moderation = useUserCardModeration(target)
 
-  const aliasFocus = useTextInputFocusTracking()
+  const [aliasFocused, setAliasFocused] = useState(false)
+  const aliasFocus = useTextInputFocusTracking(setAliasFocused)
 
   const openPicture = () => {
     if (!hideAvatar && avatarUrl) {
@@ -98,33 +113,32 @@ export function UserCardDialog({
   const metadata = useUserCardMetadata({ target, moderationPlatform })
   const publicChannel = useUserCardPublicChannel({ channelUrl })
 
-  const [tab, setTab] = useState<'profile' | 'actions' | 'notes' | 'history'>('profile')
+  const [tab, setTab] = useState<UserCardTab>('profile')
 
-  const metadataItems: Array<{ label: string; value: string | null; icon: IconName }> =
-    metadata.metadata
-      ? [
-          {
-            label: t('userCard.metadata.accountAge'),
-            value: accountAgeText(metadata.metadata),
-            icon: 'calendar',
-          },
-          {
-            label: t('userCard.metadata.followAge'),
-            value: followAgeText(metadata.metadata),
-            icon: 'users',
-          },
-          {
-            label: t('userCard.metadata.subscriptionDuration'),
-            value: subscriptionDurationText(metadata.metadata),
-            icon: 'gift',
-          },
-          {
-            label: t('userCard.metadata.subAge'),
-            value: subAgeText(metadata.metadata),
-            icon: 'clock',
-          },
-        ]
-      : []
+  const metadataItems: MetadataItem[] = metadata.metadata
+    ? [
+        {
+          label: t('userCard.metadata.accountAge'),
+          value: accountAgeText(metadata.metadata),
+          icon: 'calendar',
+        },
+        {
+          label: t('userCard.metadata.followAge'),
+          value: followAgeText(metadata.metadata),
+          icon: 'users',
+        },
+        {
+          label: t('userCard.metadata.subscriptionDuration'),
+          value: subscriptionDurationText(metadata.metadata),
+          icon: 'gift',
+        },
+        {
+          label: t('userCard.metadata.subAge'),
+          value: subAgeText(metadata.metadata),
+          icon: 'clock',
+        },
+      ]
+    : []
 
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,
@@ -147,23 +161,20 @@ export function UserCardDialog({
   return (
     <Modal
       hotkeyContextId={popupContextId}
-      width={760}
+      width={800}
       onClose={onClose}
       embedded={standalone}
       closeOnOutsideClick={!pinned}
     >
       <div
-        tabIndex={-1}
         style={{
           display: 'flex',
           flexDirection: 'column',
           flexGrow: 1,
           minHeight: 0,
-          overflowY: 'scroll',
-          scrollbarColor: theme.scrollbar,
-          scrollbarWidth: 4,
         }}
       >
+        {/* Keep the header out of the scroll area so long tab content never hides it. */}
         <UserCardHeader
           target={{
             platform: target.platform,
@@ -179,80 +190,103 @@ export function UserCardDialog({
           openPublicChannel={() => void publicChannel.openPublicChannel()}
           onAvatarClick={openPicture}
           effectiveAlias={effectiveAlias}
+          accent={headerAccent}
         />
 
         <div
+          tabIndex={-1}
           style={{
-            paddingLeft: 20,
-            paddingRight: 20,
-            paddingBottom: 20,
             display: 'flex',
             flexDirection: 'column',
+            flexGrow: 1,
+            minHeight: 0,
+            overflowY: 'scroll',
+            scrollbarColor: theme.scrollbar,
+            scrollbarWidth: 4,
           }}
         >
-          <UserCardAliasSection
-            aliasValue={alias.aliasValue}
-            setAliasValue={alias.setAliasValue}
-            effectiveAlias={effectiveAlias}
-            displayName={target.displayName}
-            aliasFocus={aliasFocus}
-            handleSaveAlias={alias.handleSaveAlias}
-            handleRemoveAlias={alias.handleRemoveAlias}
-            pinned={pinned}
-            togglePin={togglePin}
-            onClose={onClose}
-            windows={windows}
-            standalone={standalone}
-            target={target}
-            openingWindow={openingWindow}
-            setOpeningWindow={setOpeningWindow}
-            showNotice={showNotice}
-            publicChannelError={publicChannel.openError}
-            openPublicChannel={() => void publicChannel.openPublicChannel()}
-          />
-
-          <UserCardTabs tab={tab} setTab={setTab} />
-
-          {tab === 'actions' ? (
-            <UserCardActions
-              key={`${target.platform}:${target.platformUserId}`}
+          <div
+            style={{
+              paddingLeft: 16,
+              paddingRight: 16,
+              paddingBottom: 16,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <UserCardAliasSection
+              aliasValue={alias.aliasValue}
+              setAliasValue={alias.setAliasValue}
+              aliasFocused={aliasFocused}
+              effectiveAlias={effectiveAlias}
+              displayName={target.displayName}
+              aliasFocus={aliasFocus}
+              handleSaveAlias={alias.handleSaveAlias}
+              handleRemoveAlias={alias.handleRemoveAlias}
+              pinned={pinned}
+              togglePin={togglePin}
+              onClose={onClose}
+              windows={windows}
+              standalone={standalone}
               target={target}
-              moderation={moderation}
-              avatarUrl={avatarUrl}
-              hideAvatar={hideAvatar}
+              openingWindow={openingWindow}
+              setOpeningWindow={setOpeningWindow}
+              showNotice={showNotice}
+              publicChannelError={publicChannel.openError}
+              openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
             />
-          ) : null}
-          {tab === 'notes' ? (
-            <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
-          ) : null}
-          {tab === 'profile' ? (
-            <UserCardProfileTab
-              key={`${target.platform}:${target.platformUserId}`}
-              target={target}
-              hideAvatar={hideAvatar}
-              onAvatarChange={updateProfileAvatar}
-              supportedByCard={metadata.supportedByCard}
-              metadataLoading={metadata.metadataLoading}
-              metadataError={metadata.metadataError}
-              metadata={metadataItems}
-              reloadMetadata={() => void metadata.reloadMetadata()}
-            />
-          ) : null}
-          {tab === 'history' ? (
-            <UserChatHistoryPanel
-              onViewport={(viewport) => {
-                historyViewport.current = viewport
-              }}
-              platform={target.platform}
-              platformUserId={target.platformUserId}
-              channelId={
-                target.platform === 'youtube'
-                  ? target.channelId
-                  : (target.channelSlug ?? target.channelId)
-              }
-              username={target.username}
-            />
-          ) : null}
+
+            <UserCardTabs tab={tab} setTab={setTab} />
+
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+            >
+              {tab === 'actions' ? (
+                <UserCardActions
+                  key={`${target.platform}:${target.platformUserId}`}
+                  target={target}
+                  moderation={moderation}
+                  avatarUrl={avatarUrl}
+                  hideAvatar={hideAvatar}
+                />
+              ) : null}
+              {tab === 'notes' ? (
+                <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
+              ) : null}
+              {tab === 'profile' ? (
+                <UserCardProfileTab
+                  key={`${target.platform}:${target.platformUserId}`}
+                  target={target}
+                  hideAvatar={hideAvatar}
+                  profileState={profileState}
+                  supportedByCard={metadata.supportedByCard}
+                  metadataLoading={metadata.metadataLoading}
+                  metadataError={metadata.metadataError}
+                  metadata={metadataItems}
+                  reloadMetadata={() => runUiTask(metadata.reloadMetadata())}
+                />
+              ) : null}
+              {tab === 'history' ? (
+                <UserChatHistoryPanel
+                  onViewport={(viewport) => {
+                    historyViewport.current = viewport
+                  }}
+                  platform={target.platform}
+                  platformUserId={target.platformUserId}
+                  channelId={
+                    target.platform === 'youtube'
+                      ? target.channelId
+                      : (target.channelSlug ?? target.channelId)
+                  }
+                  username={target.username}
+                />
+              ) : null}
+            </motion.div>
+          </div>
         </div>
       </div>
       {avatarMenuOpen && !hideAvatar && avatarUrl ? (
