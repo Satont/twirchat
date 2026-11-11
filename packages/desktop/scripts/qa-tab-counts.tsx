@@ -128,7 +128,6 @@ function Content() {
           onSelectTab: (id) => state.modify((current) => ({ ...current, active: id })),
           onAddChannel: () => {},
           onRemoveChannel: () => {},
-          onSearchAll: () => {},
         }}
       />
       <text style={{ color: '#8b8b99', padding: 12 }}>
@@ -208,7 +207,7 @@ try {
         active: 'a',
         mode: 'uniform',
       })
-      const testIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add', 'tab-search-all']
+      const testIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add']
       const baseline = Object.fromEntries(
         testIds.map((testId) => {
           const { x, y, width } = bounds(testId)

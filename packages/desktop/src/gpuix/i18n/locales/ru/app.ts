@@ -7,6 +7,7 @@ export const ruApp = {
   'app.nav.platforms': 'Платформы',
   'app.nav.settings': 'Настройки',
   'app.nav.obsRemote': 'OBS Remote',
+  'app.nav.searchAll': 'Искать везде',
   'app.nav.currentView': 'Текущий раздел',
   'app.nav.mainNavigation': 'Основная навигация',
   'app.nav.accountBadge.one': '{count} аккаунт',
@@ -31,8 +32,6 @@ export const ruApp = {
   'app.tab.menu.moveLeft': 'Переместить влево',
   'app.tab.menu.moveRight': 'Переместить вправо',
   'app.tab.menu.close': 'Закрыть вкладку',
-  'app.tab.searchAll': 'Искать везде',
-  'app.tab.restore': 'Восстановить вкладку',
   'app.tab.appearance.title': 'Внешний вид вкладки',
   'app.tab.appearance.nameLabel': 'Название вкладки',
   'app.tab.appearance.nameHint':

@@ -304,6 +304,36 @@ try {
   assert.ok(homePane)
   await until(() => !!find(main, `pane-${homePane.id}`), 'legacy tab selection falls back to Chat')
   assert.equal(find(main, 'nav-events'), undefined)
+  const navOrder = [
+    'nav-chat',
+    'nav-platforms',
+    'nav-settings',
+    'nav-obs-remote',
+    'nav-divider',
+    'nav-search-all',
+  ]
+  const navBounds = navOrder.map((testId) => {
+    const node = find(main, testId)
+    assert.ok(node, `Missing ${testId}`)
+    const bounds = main.getElementBounds(node.id)
+    assert.ok(bounds, `Missing painted bounds for ${testId}`)
+    return bounds
+  })
+  for (let index = 1; index < navBounds.length; index++) {
+    const previous = navBounds[index - 1]
+    const current = navBounds[index]
+    assert.ok(previous && current)
+    assert.ok(
+      current.x >= previous.x + previous.width,
+      `${navOrder[index]} renders after ${navOrder[index - 1]}`,
+    )
+  }
+  assert.equal(find(main, 'tab-search-all'), undefined, 'search all left the tab row')
+  await click('nav-search-all')
+  await until(() => !!find(main, 'search-all-chats-input'), 'navigation opens Search all')
+  await captureGuiQaDisplay('search-all-from-navigation')
+  main.simulateKeystrokes('escape')
+  await until(() => !find(main, 'search-all-chats-input'), 'Escape closes Search all')
   await openNavTab('platforms', 'connect-twitch')
   await openNavTab('obs-remote', 'obs-remote-controller')
   assert.equal(mounts.size, 1, 'OBS Remote opens in the main window')
@@ -317,6 +347,9 @@ try {
   await openNavTab('obs-remote', 'obs-remote-controller')
   assert.equal(mounts.size, 1, 'Reopening OBS Remote reuses the main window')
   await openNavTab('chat', `pane-${homePane.id}`)
+  main.simulateMouseMove(8, 140)
+  await Bun.sleep(150)
+  await captureGuiQaDisplay('header-search-all')
   await captureThemedChat()
   await action('window', 'newSplit')
   await until(
@@ -340,6 +373,7 @@ try {
   )
   await until(() => !app.tabChannelIdsStore.get().includes(emptyTab), 'middle click closes the tab')
   assert.equal(app.activeWatchedTabStore.get(), 'home', 'middle click does not select the tab')
+  assert.equal(find(main, 'tab-restore'), undefined, 'the restore toolbar action is removed')
   await action('window', 'openSettings')
   await until(
     () => app.activeTabStore.get() === 'settings' && !!find(main, 'settings-search'),

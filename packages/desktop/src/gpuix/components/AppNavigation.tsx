@@ -24,32 +24,32 @@ const ITEMS: readonly NavItem[] = [
   { id: 'obs-remote', labelKey: 'app.nav.obsRemote', icon: 'monitor' },
 ]
 
-function NavItemButton({
-  item,
+function NavButton({
+  testId,
+  label,
+  icon,
   active,
   badge,
   streamerMode,
   select,
 }: {
-  item: NavItem
+  testId: string
+  label: string
+  icon: IconName
   active: boolean
   badge?: number
   streamerMode?: StreamerModeStatus
   select: () => void
 }) {
   const theme = useTheme()
-  const { t, tPlural } = useT()
-  const label =
-    badge === undefined
-      ? t(item.labelKey)
-      : `${t(item.labelKey)} (${tPlural('app.nav.accountBadge', badge)})`
+  const { t } = useT()
   const status = streamerMode ? describeStreamerMode(streamerMode) : undefined
 
   return (
     <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
         <div
-          testId={`nav-${item.id}`}
+          testId={testId}
           role="button"
           aria-label={label}
           aria-description={
@@ -77,7 +77,7 @@ function NavItemButton({
             focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: 1 },
           }}
         >
-          <Icon name={item.icon} size={16} color={active ? theme.link : theme.text2} />
+          <Icon name={icon} size={16} color={active ? theme.link : theme.text2} />
           {badge !== undefined && badge > 0 ? (
             <div
               style={{
@@ -130,8 +130,9 @@ function NavItemButton({
   )
 }
 
-export function AppNavigation() {
-  const { t } = useT()
+export function AppNavigation({ onSearchAll }: { onSearchAll?: () => void }) {
+  const { t, tPlural } = useT()
+  const theme = useTheme()
   const activeTab = useStore(activeTabStore)
   const accountCount = useStoreSelector(accountsStore, (accounts) => accounts.length)
   const streamerMode = useStore(streamerModeStore)
@@ -153,16 +154,47 @@ export function AppNavigation() {
         userSelect: 'none',
       }}
     >
-      {ITEMS.map((item) => (
-        <NavItemButton
-          key={item.id}
-          item={item}
-          active={activeTab === item.id}
-          badge={item.id === 'platforms' ? accountCount : undefined}
-          streamerMode={item.id === 'settings' ? streamerMode : undefined}
-          select={() => setMainTab(item.id)}
-        />
-      ))}
+      {ITEMS.map((item) => {
+        const badge = item.id === 'platforms' ? accountCount : undefined
+        return (
+          <NavButton
+            key={item.id}
+            testId={`nav-${item.id}`}
+            label={
+              badge === undefined
+                ? t(item.labelKey)
+                : `${t(item.labelKey)} (${tPlural('app.nav.accountBadge', badge)})`
+            }
+            icon={item.icon}
+            active={activeTab === item.id}
+            badge={badge}
+            streamerMode={item.id === 'settings' ? streamerMode : undefined}
+            select={() => setMainTab(item.id)}
+          />
+        )
+      })}
+      {onSearchAll ? (
+        <>
+          <div
+            testId="nav-divider"
+            style={{
+              width: 1,
+              height: 18,
+              flexShrink: 0,
+              marginLeft: 2,
+              marginRight: 2,
+              backgroundColor: theme.border,
+            }}
+          />
+          <NavButton
+            testId="nav-search-all"
+            label={t('app.nav.searchAll')}
+            icon="search"
+            active={false}
+            select={onSearchAll}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

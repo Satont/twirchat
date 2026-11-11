@@ -28,7 +28,6 @@ import {
   duplicateChatTab,
   renameChatTab,
   reorderChatTab,
-  restoreClosedChatTab,
   setChatTabColor,
   setChatTabLocked,
 } from '../state/chat-tabs'
@@ -71,7 +70,6 @@ interface ChannelTabsProps {
   onSelectTab: (id: string) => void
   onAddChannel: () => void
   onRemoveChannel: (id: string) => void
-  onSearchAll?: () => void
 }
 
 export function ChannelTabBar({ leading, tabs }: { leading?: ReactNode; tabs?: ChannelTabsProps }) {
@@ -115,7 +113,6 @@ function ChannelTabs({
   onSelectTab,
   onAddChannel,
   onRemoveChannel,
-  onSearchAll,
 }: ChannelTabsProps & { barElement: RefObject<number | null> }) {
   const theme = useTheme()
   const { t } = useT()
@@ -198,12 +195,7 @@ function ChannelTabs({
       showNotice('error', error instanceof Error ? error.message : String(error)),
     )
   }
-  const toolbar = (
-    testId: string,
-    label: string,
-    icon: 'plus' | 'search' | 'refresh',
-    click: () => void,
-  ) => (
+  const toolbar = (testId: string, label: string, click: () => void) => (
     <div
       testId={testId}
       tabIndex={0}
@@ -225,7 +217,7 @@ function ChannelTabs({
         hover: { backgroundColor: theme.fillHover },
       }}
     >
-      <Icon name={icon} size={14} color={theme.text2} />
+      <Icon name="plus" size={14} color={theme.text2} />
       {label ? <Text style={{ fontSize: 11, color: theme.text2 }}>{label}</Text> : null}
     </div>
   )
@@ -529,15 +521,7 @@ function ChannelTabs({
           </div>
         )
       })}
-      {toolbar('tab-add', '', 'plus', onAddChannel)}
-      {onSearchAll
-        ? toolbar('tab-search-all', t('app.tab.searchAll'), 'search', onSearchAll)
-        : null}
-      {state.value.closed.length
-        ? toolbar('tab-restore', t('app.tab.restore'), 'refresh', () =>
-            action(() => restoreClosedChatTab(backend)),
-          )
-        : null}
+      {toolbar('tab-add', '', onAddChannel)}
       {state.error ? (
         <Text
           onClick={() => {
