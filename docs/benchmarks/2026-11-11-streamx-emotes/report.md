@@ -59,3 +59,5 @@ emote artwork were verified separately with fixtures and a public history smoke 
 
 Both revisions used GPUIX `0.11.0-twirchat.25` with patch digest `f6ff95b61fce09c8` and native
 SHA-256 `ce789deb4d66695747865d79691dfd2400034bb7d5350c177255bdaf83ec4819`.
+The final lint cleanup renamed a local variable in the plugin protocol parser. The benchmark
+exercises built-in channels and does not call that parser.

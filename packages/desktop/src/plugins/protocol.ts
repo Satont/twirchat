@@ -86,13 +86,14 @@ export const transportMessageSchema = z
     historical: z.boolean().optional(),
   })
   .refine(
-    ({ text, emotes }) => {
+    ({ text: messageText, emotes }) => {
       if (!emotes) return true
       let count = 0
       for (const { positions } of emotes) {
         count += positions.length
         if (count > MAX_EMOTE_POSITIONS) return false
-        if (positions.some(({ start, end }) => start > end || end >= text.length)) return false
+        if (positions.some(({ start, end }) => start > end || end >= messageText.length))
+          return false
       }
       return true
     },
