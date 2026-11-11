@@ -18,6 +18,7 @@ const { BackendContext } = await import('../src/gpuix/backend/context')
 const { createDesktopApi } = await import('../src/gpuix/backend/api')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatInput } = await import('../src/gpuix/components/ChatInput')
+const { t } = await import('../src/gpuix/i18n')
 const { initializeManagedRenderer } = await import('../src/gpuix/managed-renderer')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { ChatAggregator } = await import('../src/chat/aggregator')
@@ -26,7 +27,7 @@ const { WatchedChannelManager } = await import('../src/watched-channels/manager'
 const { setRuntimeConfig } = await import('../src/runtime-config')
 const { initDb } = await import('../src/store/db')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
-const { composerStore } = await import('../src/gpuix/state/composer')
+const { composerStore, updateComposer } = await import('../src/gpuix/state/composer')
 const { focusNativeQaWindow } = await import('../scripts/qa-x11')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
@@ -167,6 +168,35 @@ async function click(id: string): Promise<void> {
   renderer.simulateClick(target.x + target.width / 2, target.y + target.height / 2, 0)
   await Bun.sleep(80)
 }
+function renderKickStatus(status: PlatformStatusInfo['status'], error?: string) {
+  renderComposer({
+    ...props,
+    statuses: {
+      ...statuses,
+      kick: { platform: 'kick', channelLogin: 'qa_kick', mode: 'authenticated', status, error },
+    },
+  })
+}
+function painted(text: string): boolean {
+  return renderer.getPaintedText().join(' ').includes(text)
+}
+async function hoverKick(reason: string) {
+  renderer.simulateMouseMove(0, 0)
+  await Bun.sleep(50)
+  const target = bounds('composer-target-kick')
+  renderer.simulateMouseMove(target.x + target.width / 2, target.y + target.height / 2)
+  await until(() => painted(reason), 'Kick tooltip shows ' + reason)
+}
+async function sendHome(keys: string, expected: Platform[]) {
+  const text = keys.replaceAll(' ', '')
+  const next = submissions.length
+  await focus()
+  renderer.simulateKeystrokes(keys)
+  await until(() => composerStore.get().get('qa:compact-frame')?.text === text, 'typed draft')
+  renderer.simulateKeystrokes('enter')
+  await until(() => submissions.length === next + 1, 'native Enter sends')
+  assert.deepEqual(submissions[next]?.map((target) => target.platform).toSorted(), expected)
+}
 function checkFrame(minimumEditorWidth: number) {
   assert(!nodes().some((node) => node.testId === 'send-button'), 'Send button must not exist')
   const frame = bounds('composer-frame'),
@@ -211,6 +241,47 @@ try {
   assert.equal(submissions.length, 1, 'one native Enter produces one submission')
   assert.deepEqual(submissions[0]?.map((target) => target.platform).toSorted(), ['kick', 'twitch'])
   assert.equal(composerStore.get().get('qa:compact-frame')?.text, '')
+
+  const kickId = find('composer-target-kick').id
+  const kickWide = bounds('composer-target-kick')
+  renderer.focusElement?.(kickId)
+  await until(() => renderer.getFocusedElementId() === kickId, 'connected Kick target focused')
+  renderKickStatus('error', 'Kick QA connection dropped')
+  await hoverKick('Kick QA connection dropped')
+  assert(!painted(t('composer.target.sendingHere')))
+  assert(!painted(t('composer.target.clickToEnable')))
+  assert.equal(find('composer-target-kick').id, kickId)
+  assert.deepEqual(bounds('composer-target-kick'), kickWide)
+  const kickErrorScreenshot = await captureGuiQaDisplay('composer-kick-error')
+  const preferences = composerStore.get().get('qa:compact-frame')
+  renderer.simulateKeystrokes('enter')
+  await click('composer-target-kick')
+  const afterClick = composerStore.get().get('qa:compact-frame')
+  assert.equal(afterClick?.activePlatform, preferences?.activePlatform)
+  assert.equal(afterClick?.disabledPlatforms, preferences?.disabledPlatforms)
+  assert.equal(submissions.length, 1, 'an unavailable Kick control cannot activate')
+  await sendHome('o u t a g e', ['twitch'])
+
+  await nativeWindow(renderer).setWindowBounds({ width: 320, height: 240 })
+  await Bun.sleep(160)
+  const kickSmall = bounds('composer-target-kick')
+  renderKickStatus('connecting')
+  await hoverKick(t('composer.connection.connecting', { channel: 'qa_kick' }))
+  assert.equal(find('composer-target-kick').id, kickId)
+  assert.deepEqual(bounds('composer-target-kick'), kickSmall)
+  checkFrame(120)
+  updateComposer('qa:compact-frame', (state) => ({ ...state, activePlatform: 'kick' }))
+  await until(() => painted(t('chat.empty.waitingConnection')), 'selected Kick waits to connect')
+  assert(!painted(t('composer.placeholder.login')))
+  const kickConnectingScreenshot = await captureGuiQaDisplay('composer-kick-connecting')
+  updateComposer('qa:compact-frame', (state) => ({ ...state, activePlatform: undefined }))
+  renderComposer(props)
+  await hoverKick(t('composer.target.sendingHere'))
+  assert.equal(find('composer-target-kick').id, kickId)
+  assert.deepEqual(bounds('composer-target-kick'), kickSmall)
+  const kickRecoveredScreenshot = await captureGuiQaDisplay('composer-kick-recovered')
+  await sendHome('r e s t o r e d', ['kick', 'twitch'])
+
   await click('composer-target-kick')
   root.render(React.createElement('div', { testId: 'composer-unmounted' }))
   await until(
@@ -225,6 +296,7 @@ try {
     () => nodes().some((node) => node.testId === 'composer-target-kick'),
     'composer remounted with the same session key',
   )
+  const remountedSubmission = submissions.length
   await focus()
   renderer.simulateKeystrokes('n e x t')
   await until(
@@ -234,12 +306,13 @@ try {
   await Bun.sleep(80)
   renderer.simulateKeystrokes('enter')
   await until(
-    () => submissions.length === 2,
+    () => submissions.length === remountedSubmission + 1,
     'native Enter preserves toggled platform after remount',
   )
-  assert.deepEqual(submissions[1]?.map((target) => target.platform).toSorted(), ['twitch'])
-  await nativeWindow(renderer).setWindowBounds({ width: 320, height: 240 })
-  await Bun.sleep(160)
+  assert.deepEqual(
+    submissions[remountedSubmission]?.map((target) => target.platform),
+    ['twitch'],
+  )
   await focus()
   renderer.simulateKeystrokes('s m a l l space w i n d o w')
   await Bun.sleep(150)
@@ -318,6 +391,7 @@ try {
     enterExactlyOnce: true,
     targetRouting: true,
     targetRoutingAfterRemount: true,
+    kickReconnect: { kickErrorScreenshot, kickConnectingScreenshot, kickRecoveredScreenshot },
     emoji: true,
     screenshot,
   }

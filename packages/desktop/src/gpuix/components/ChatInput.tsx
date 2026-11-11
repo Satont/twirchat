@@ -1215,7 +1215,16 @@ export function ChatInput(props: ChatInputProps) {
         : t('composer.placeholder.messageAs', { channel, username: watchedAccount.username })
     }
     if (!hasAnything) return t('composer.placeholder.connectAccount')
-    if (isDisabled) return t('composer.placeholder.login')
+    if (isDisabled) {
+      const waitingForConnection = homeConnectionStatuses.some(
+        (target) =>
+          target.mode === 'authenticated' &&
+          (!composer.activePlatform || target.platform === composer.activePlatform),
+      )
+      return waitingForConnection
+        ? t('chat.empty.waitingConnection')
+        : t('composer.placeholder.login')
+    }
     return t('composer.placeholder.send')
   }
 
@@ -1964,7 +1973,7 @@ function TargetControl({
   label: string
   active: boolean
   anonymous: boolean
-  status?: string
+  status?: PlatformStatusInfo['status']
   /** Non-empty while not connected — shown as a dot + tooltip. */
   statusText?: string
   onClick?: () => void
@@ -1973,20 +1982,28 @@ function TargetControl({
   const { t } = useT()
   const color = platformColor(platform)
   const [hovered, setHovered] = useState(false)
-  const effectiveHover = hovered && !anonymous && !active
   const dotColor = statusDotColor(status, theme)
-  const tint = active || effectiveHover ? color : theme.text2
+  const unavailable = dotColor !== null
+  const locked = anonymous && !unavailable
+  const activate = locked || unavailable ? undefined : onClick
+  const highlighted = active && !unavailable
+  const effectiveHover = hovered && !anonymous && !unavailable && !active
+  const tint = unavailable
+    ? withAlpha(theme.text2, 0.5)
+    : highlighted || effectiveHover
+      ? color
+      : theme.text2
 
   const control = (
     <div
       testId={`composer-target-${platform}`}
-      tabIndex={onClick && !anonymous ? 0 : undefined}
-      onClick={anonymous ? undefined : onClick}
+      tabIndex={activate ? 0 : undefined}
+      onClick={activate}
       onKeyDown={(event) => {
-        if (!anonymous && onClick && (event.key === 'enter' || event.key === 'space')) {
+        if (activate && (event.key === 'enter' || event.key === 'space')) {
           event.preventDefault()
           event.stopPropagation()
-          onClick()
+          activate()
         }
       }}
       onMouseEnter={() => setHovered(true)}
@@ -2000,18 +2017,18 @@ function TargetControl({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 5,
-        backgroundColor: active
+        backgroundColor: highlighted
           ? withAlpha(color, 0.16)
           : effectiveHover
             ? theme.fillHover
             : 'transparent',
-        cursor: anonymous || !onClick ? 'default' : 'pointer',
-        opacity: anonymous ? 0.45 : 1,
+        cursor: activate ? 'pointer' : 'default',
+        opacity: locked ? 0.45 : 1,
         userSelect: 'none',
       }}
     >
       <PlatformIcon platform={platform} size={14} color={tint} />
-      {anonymous ? (
+      {locked ? (
         <div style={{ position: 'absolute', right: 1, bottom: 1 }}>
           <Icon name="lock" size={8} color={theme.text2} />
         </div>
@@ -2030,9 +2047,9 @@ function TargetControl({
       ) : null}
     </div>
   )
-  const stateSuffix = anonymous
+  const stateSuffix = locked
     ? t('composer.target.loginToSend')
-    : onClick
+    : activate
       ? active
         ? t('composer.target.sendingHere')
         : t('composer.target.clickToEnable')
