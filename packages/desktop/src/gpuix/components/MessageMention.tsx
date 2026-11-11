@@ -11,6 +11,7 @@ import { resolveMentionTarget } from '../../views/main/utils/mention-user-card'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
+import { claimMessageRowClick } from '../message-row-click'
 import type { MessageToken } from '../message-tokens'
 import { accountsStore, aliasesStore, homeMessagesStore, watchedMessagesStore } from '../state/app'
 import { useStoreSelector } from '../state/create-store'
@@ -148,7 +149,9 @@ export function MessageMention({
       testId={`${image ? 'painted-mention' : 'mention'}-${name}`}
       tabIndex={interactive ? 0 : undefined}
       onClick={(event) => {
-        if (!interactive || (event.button ?? 0) !== 0 || event.isRightClick) return
+        if (!interactive) return
+        claimMessageRowClick(event)
+        if ((event.button ?? 0) !== 0 || event.isRightClick) return
         runUiTask(openCard())
       }}
       onKeyDown={(event) => {

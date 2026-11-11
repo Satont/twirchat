@@ -85,6 +85,28 @@ test('timestamp format defaults for old settings and persists supported values',
   }
 })
 
+test('reply on double-click defaults on for old settings and persists when disabled', () => {
+  const f = fixture()
+  try {
+    f.database.run('INSERT INTO settings(key,value) VALUES(?,?)', [
+      'app_settings',
+      JSON.stringify({ fontSize: 18 }),
+    ])
+    expect(SettingsStore.get().replyOnDoubleClick).toBe(true)
+
+    SettingsStore.set({ ...SettingsStore.get(), replyOnDoubleClick: false })
+    expect(SettingsStore.get().replyOnDoubleClick).toBe(false)
+
+    f.database.run('UPDATE settings SET value=? WHERE key=?', [
+      JSON.stringify({ replyOnDoubleClick: 'no' }),
+      'app_settings',
+    ])
+    expect(SettingsStore.get().replyOnDoubleClick).toBe(DEFAULT_SETTINGS.replyOnDoubleClick)
+  } finally {
+    f.dispose()
+  }
+})
+
 test('theme settings recover independently and retain the custom palette across preset changes', () => {
   const f = fixture()
   try {

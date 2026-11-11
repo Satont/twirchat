@@ -74,6 +74,8 @@ export const settings = {
   'settings.section.similarity.desc': 'Control repeated and almost identical messages',
   'settings.section.timestamps': 'Message Timestamps',
   'settings.section.timestamps.desc': 'Choose how chat timestamps look',
+  'settings.section.replies': 'Replies',
+  'settings.section.replies.desc': 'Choose how to start a reply to a message',
   'settings.section.pause': 'Chat Pausing',
   'settings.section.pause.desc': 'Keep chat still while reading or opening links',
   'settings.section.twitch-session': 'Additional Twitch Session',
@@ -112,6 +114,9 @@ export const settings = {
   'settings.chat.showTimestampHint': 'Display the time next to each chat message',
   'settings.chat.timestampFormat': 'Timestamp format',
   'settings.chat.timestampFormatHint': 'Example: {example}. 12-hour formats include AM/PM.',
+  'settings.chat.replyOnDoubleClick': 'Reply on double-click',
+  'settings.chat.replyOnDoubleClickHint':
+    'Double-click a chat message to reply to it. Turn off to select words with a double-click.',
 
   'settings.twir.suggest': 'Suggest Twir commands',
   'settings.twir.suggestHint': 'Show public commands for the selected chat when you type !',

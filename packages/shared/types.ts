@@ -269,6 +269,8 @@ export interface AppSettings {
   showPlatformIcon: boolean
   showTimestamp: boolean
   timestampFormat: TimestampFormat
+  /** Double-clicking a chat message starts a reply to it. */
+  replyOnDoubleClick: boolean
   showAvatars: boolean
   showBadges: boolean
   showChannelLabel: boolean
@@ -340,6 +342,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPlatformIcon: true,
   showTimestamp: true,
   timestampFormat: 'HH:MM:SS',
+  replyOnDoubleClick: true,
   theme: 'dark',
   themeMode: 'dark',
   twirIntegrationEnabled: true,

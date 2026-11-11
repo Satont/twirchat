@@ -112,6 +112,7 @@ export function ChatThreadPanel({
         chatTheme={settings?.chatTheme}
         hideReplyPreview
         onReply={preview ? undefined : onReply}
+        replyOnDoubleClick={settings?.replyOnDoubleClick}
         onOpenUserCard={onOpenUserCard}
       />
     ),

@@ -16,6 +16,7 @@ import {
   unbanDistanceFrom,
 } from '../../views/main/utils/moderation-drag'
 import { createDragMotion, useDragCancellation } from '../hooks/use-drag-motion'
+import { claimMessageRowClick } from '../message-row-click'
 import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Text } from './ui/Text'
@@ -110,6 +111,7 @@ export function MessageModerationRail({
       onMouseUp={(event) => {
         const current = drag.current
         if (event.button !== 0 || !current) return
+        claimMessageRowClick(event)
         // Commit what the pointer points at now, not the last coalesced frame.
         const action = moderationActionForDrag(platform, dragDistance(current.startX, event.x), {
           messageDeleted,

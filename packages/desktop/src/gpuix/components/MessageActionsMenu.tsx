@@ -9,7 +9,9 @@ import {
   runCommandActions,
   type CommandContext,
 } from '../commands'
+import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../i18n'
+import { claimMessageRowClick } from '../message-row-click'
 import type { IgnoreRule } from '../message-rules'
 import { usePaneAccountId } from '../pane-account-context'
 import { accountsStore, showNotice, streamStatusStore } from '../state/app'
@@ -184,7 +186,10 @@ export function MessageActionsMenu({
   }
   const item = (label: string, run: () => Promise<unknown> | void) => (
     <div
-      onClick={() => void action(run)}
+      onClick={(event) => {
+        claimMessageRowClick(event)
+        runUiTask(action(run))
+      }}
       style={{
         paddingTop: 6,
         paddingBottom: 6,
@@ -205,7 +210,8 @@ export function MessageActionsMenu({
         testId="msg-more"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onClick={() => {
+        onClick={(event) => {
+          claimMessageRowClick(event)
           onMenuButtonClick()
           setOpen((value) => !value)
         }}
