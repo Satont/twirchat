@@ -619,17 +619,18 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const mentionMatcher = useMemo(() => createMentionMatcher(props.accounts ?? []), [props.accounts])
   const isSelfPing =
     props.highlighted ?? (props.selfPingEnabled === true && mentionMatcher(message))
+  // Sanctioned rows keep the rail: a left drag unbans, a right drag changes the sanction.
   const moderationRail =
     props.canModerate &&
     props.onModerate &&
     (message.platform === 'twitch' || message.platform === 'kick') &&
     !isSystem &&
     message.id &&
-    message.author.id &&
-    (!props.moderationOutcome || isTombstone) ? (
+    message.author.id ? (
       <MessageModerationRail
         disabled={props.moderationPending}
         platform={message.platform}
+        messageDeleted={isTombstone}
         rowHovered={hovered}
         onModerate={(action) => props.onModerate?.(message, action)}
       />

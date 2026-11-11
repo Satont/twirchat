@@ -6,6 +6,7 @@ import { z } from 'zod'
 import {
   applyChannelClear,
   applyModerationOutcome,
+  clearModerationSanction,
   moderationOutcomeFor,
   moderationViewStore,
 } from '../src/gpuix/state/app'
@@ -157,6 +158,29 @@ test('moderation publishes immutable resolver snapshots while imperative lookup 
   expect(moderationOutcomeFor(other)?.action).toBe('ban')
   applyChannelClear(entry)
   expect(moderationOutcomeFor(entry)?.label).toBe('(chat cleared)')
+})
+
+test('an unban lifts the ban rows but keeps deleted messages deleted', () => {
+  const entry = message(
+    `unban-${crypto.randomUUID()}`,
+    Date.now() - 1,
+    `room-${crypto.randomUUID()}`,
+  )
+  const other = { ...entry, id: `${entry.id}-other` }
+  const target = { platform: entry.platform, channelId: entry.channelId }
+  applyModerationOutcome({ ...target, action: 'delete_message', messageId: entry.id })
+  applyModerationOutcome({ ...target, action: 'ban', targetUserId: entry.author.id })
+  expect(moderationOutcomeFor(other)?.action).toBe('ban')
+
+  const banned = moderationViewStore.get()
+  clearModerationSanction({ ...target, targetUserId: entry.author.id })
+  expect(moderationViewStore.get()).not.toBe(banned)
+  expect(moderationOutcomeFor(other)).toBeUndefined()
+  expect(moderationOutcomeFor(entry)?.isTombstone).toBe(true)
+
+  const lifted = moderationViewStore.get()
+  clearModerationSanction({ ...target, targetUserId: entry.author.id })
+  expect(moderationViewStore.get()).toBe(lifted)
 })
 
 test('a retained moderation view cannot keep a deleted-message tombstone after its expiry', () => {
