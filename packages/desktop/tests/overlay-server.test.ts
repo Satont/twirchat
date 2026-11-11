@@ -10,6 +10,7 @@ import {
   startOverlayServer,
 } from '../src/overlay-server'
 import type { PluginTransportMessage } from '../src/plugins/api'
+import { getBackendUrl } from '../src/runtime-config'
 import { normalizedChatMessageSchema } from '../src/services/persisted-schemas'
 import { overlayEventSchema } from '../src/views/overlay/protocol'
 import type { PluginWatchedChannel } from '../src/watched-channels/plugin-channel-types'
@@ -75,6 +76,13 @@ test('broadcasts built-in and live plugin chat on the overlay socket', async () 
     text: 'Привет KEKW <b>hello</b>',
     timestamp: timestamp.getTime(),
   }
+  const emote = {
+    id: '7tv-emote',
+    name: 'KEKW',
+    imageUrl: 'https://cdn.7tv.app/emote/7tv-emote/1x.webp',
+    positions: [{ start: 7, end: 10 }],
+    aspectRatio: 2,
+  }
   const server = startOverlayServer(0)
   const socket = new WebSocket(`ws://127.0.0.1:${server.port}`)
   const opened = Promise.withResolvers<void>()
@@ -97,8 +105,14 @@ test('broadcasts built-in and live plugin chat on the overlay socket', async () 
   try {
     await opened.promise
     pushOverlayMessage(builtIn)
-    pushOverlayPluginMessage(channel, { ...plugin, id: 'history-1', historical: true })
+    pushOverlayPluginMessage(channel, {
+      ...plugin,
+      id: 'history-1',
+      historical: true,
+      emotes: [emote],
+    })
     pushOverlayPluginMessage(channel, plugin)
+    pushOverlayPluginMessage(channel, { ...plugin, id: 'chat-2', emotes: [emote] })
     clearOverlay()
     await cleared.promise
 
@@ -116,6 +130,10 @@ test('broadcasts built-in and live plugin chat on the overlay socket', async () 
       },
       text: plugin.text,
     }
+    const overlayEmote = {
+      ...emote,
+      imageUrl: `${getBackendUrl().replace(/\/$/u, '')}/proxy/provider-image?url=${encodeURIComponent(emote.imageUrl)}`,
+    }
     expect(frames).toEqual([
       {
         type: 'chat_message',
@@ -124,6 +142,17 @@ test('broadcasts built-in and live plugin chat on the overlay socket', async () 
       {
         type: 'chat_message',
         data: { message: pluginMessage, parts: [{ type: 'text', content: plugin.text }] },
+      },
+      {
+        type: 'chat_message',
+        data: {
+          message: { ...pluginMessage, id: `${channel.id}:chat-2`, emotes: [overlayEmote] },
+          parts: [
+            { type: 'text', content: 'Привет ' },
+            { type: 'emote', emote: overlayEmote },
+            { type: 'text', content: ' <b>hello</b>' },
+          ],
+        },
       },
       { type: 'clear' },
     ])

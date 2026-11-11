@@ -66,10 +66,20 @@ export interface PluginEventMap {
   }
 }
 
+export interface PluginTransportEmote {
+  id: string
+  name: string
+  imageUrl: string
+  /** Inclusive UTF-16 indices in the message text. */
+  positions: { start: number; end: number }[]
+  aspectRatio?: number
+}
+
 export interface PluginTransportMessage {
   id: string
   author: PluginMessageAuthor
   text: string
+  emotes?: PluginTransportEmote[]
   timestamp?: number
   historical?: boolean
 }

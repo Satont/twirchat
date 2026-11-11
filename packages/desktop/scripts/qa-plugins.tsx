@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import type { GpuixRenderer } from '@gpuix/native'
+import sharp from 'sharp'
 import { z } from 'zod'
 
 import type { NativeWindowControls } from '../src/gpuix/native-window'
+import { getDbPath } from '../src/runtime-config'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 import { focusNativeQaWindow } from './qa-x11'
 
@@ -22,15 +25,18 @@ const { accountsStore, loadInitialData, wireBackendToStores } =
 const { wireActiveWatchedChannels } = await import('../src/gpuix/state/watched-subscriptions')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
+const backend = getDesktopBackend()
 
 interface AutomationNode {
   id: number
+  type: string
   testId?: string
   children: AutomationNode[]
 }
 const nodeSchema: z.ZodType<AutomationNode> = z.lazy(() =>
   z.object({
     id: z.number(),
+    type: z.string(),
     testId: z.string().optional(),
     children: z.array(nodeSchema).default([]),
   }),
@@ -39,6 +45,13 @@ const directory = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(directory)
 const fixture = join(directory, 'plugin-fixture')
 const builtinCommandProof = join(directory, 'builtin-command.txt')
+const imageUrl = 'https://plugins.example.org/qa-emote.png'
+const imageCache = join(dirname(getDbPath()), 'image-cache')
+await mkdir(imageCache, { recursive: true })
+const imageKey = createHash('sha256').update(imageUrl).digest('hex').slice(0, 32)
+await sharp({ create: { width: 32, height: 16, channels: 3, background: '#ff9900' } })
+  .png()
+  .toFile(join(imageCache, `${imageKey}.png`))
 await mkdir(fixture)
 const manifest = join(fixture, 'manifest.json')
 await Bun.write(
@@ -84,7 +97,11 @@ await Bun.write(
         context.emitMessage({
           id: 'feed-history',
           author: { id: 'qa', name: 'QA', color: '#ff9900' },
-          text: 'PLUGIN HISTORY',
+          text: 'PLUGIN HISTORY WideEmote',
+          emotes: [{
+            id: 'wide', name: 'WideEmote', imageUrl: ${JSON.stringify(imageUrl)},
+            positions: [{ start: 15, end: 23 }], aspectRatio: 2,
+          }],
           timestamp: Date.now() - 20_000,
         })
         return () => { feed = undefined }
@@ -93,7 +110,6 @@ await Bun.write(
   }`,
 )
 
-const backend = getDesktopBackend()
 const plugins = backend.plugins
 assert(plugins)
 const stopMessages = wireBackendToStores(backend)
@@ -115,12 +131,21 @@ function current() {
 function flatten(node: AutomationNode): AutomationNode[] {
   return [node, ...node.children.flatMap(flatten)]
 }
-function bounds(id: string) {
-  if (!renderer) return null
-  const node = flatten(nodeSchema.parse(JSON.parse(renderer.getAutomationTree()))).find(
+function findNode(id: string) {
+  if (!renderer) return undefined
+  return flatten(nodeSchema.parse(JSON.parse(renderer.getAutomationTree()))).find(
     (candidate) => candidate.testId === id,
   )
-  return node ? renderer.getPaintedElementBounds(node.id) : null
+}
+function bounds(id: string) {
+  const node = findNode(id)
+  return node ? current().getPaintedElementBounds(node.id) : null
+}
+function paintedHistoryEmote() {
+  const row = findNode('plugin-chat-message-feed-history')
+  const image = row && flatten(row).find(({ type }) => type === 'img')
+  const rectangle = image && current().getPaintedElementBounds(image.id)
+  return Boolean(rectangle && rectangle.height > 0 && rectangle.width > rectangle.height)
 }
 async function until(check: () => boolean, label: string) {
   const deadline = performance.now() + 5_000
@@ -223,6 +248,7 @@ try {
   await fill('add-channel-input', 'read-only')
   await click('add-channel-confirm')
   await until(() => painted('PLUGIN HISTORY'), 'read-only plugin split')
+  await until(paintedHistoryEmote, 'inline emote in the plugin split')
   const feed = (await backend.api.getWatchedChannels()).find(
     (channel) => channel.channelSlug === 'read-only',
   )
@@ -260,6 +286,7 @@ try {
       painted('BUILTIN MESSAGE'),
     'plugin history moves into the built-in list',
   )
+  await until(paintedHistoryEmote, 'inline emote in the combined feed')
   assert.equal(
     await backend.api.getUiState({ key: 'chat.homePluginChannels' }),
     JSON.stringify([feed.id]),

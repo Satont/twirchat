@@ -11,8 +11,8 @@ interface MessagePartWithAlias extends MessagePart {
 }
 
 export function buildMessageParts(
-  message: NormalizedChatMessage,
-  includeAliases = false,
+  message: Pick<NormalizedChatMessage, 'text' | 'emotes' | 'metadata'>,
+  includeAliases: boolean | 'all' = false,
 ): MessagePartWithAlias[] {
   if (!message.emotes.length) {
     return [{ content: message.text, type: 'text' }]
@@ -45,6 +45,7 @@ export function buildMessageParts(
     if (readAliases && range.end >= range.start && range.end < message.text.length) {
       const provider = range.emote.provider ?? range.emote.source
       if (
+        includeAliases === 'all' ||
         provider === 'seventv' ||
         provider === 'bttv' ||
         provider === 'ffz' ||

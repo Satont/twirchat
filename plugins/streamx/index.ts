@@ -4,6 +4,7 @@ import type {
   PluginDefinition,
   PluginTransport,
   PluginTransportContext,
+  PluginTransportEmote,
   PluginTransportMessage,
 } from '../../packages/desktop/src/plugins/api'
 
@@ -15,6 +16,8 @@ const HANDSHAKE_TIMEOUT = 15_000
 const HEARTBEAT_INTERVAL = 25_000
 const IDLE_TIMEOUT = 90_000
 const MAX_RETRY_DELAY = 30_000
+const MAX_MESSAGE_LENGTH = 16_384
+const MAX_EMOTES = 64
 
 const CHANNEL_QUERY = `query ChannelId($channelName: String!) {
   fetchUserByName(name: $channelName) { id }
@@ -22,7 +25,10 @@ const CHANNEL_QUERY = `query ChannelId($channelName: String!) {
 const MESSAGE_FIELDS = `
   id createdAt senderColor
   sender { id name displayName }
-  segments { content }
+  segments {
+    content
+    ... on MessageSegmentEmote { emote { id name url width height } }
+  }
 `
 const SUBSCRIPTION = `subscription NewChatMessages($channelID: UUID!) {
   chatMessages(channelID: $channelID) { ${MESSAGE_FIELDS} }
@@ -57,6 +63,30 @@ function identity(value: unknown): string | undefined {
   return trimmed && trimmed.length <= 256 ? trimmed : undefined
 }
 
+function chatEmote(value: unknown, start: number, end: number): PluginTransportEmote | undefined {
+  const id = identity(field(value, 'id'))
+  const name = identity(field(value, 'name'))
+  const source = field(value, 'url')
+  if (!id || !name || typeof source !== 'string' || source.length > 2048) return undefined
+
+  const url = URL.parse(source.startsWith('//') ? `https:${source}` : source)
+  if (url?.protocol !== 'https:' || url.username || url.password || url.href.length > 2048)
+    return undefined
+
+  const width = field(value, 'width')
+  const height = field(value, 'height')
+  const aspectRatio =
+    typeof width === 'number' &&
+    Number.isInteger(width) &&
+    width > 0 &&
+    typeof height === 'number' &&
+    Number.isInteger(height) &&
+    height > 0
+      ? width / height
+      : undefined
+  return { id, name, imageUrl: url.href, positions: [{ start, end }], aspectRatio }
+}
+
 function chatMessage(value: unknown): PluginTransportMessage | undefined {
   const id = identity(field(value, 'id'))
   const sender = field(value, 'sender')
@@ -68,11 +98,19 @@ function chatMessage(value: unknown): PluginTransportMessage | undefined {
   const senderColor = field(value, 'senderColor')
   const color =
     typeof senderColor === 'string' && /^#[\da-f]{6}$/iu.test(senderColor) ? senderColor : undefined
-  const text = list(field(value, 'segments'))
-    .map((segment) => field(segment, 'content'))
-    .filter((content) => typeof content === 'string' && content !== '')
-    .join(' ')
-    .slice(0, 16_384)
+  let text = ''
+  const emotes: PluginTransportEmote[] = []
+  for (const segment of list(field(value, 'segments'))) {
+    if (text.length === MAX_MESSAGE_LENGTH) break
+    const content = field(segment, 'content')
+    if (typeof content !== 'string' || content === '') continue
+    if (text) text += ' '
+    const start = text.length
+    text += content.slice(0, MAX_MESSAGE_LENGTH - start)
+    if (emotes.length === MAX_EMOTES || text.length - start !== content.length) continue
+    const emote = chatEmote(field(segment, 'emote'), start, text.length - 1)
+    if (emote) emotes.push(emote)
+  }
   if (!text) return undefined
 
   const createdAt = field(value, 'createdAt')
@@ -81,6 +119,7 @@ function chatMessage(value: unknown): PluginTransportMessage | undefined {
     id,
     author: { id: senderId, name, username, ...(color ? { color } : {}) },
     text,
+    ...(emotes.length > 0 ? { emotes } : {}),
     timestamp: timestamp >= 0 ? timestamp : undefined,
   }
 }
