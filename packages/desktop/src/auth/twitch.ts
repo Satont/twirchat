@@ -7,9 +7,9 @@ import { t } from '../gpuix/i18n'
 import { AccountStore } from '../store/account-store'
 import { getTwitchDesktopClientId } from './client-config'
 import { postOAuthForm } from './oauth-form'
-import { createOAuthRefresher } from './refresh-token'
+import { createOAuthRefresher, OAuthRefreshError } from './refresh-token'
 import { expiresAt, oauthTokenSchema } from './response-schemas'
-import { validateTwitchUserToken } from './twitch-user-token'
+import { TwitchTokenValidationError, validateTwitchUserToken } from './twitch-user-token'
 
 export const TWITCH_SCOPES: readonly string[] = [
   'chat:read',
@@ -183,3 +183,38 @@ export async function connectTwitchDevice(
 export const refreshTwitchToken = createOAuthRefresher('Twitch', TWITCH_TOKEN_URL, () => ({
   client_id: getTwitchDesktopClientId(),
 }))
+
+export async function checkTwitchSession(
+  accountId: string,
+  isDisposed: () => boolean,
+): Promise<boolean> {
+  const tokens = AccountStore.getTokens(accountId)
+  if (!tokens || isDisposed()) return false
+  try {
+    await validateTwitchUserToken(tokens.accessToken, true)
+    return false
+  } catch (error) {
+    if (!(error instanceof TwitchTokenValidationError) || !error.invalidAccessToken) throw error
+  }
+
+  const isCurrent = () => {
+    if (isDisposed()) return false
+    const current = AccountStore.getTokens(accountId)
+    return (
+      current?.accessToken === tokens.accessToken && current.refreshToken === tokens.refreshToken
+    )
+  }
+  if (!isCurrent()) return false
+  if (tokens.refreshToken) {
+    try {
+      const refreshed = await refreshTwitchToken(accountId)
+      await validateTwitchUserToken(refreshed)
+      return false
+    } catch (error) {
+      if (!(error instanceof OAuthRefreshError) || !error.invalidRefreshToken) throw error
+    }
+  }
+  if (!isCurrent()) return false
+  AccountStore.clearTokens(accountId)
+  return true
+}

@@ -162,15 +162,20 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
     current.client.quit()
   }
 
-  function forget(accountId: string): void {
+  function invalidate(accountId: string): void {
     const entry = entries.get(accountId)
-    if (!entry) return
+    if (!entry?.opening) return
+    const opening = entry.opening
+    entry.opening = undefined
+    runInBackground(
+      opening.then(close, () => {}),
+      'Could not close a Twitch chat connection',
+    )
+  }
+
+  function forget(accountId: string): void {
+    invalidate(accountId)
     entries.delete(accountId)
-    if (entry.opening)
-      runInBackground(
-        entry.opening.then(close, () => {}),
-        'Could not close a Twitch chat connection',
-      )
   }
 
   function releaseChannel(
@@ -209,8 +214,13 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       const entry = entryFor(account.id)
       const use = channelFor(entry, name)
       use.owners++
-      const current = await sessionFor(account, entry)
-      if (entries.get(account.id) === entry && entry.channels.get(name) === use)
+      const opening = sessionFor(account, entry)
+      const current = await opening
+      if (
+        entries.get(account.id) === entry &&
+        entry.channels.get(name) === use &&
+        entry.opening === opening
+      )
         await join(current, name)
     },
 
@@ -226,17 +236,22 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       const use = channelFor(entry, name)
       const temporary = use.owners === 0
       if (temporary) use.temporarySends++
-      const assertChannelOpen = () => {
-        if (entries.get(account.id) !== entry || entry.channels.get(name) !== use)
-          throw new Error(t('misc.twitchSender.closedBeforeSending'))
-      }
       try {
-        const current = await sessionFor(account, entry)
+        const opening = sessionFor(account, entry)
+        const assertChannelOpen = () => {
+          if (
+            entries.get(account.id) !== entry ||
+            entry.channels.get(name) !== use ||
+            entry.opening !== opening
+          )
+            throw new Error(t('misc.twitchSender.closedBeforeSending'))
+        }
+        const current = await opening
         assertChannelOpen()
         const state = await join(current, name)
         await dependencies.acquire(account.id, name, hasPrivilegedChatRole(state.tags))
-        assertChannelOpen()
         const outcome = await current.outcomes.send(name, () => {
+          assertChannelOpen()
           beforeWrite?.()
           return current.client.say(name, text, replyTo)
         })
@@ -268,6 +283,7 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       releaseChannel(accountId, entry, name, use)
     },
 
+    invalidate,
     forget,
 
     dispose(): void {
