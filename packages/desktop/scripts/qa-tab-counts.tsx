@@ -209,6 +209,7 @@ try {
         mode: 'uniform',
       })
       const testIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add', 'tab-search-all']
+      const rowTestIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add']
       const baseline = Object.fromEntries(
         testIds.map((testId) => {
           const { x, y, width } = bounds(testId)
@@ -216,11 +217,22 @@ try {
         }),
       )
       const bar = bounds('channel-tab-bar')
-      for (const testId of testIds) {
+      const toolbar = bounds('channel-tab-toolbar')
+      assert(toolbar.y >= bar.y + bar.height, 'The tab toolbar stays below the channel row')
+      for (const testId of rowTestIds) {
         const tab = bounds(testId)
         assert(tab.x >= bar.x && tab.x + tab.width <= bar.x + bar.width, `${testId} fits the row`)
         assert(tab.y >= bar.y && tab.y + tab.height <= bar.y + bar.height, `${testId} fits the bar`)
       }
+      const searchAll = bounds('tab-search-all')
+      assert(
+        searchAll.x >= toolbar.x && searchAll.x + searchAll.width <= toolbar.x + toolbar.width,
+        'Search all fits the toolbar',
+      )
+      assert(
+        searchAll.y >= toolbar.y && searchAll.y + searchAll.height <= toolbar.y + toolbar.height,
+        'Search all stays inside the toolbar',
+      )
       for (const channel of channels) {
         const tab = bounds(`tab-${channel.id}`)
         const counts = bounds(`tab-${channel.id}-counts`)

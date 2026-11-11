@@ -48,7 +48,7 @@ import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { AccountAvatar } from './ChatAccountControl'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
-import { Icon, PlatformIcon } from './ui/Icon'
+import { Icon, PlatformIcon, type IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 
@@ -79,28 +79,124 @@ export function ChannelTabBar({ leading, tabs }: { leading?: ReactNode; tabs?: C
 
   return (
     <div
-      ref={(element) => {
-        barElement.current = element?.id ?? null
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flexShrink: 0,
       }}
-      testId="channel-tab-bar"
+    >
+      <div
+        ref={(element) => {
+          barElement.current = element?.id ?? null
+        }}
+        testId="channel-tab-bar"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          alignContent: 'start',
+          minWidth: 0,
+          gap: 2,
+          paddingTop: 6,
+          paddingLeft: 8,
+          paddingRight: 8,
+          userSelect: 'none',
+        }}
+      >
+        {leading}
+        {tabs ? <ChannelTabs {...tabs} barElement={barElement} /> : null}
+      </div>
+      {tabs ? <ChannelTabToolbar onSearchAll={tabs.onSearchAll} /> : null}
+    </div>
+  )
+}
+
+function TabToolbarButton({
+  testId,
+  label,
+  icon,
+  onClick,
+}: {
+  testId: string
+  label: string
+  icon: IconName
+  onClick: () => void
+}) {
+  const theme = useTheme()
+  return (
+    <div
+      testId={testId}
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'enter' || event.key === 'space') {
+          event.preventDefault()
+          onClick()
+        }
+      }}
+      style={{
+        padding: 6,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        borderRadius: 4,
+        cursor: 'pointer',
+        hover: { backgroundColor: theme.fillHover },
+      }}
+    >
+      <Icon name={icon} size={14} color={theme.text2} />
+      {label ? <Text style={{ fontSize: 11, color: theme.text2 }}>{label}</Text> : null}
+    </div>
+  )
+}
+
+/** Secondary actions stay below the channel row so wrapped tabs never push them around. */
+function ChannelTabToolbar({ onSearchAll }: { onSearchAll?: () => void }) {
+  const backend = useBackend()
+  const { t } = useT()
+  const state = useStore(chatTabsStore)
+
+  return (
+    <div
+      testId="channel-tab-toolbar"
       style={{
         display: 'flex',
         flexDirection: 'row',
-        flexWrap: 'wrap',
         alignItems: 'center',
-        alignContent: 'start',
-        minWidth: 0,
         gap: 2,
-        paddingTop: 6,
         paddingLeft: 8,
         paddingRight: 8,
+        paddingBottom: 2,
         flexShrink: 0,
         userSelect: 'none',
       }}
     >
-      {leading}
-      {tabs ? <ChannelTabs {...tabs} barElement={barElement} /> : null}
+      {onSearchAll ? (
+        <TabToolbarButton
+          testId="tab-search-all"
+          label={t('app.tab.searchAll')}
+          icon="search"
+          onClick={onSearchAll}
+        />
+      ) : null}
+      {state.value.closed.length ? (
+        <TabToolbarButton
+          testId="tab-restore"
+          label={t('app.tab.restore')}
+          icon="refresh"
+          onClick={() => runTabAction(() => restoreClosedChatTab(backend))}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function runTabAction(operation: () => Promise<unknown>) {
+  void operation().catch((error) =>
+    showNotice('error', error instanceof Error ? error.message : String(error)),
   )
 }
 
@@ -115,7 +211,6 @@ function ChannelTabs({
   onSelectTab,
   onAddChannel,
   onRemoveChannel,
-  onSearchAll,
 }: ChannelTabsProps & { barElement: RefObject<number | null> }) {
   const theme = useTheme()
   const { t } = useT()
@@ -194,41 +289,8 @@ function ChannelTabs({
   }, [cancelDrag, state.value.metadata, watchedChannels])
   const action = (operation: () => Promise<unknown>) => {
     setMenuId(null)
-    void operation().catch((error) =>
-      showNotice('error', error instanceof Error ? error.message : String(error)),
-    )
+    runTabAction(operation)
   }
-  const toolbar = (
-    testId: string,
-    label: string,
-    icon: 'plus' | 'search' | 'refresh',
-    click: () => void,
-  ) => (
-    <div
-      testId={testId}
-      tabIndex={0}
-      onClick={click}
-      onKeyDown={(event) => {
-        if (event.key === 'enter' || event.key === 'space') {
-          event.preventDefault()
-          click()
-        }
-      }}
-      style={{
-        padding: 6,
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        borderRadius: 4,
-        cursor: 'pointer',
-        hover: { backgroundColor: theme.fillHover },
-      }}
-    >
-      <Icon name={icon} size={14} color={theme.text2} />
-      {label ? <Text style={{ fontSize: 11, color: theme.text2 }}>{label}</Text> : null}
-    </div>
-  )
   return (
     <>
       <Tab
@@ -529,15 +591,7 @@ function ChannelTabs({
           </div>
         )
       })}
-      {toolbar('tab-add', '', 'plus', onAddChannel)}
-      {onSearchAll
-        ? toolbar('tab-search-all', t('app.tab.searchAll'), 'search', onSearchAll)
-        : null}
-      {state.value.closed.length
-        ? toolbar('tab-restore', t('app.tab.restore'), 'refresh', () =>
-            action(() => restoreClosedChatTab(backend)),
-          )
-        : null}
+      <TabToolbarButton testId="tab-add" label="" icon="plus" onClick={onAddChannel} />
       {state.error ? (
         <Text
           onClick={() => {
