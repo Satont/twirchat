@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { hasOAuthErrorMessage } from './response-schemas'
+
 const tokenSchema = z.object({
   client_id: z.string().min(1),
   user_id: z.string().min(1),
@@ -17,7 +19,10 @@ interface TwitchUserToken {
 }
 
 export class TwitchTokenValidationError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    readonly invalidAccessToken: boolean,
+  ) {
     super(`Twitch token validation failed (HTTP ${status}).`)
   }
 }
@@ -42,7 +47,12 @@ export function validateTwitchUserToken(
       signal: AbortSignal.timeout(10_000),
     })
       .then(async (response) => {
-        if (!response.ok) throw new TwitchTokenValidationError(response.status)
+        if (!response.ok) {
+          const invalidAccessToken =
+            response.status === 401 &&
+            (await hasOAuthErrorMessage(response, 'invalid access token'))
+          throw new TwitchTokenValidationError(response.status, invalidAccessToken)
+        }
         const token = tokenSchema.parse(await response.json())
         entry.expiresAt = now + Math.min(validationTtl, token.expires_in * 1000)
         return {

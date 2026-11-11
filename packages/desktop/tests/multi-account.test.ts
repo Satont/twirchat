@@ -9,7 +9,7 @@ import { createYouTubeGrpcSession } from '@twirchat/shared/youtube'
 import { z } from 'zod'
 
 import { refreshKickToken } from '../src/auth/kick'
-import { refreshTwitchToken } from '../src/auth/twitch'
+import { checkTwitchSession, refreshTwitchToken } from '../src/auth/twitch'
 import {
   requestTwitchActivitiesSnapshot,
   subscribeTwitchActivities,
@@ -76,6 +76,142 @@ function gate<T>() {
   const { promise, resolve } = Promise.withResolvers<T>()
   return { promise, resolve }
 }
+
+function mockTwitchOAuth(handler: (pathname: string, headers: Headers) => Promise<Response>) {
+  globalThis.fetch = Object.assign(
+    (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : input)
+      expect(url.origin).toBe('https://id.twitch.tv')
+      return handler(url.pathname, new Headers(init?.headers))
+    },
+    { preconnect: originalFetch.preconnect },
+  )
+}
+
+function invalidTwitchAccessToken() {
+  return Response.json({ message: 'invalid access token' }, { status: 401 })
+}
+
+function validTwitchAccessToken() {
+  return Response.json({
+    client_id: 'public-client',
+    user_id: '1',
+    login: 'user1',
+    expires_in: 3600,
+    scopes: [],
+  })
+}
+
+const isDisposed = () => false
+
+describe('saved Twitch session validation', () => {
+  test('retains the account while offline and refreshes the same credentials on recovery', async () => {
+    const account = save('twitch', '1')
+    const originalTokens = AccountStore.getTokens(account.id)
+    mockTwitchOAuth(async () => {
+      throw new TypeError('Network unavailable')
+    })
+    await expect(checkTwitchSession(account.id, isDisposed)).rejects.toThrow('Network unavailable')
+    expect(AccountStore.getTokens(account.id)).toEqual(originalTokens)
+
+    mockTwitchOAuth(async (pathname, headers) => {
+      if (pathname === '/oauth2/token')
+        return Response.json({
+          access_token: 'renewed',
+          refresh_token: 'rotated',
+          expires_in: 3600,
+        })
+      expect(pathname).toBe('/oauth2/validate')
+      return headers.get('Authorization') === 'OAuth renewed'
+        ? validTwitchAccessToken()
+        : invalidTwitchAccessToken()
+    })
+    expect(await checkTwitchSession(account.id, isDisposed)).toBe(false)
+    expect(AccountStore.getTokens(account.id)).toMatchObject({
+      accessToken: 'renewed',
+      refreshToken: 'rotated',
+    })
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(account.id)
+  })
+
+  test.each([
+    [400, 'Bad gateway'],
+    [401, '{"message":"Invalid client"}'],
+    [503, '{"message":"Invalid refresh token"}'],
+  ])('keeps the credentials after an unconfirmed HTTP %i refresh failure', async (status, body) => {
+    const account = save('twitch', '1')
+    const originalTokens = AccountStore.getTokens(account.id)
+    mockTwitchOAuth(async (pathname) =>
+      pathname === '/oauth2/validate' ? invalidTwitchAccessToken() : new Response(body, { status }),
+    )
+    await expect(checkTwitchSession(account.id, isDisposed)).rejects.toMatchObject({ status })
+    expect(AccountStore.getTokens(account.id)).toEqual(originalTokens)
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(account.id)
+  })
+
+  test('preserves the selected identity, chat binding and web session when Twitch consumed a refresh token', async () => {
+    const account = save('twitch', '1')
+    const watched = WatchedChannelStore.upsert('twitch', 'watched', 'Watched')
+    WatchedChannelStore.setAccount(watched.id, account.id)
+    const webSession = { token: 'web-token', userId: '1', username: 'user1', clientId: 'client' }
+    await TwitchWebSessionStore.set(webSession)
+    let refreshes = 0
+    mockTwitchOAuth(async (pathname) => {
+      if (pathname === '/oauth2/validate') return invalidTwitchAccessToken()
+      expect(pathname).toBe('/oauth2/token')
+      if (++refreshes === 1) throw new TypeError('Connection lost during refresh')
+      return Response.json({ message: ' Invalid refresh token ' }, { status: 400 })
+    })
+
+    await expect(checkTwitchSession(account.id, isDisposed)).rejects.toThrow('Connection lost')
+    expect(AccountStore.getTokens(account.id)?.refreshToken).toBe('refresh-1')
+    expect(await checkTwitchSession(account.id, isDisposed)).toBe(true)
+    expect(AccountStore.getTokens(account.id)).toBeNull()
+    expect(await checkTwitchSession(account.id, isDisposed)).toBe(false)
+    expect(refreshes).toBe(2)
+    expect(AccountStore.findById(account.id)?.id).toBe(account.id)
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(account.id)
+    expect(WatchedChannelStore.findById(watched.id)?.accountId).toBe(account.id)
+    expect(await TwitchWebSessionStore.get()).toEqual(webSession)
+
+    const signedIn = save('twitch', '1')
+    mockTwitchOAuth(async (pathname) => {
+      expect(pathname).toBe('/oauth2/validate')
+      return validTwitchAccessToken()
+    })
+    expect(await checkTwitchSession(signedIn.id, isDisposed)).toBe(false)
+    expect(signedIn.id).toBe(account.id)
+    expect(WatchedChannelStore.findById(watched.id)?.accountId).toBe(account.id)
+  })
+
+  test('a check sharing an old in-flight refresh cannot clear newer credentials', async () => {
+    const account = save('twitch', '1')
+    const started = gate<void>()
+    const rejectedRefresh = gate<Response>()
+    const validating = gate<void>()
+    mockTwitchOAuth(async (pathname) => {
+      if (pathname === '/oauth2/token') {
+        started.resolve()
+        return rejectedRefresh.promise
+      }
+      validating.resolve()
+      return invalidTwitchAccessToken()
+    })
+    const oldRefresh = refreshTwitchToken(account.id)
+    await started.promise
+    AccountStore.updateTokens(account.id, 'new-access', 'new-refresh')
+    const checked = checkTwitchSession(account.id, isDisposed).catch((error: unknown) => error)
+    await validating.promise
+    await Bun.sleep(0)
+    rejectedRefresh.resolve(Response.json({ message: 'Invalid refresh token' }, { status: 400 }))
+    await expect(oldRefresh).resolves.toBe('new-access')
+    expect(await checked).toMatchObject({ status: 401 })
+    expect(AccountStore.getTokens(account.id)).toMatchObject({
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+    })
+  })
+})
 
 describe('saved and active accounts', () => {
   test('successive OAuth selections preserve both identities and encrypted tokens across restart', () => {

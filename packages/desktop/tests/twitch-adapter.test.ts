@@ -81,13 +81,14 @@ function readerFixture(login = 'satont', channel = 'satont', senders?: TwitchSen
 
 function writerFixture(
   write: (client: ChatClient, channel: string, text: string, replyTo?: string) => Promise<void>,
+  acquire = async () => {},
 ) {
   const client = new ChatClient({ logger: { minLevel: LogLevel.CRITICAL } })
   clients.push(client)
   return createTwitchSenderPool({
     token: async () => 'fixture',
     refreshToken: async () => 'fixture',
-    acquire: async () => {},
+    acquire,
     createClient: () => ({
       connect() {},
       quit: () => client.quit(),
@@ -402,5 +403,39 @@ describe('Twitch writer and reader', () => {
     await expect(sending).rejects.toThrow('disconnected before delivery')
     await disconnecting
     expect(messages).toEqual([])
+  })
+
+  test('invalidating a writer blocks queued sends and allows a new connection after sign-in', async () => {
+    const acquired = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const written: string[] = []
+    let sends = 0
+    const senders = writerFixture(
+      async (writer, _channel, text) => {
+        written.push(text)
+        writer.irc.receiveLine('@id=acknowledged :tmi.twitch.tv USERSTATE #another')
+      },
+      async () => {
+        if (++sends !== 1) return
+        acquired.resolve()
+        await resume.promise
+      },
+    )
+    const account = { id: 'twitch:1', username: 'viewer' }
+    senders.retain(account.id, 'another')
+    try {
+      const oldSend = senders
+        .send(account, 'another', 'old session')
+        .catch((error: unknown) => error)
+      await acquired.promise
+      senders.invalidate(account.id)
+      await senders.send(account, 'another', 'new session')
+      resume.resolve()
+      expect(await oldSend).toMatchObject({ message: 'The Twitch chat was closed before sending.' })
+      expect(written).toEqual(['new session'])
+    } finally {
+      resume.resolve()
+      senders.dispose()
+    }
   })
 })

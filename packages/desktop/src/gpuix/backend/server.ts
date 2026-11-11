@@ -9,7 +9,12 @@ import {
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
-import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import type {
+  Account,
+  NormalizedChatMessage,
+  Platform,
+  PlatformStatusInfo,
+} from '@twirchat/shared/types'
 /**
  * GPUIX backend bridge — process bootstrap.
  *
@@ -26,9 +31,7 @@ import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirc
 import { z } from 'zod'
 
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
-import { OAuthRefreshError } from '../../auth/refresh-token'
-import { refreshTwitchToken } from '../../auth/twitch'
-import { TwitchTokenValidationError, validateTwitchUserToken } from '../../auth/twitch-user-token'
+import { checkTwitchSession } from '../../auth/twitch'
 import { BackendConnection } from '../../backend-connection'
 import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
@@ -42,7 +45,6 @@ import {
 } from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
-import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import { createDefaultTwitchSenderPool } from '../../platforms/twitch/sender-pool'
 import { VkPlayAdapter } from '../../platforms/vkplay/adapter'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
@@ -97,6 +99,10 @@ import { createUpdater } from './updater'
 const log = logger('gpuix-backend')
 const isHomeTwitchChannel = (channel: string) =>
   AccountStore.findByPlatform('twitch')?.username.toLowerCase() === channel
+
+function accountWithTwitchToken(account: Account | null): Account | null {
+  return account && AccountStore.getTokens(account.id) ? account : null
+}
 
 export interface DesktopBackend {
   api: DesktopApi
@@ -243,13 +249,13 @@ function boot(): DesktopBackend {
     }
   }
   const twitchEventSub = createTwitchEventSubAccounts({
-    activeAccount: () => AccountStore.findByPlatform('twitch'),
-    channelAccount: (channelSlug) => channelAccount('twitch', channelSlug),
+    activeAccount: () => accountWithTwitchToken(AccountStore.findByPlatform('twitch')),
+    channelAccount: (channelSlug) => accountWithTwitchToken(channelAccount('twitch', channelSlug)),
     clearAutoMod: (channelSlug) => events.emit('twitch_automod', { type: 'clear', channelSlug }),
     createClient(account, primary): TwitchEventSubClient {
       const ownsChannel = (channel: string) => twitchEventSub.ownsChannel(account.id, channel)
       return new TwitchEventSubClient({
-        hasAccount: () => !!AccountStore.findById(account.id),
+        hasAccount: () => !!AccountStore.getTokens(account.id),
         senderUserId: account.platformUserId,
         receiveWhispers: primary,
         subscribe: (sessionId, channelSlug) =>
@@ -380,44 +386,28 @@ function boot(): DesktopBackend {
       )
       const results = await Promise.allSettled(
         accounts.map(async (account) => {
-          const tokens = AccountStore.getTokens(account.id)
-          if (!tokens?.accessToken) return
-          try {
-            await validateTwitchUserToken(tokens.accessToken, true)
+          const ended = await checkTwitchSession(account.id, () => disposed)
+          if (
+            !ended ||
+            disposed ||
+            AccountStore.getTokens(account.id) ||
+            !AccountStore.findById(account.id)
+          )
             return
-          } catch (error) {
-            if (!(error instanceof TwitchTokenValidationError) || error.status !== 401) throw error
-          }
-
-          if (disposed || AccountStore.getTokens(account.id)?.accessToken !== tokens.accessToken)
-            return
-          if (tokens.refreshToken) {
-            try {
-              const refreshed = await refreshTwitchToken(account.id)
-              await validateTwitchUserToken(refreshed)
-              return
-            } catch (error) {
-              if (!(error instanceof OAuthRefreshError) || ![400, 401].includes(error.status))
-                throw error
-            }
-          }
-
-          await accountSessions.forget(account.id, () => {
-            const current = AccountStore.getTokens(account.id)
-            return (
-              !disposed &&
-              current?.accessToken === tokens.accessToken &&
-              current.refreshToken === tokens.refreshToken
-            )
-          })
-          if (disposed || AccountStore.findById(account.id)) return
-          watchedChannelManager.releaseAccount(account.id)
+          twitchSenders.invalidate(account.id)
           twitchEventSub.refresh()
-          forgetTwitchSendLimiter(account.id)
           events.emit('auth_error', {
             platform: 'twitch',
             error: t('runtime.auth.twitchReconnect', { username: account.username }),
           })
+          if (AccountStore.findByPlatform('twitch')?.id === account.id) {
+            const reconnects = await Promise.allSettled([
+              accountSessions.reconnectOwn('twitch'),
+              watchedChannelManager.reconnectByPlatform('twitch'),
+            ])
+            if (reconnects.some((result) => result.status === 'rejected'))
+              log.warn('Could not reconnect some Twitch chats after authorization ended')
+          }
         }),
       )
       const failed = results.filter((result) => result.status === 'rejected').length

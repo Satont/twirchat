@@ -87,7 +87,7 @@ export const AccountStore = {
         'SELECT access_token, refresh_token, expires_at FROM accounts WHERE id = ?',
       )
       .get(id)
-    if (!row) return null
+    if (!row?.access_token) return null
     return {
       accessToken: decrypt(row.access_token),
       refreshToken: row.refresh_token ? decrypt(row.refresh_token) : undefined,
@@ -106,6 +106,10 @@ export const AccountStore = {
        WHERE id = ?`,
       [encrypt(accessToken), refreshToken ? encrypt(refreshToken) : null, expiresAt ?? null, id],
     )
+  },
+
+  clearTokens(id: string): void {
+    this.updateTokens(id, '')
   },
 
   upsert(params: {

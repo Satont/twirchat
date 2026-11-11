@@ -21,6 +21,14 @@ export const oauthTokenSchema = z.object({
     .optional(),
 })
 
+const oauthErrorSchema = z.object({ message: z.string() })
+
+export async function hasOAuthErrorMessage(response: Response, message: string): Promise<boolean> {
+  const payload: unknown = await response.json().catch(() => null)
+  const parsed = oauthErrorSchema.safeParse(payload)
+  return parsed.success && parsed.data.message.trim().toLowerCase() === message
+}
+
 export function expiresAt(expiresIn?: number): number | undefined {
   return expiresIn === undefined ? undefined : Math.floor(Date.now() / 1000) + expiresIn
 }
