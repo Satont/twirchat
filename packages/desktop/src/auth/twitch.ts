@@ -165,7 +165,6 @@ export async function connectTwitchDevice(
   signal.throwIfAborted()
   const displayName = profile?.display_name ?? validation.login
   AccountStore.upsert({
-    activate: true,
     id: `twitch:${validation.userId}`,
     platform: 'twitch',
     platformUserId: validation.userId,

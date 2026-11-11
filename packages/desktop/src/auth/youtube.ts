@@ -120,7 +120,6 @@ export async function handleYouTubeCallback(url: URL) {
   const username = customUrl ?? userId
 
   AccountStore.upsert({
-    activate: true,
     accessToken: tokens.access_token,
     avatarUrl,
     displayName,

@@ -152,7 +152,6 @@ test('Twitch refresh is serialized and persists the rotated public-client token'
     displayName: 'Twitch Login',
     accessToken: 'expired',
     refreshToken: 'refresh+encoded%',
-    activate: true,
   })
   let requests = 0
   const { promise, resolve } = Promise.withResolvers<Response>()

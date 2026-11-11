@@ -123,7 +123,6 @@ export const AccountStore = {
     refreshToken?: string
     expiresAt?: number
     scopes?: string[]
-    activate?: boolean
   }): void {
     const db = getDb()
     const encryptedAccess = encrypt(params.accessToken)
@@ -158,11 +157,13 @@ export const AccountStore = {
           params.scopes ? JSON.stringify(params.scopes) : null,
         ],
       )
-      db.run('INSERT OR IGNORE INTO active_accounts(platform, account_id) VALUES (?, ?)', [
-        params.platform,
-        params.id,
-      ])
-      if (params.activate) this.setActive(params.platform, params.id)
+      // Adding another identity must not replace the current one; it only fills an empty slot.
+      db.run(
+        `INSERT INTO active_accounts(platform, account_id) VALUES (?, ?)
+        ON CONFLICT(platform) DO UPDATE SET account_id = excluded.account_id
+        WHERE active_accounts.account_id IS NULL`,
+        [params.platform, params.id],
+      )
     })()
   },
 }

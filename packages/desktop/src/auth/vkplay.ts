@@ -132,7 +132,6 @@ export async function handleVkPlayToken(params: URLSearchParams): Promise<{
 
   AccountStore.upsert({
     accessToken,
-    activate: true,
     avatarUrl: profile.user.avatar_url,
     displayName,
     expiresAt: expireTime,

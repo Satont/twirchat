@@ -42,7 +42,7 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-function save(platform: Platform, id: string, activate = true): Account {
+function save(platform: Platform, id: string, select = true): Account {
   AccountStore.upsert({
     id: `${platform}:${id}`,
     platform,
@@ -50,8 +50,8 @@ function save(platform: Platform, id: string, activate = true): Account {
     username: `user${id}`,
     displayName: `User ${id}`,
     accessToken: `token-${id}`,
-    activate,
   })
+  if (select) AccountStore.setActive(platform, `${platform}:${id}`)
   return required(AccountStore.findById(`${platform}:${id}`))
 }
 
