@@ -43,6 +43,8 @@ export const ruChatMessages = {
   'chatMessages.notice.cheerGift': 'Подарок Cheer',
   'chatMessages.notice.cheer': 'Cheer',
   'chatMessages.notice.moderation': 'Модерация',
+  'chatMessages.notice.modiversary': 'Годовщина модератора',
+  'chatMessages.notice.watchStreak': 'Серия просмотра',
 
   'chatMessages.autoMod.submitting': 'Отправка…',
   'chatMessages.autoMod.reason.category':

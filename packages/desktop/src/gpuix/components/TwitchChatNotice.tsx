@@ -26,6 +26,8 @@ const notices = {
   reward_gift: { label: 'chatMessages.notice.cheerGift', icon: 'gift', tone: 'bits' },
   cheer: { label: 'chatMessages.notice.cheer', icon: 'sparkle', tone: 'bits' },
   moderation: { label: 'chatMessages.notice.moderation', icon: 'lock', tone: 'moderation' },
+  modiversary: { label: 'chatMessages.notice.modiversary', icon: 'calendar', tone: 'subscription' },
+  watch_streak: { label: 'chatMessages.notice.watchStreak', icon: 'eye', tone: 'bits' },
 } satisfies Record<
   TwitchNoticeKind | 'cheer',
   { label: MessageKey; icon: IconName; tone: keyof typeof palette }

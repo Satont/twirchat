@@ -8,9 +8,11 @@ import {
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
+import { compileChatSearch } from '../src/gpuix/chat-tools'
 import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
 import { onTwitchSendRejected } from '../src/platforms/twitch/send-outcomes'
 import { createTwitchSenderPool, type TwitchSenderPool } from '../src/platforms/twitch/sender-pool'
+import { normalizedChatMessageSchema } from '../src/services/persisted-schemas'
 
 describe('twitchMessageMetadata', () => {
   test('preserves Twitch first/returning/highlight/reward/bits/subscription/shared-chat metadata', () => {
@@ -230,6 +232,82 @@ describe('Twitch system notices', () => {
       metadata: { twitchNotice: { detail: 'Happy anniversary!' } },
     })
     expect(notices[2]?.author).toMatchObject({ id: '10', username: 'maya', displayName: 'Maya' })
+  })
+
+  test('shows moderator anniversaries and watch streaks from Twitch IRC', () => {
+    const { adapter, client, messages } = readerFixture('viewer', 'another')
+    const notices: NormalizedChatMessage[] = []
+    adapter.on('notice', (notice) => notices.push(notice))
+    const send = (tags: string, detail = '') =>
+      client.irc.receiveLine(
+        `@room-id=420;tmi-sent-ts=1780000000000;${tags} :tmi.twitch.tv USERNOTICE #another${detail}`,
+      )
+
+    send(
+      'id=anniversary;msg-id=modiversary;login=maya;display-name=Maya;user-id=10;msg-param-months=108;system-msg=has\\sbeen\\sa\\smoderator\\sfor\\s24\\smonths!',
+      ' :Thanks for nine years!',
+    )
+    send(
+      'id=streak;msg-id=viewermilestone;login=liam;display-name=Liam;user-id=11;msg-param-category=watch-streak;msg-param-value=3;msg-param-id=milestone-event',
+      ' :Three in a row!',
+    )
+    send(
+      'id=shared;msg-id=sharedchatnotice;source-msg-id=modiversary;source-id=origin;source-room-id=421;login=maya;msg-param-months=1',
+    )
+    send('id=unrelated;msg-id=viewermilestone;msg-param-category=other;msg-param-value=5')
+    send('id=shared-sub;msg-id=sharedchatnotice;source-msg-id=sub;source-room-id=421')
+
+    expect(messages).toEqual([])
+    expect(notices).toHaveLength(3)
+    expect(notices[0]).toMatchObject({
+      id: 'twitch:notice:anniversary',
+      channelId: 'another',
+      timestamp: new Date(1780000000000),
+      type: 'system',
+      author: { id: '10', username: 'maya', displayName: 'Maya' },
+      text: 'Maya has been a moderator for 108 months!',
+      metadata: { twitchNotice: { kind: 'modiversary', detail: 'Thanks for nine years!' } },
+    })
+    expect(notices[0]?.metadata?.flags).toBeUndefined()
+    expect(notices[1]).toMatchObject({
+      id: 'twitch:notice:streak',
+      text: 'Liam watched 3 streams in a row!',
+      metadata: {
+        flags: { watch_streak: true },
+        twitchNotice: { kind: 'watch_streak', detail: 'Three in a row!' },
+      },
+    })
+    expect(notices[2]).toMatchObject({
+      id: 'twitch:notice:shared',
+      channelId: 'another',
+      text: 'maya has been a moderator for 1 month!',
+      metadata: {
+        twitchNotice: { kind: 'modiversary' },
+        sharedChat: { sourceChannelId: '421', sourceMessageId: 'origin' },
+      },
+    })
+    const watchStreak = compileChatSearch('is:watch-streak')
+    expect(notices.filter((notice) => watchStreak.matches(notice, {})).map(({ id }) => id)).toEqual(
+      ['twitch:notice:streak'],
+    )
+    for (const notice of notices)
+      expect(normalizedChatMessageSchema.parse(JSON.parse(JSON.stringify(notice)))).toEqual(notice)
+  })
+
+  test('shows milestone notices when Twitch omits a valid count', () => {
+    const { adapter, client } = readerFixture('viewer', 'another')
+    const notices: string[] = []
+    adapter.on('notice', ({ text }) => notices.push(text))
+    client.irc.receiveLine(
+      '@msg-id=modiversary;display-name=Maya :tmi.twitch.tv USERNOTICE #another',
+    )
+    client.irc.receiveLine(
+      '@msg-id=viewermilestone;display-name=Liam;msg-param-category=watch-streak;msg-param-value=-1 :tmi.twitch.tv USERNOTICE #another',
+    )
+    expect(notices).toEqual([
+      'Maya is celebrating a moderator anniversary!',
+      'Liam shared a watch streak!',
+    ])
   })
 })
 
