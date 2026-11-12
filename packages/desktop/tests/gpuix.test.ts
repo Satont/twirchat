@@ -153,6 +153,41 @@ describe('buildMessageTokens', () => {
     })
   })
 
+  test('a bare domain keeps its label and opens over HTTPS', () => {
+    expect(buildMessageTokens(makeMessage({ text: 'twir.app' }))).toEqual([
+      { kind: 'link', text: 'twir.app', url: 'https://twir.app' },
+    ])
+  })
+
+  test('bare links keep their URL components and leave punctuation outside', () => {
+    const domain = 'Sub.Twir.APP:8443/x?q=1#top'
+    const tokens = buildMessageTokens(makeMessage({ text: `(${domain}), пример.рф?` }))
+    expect(tokens).toEqual([
+      { kind: 'text', text: '(' },
+      { kind: 'link', text: domain, url: `https://${domain}` },
+      { kind: 'text', text: '), ' },
+      { kind: 'link', text: 'пример.рф', url: 'https://пример.рф' },
+      { kind: 'text', text: '?' },
+    ])
+  })
+
+  test('emails, mentions, unsupported schemes, and invalid domains do not become web links', () => {
+    const text = [
+      'name@sub.twir.app',
+      '@twir.app',
+      'ftp://twir.app',
+      'mailto:name@twir.app',
+      '/path/twir.app',
+      'name_twir.app',
+      'twir.app.invalid',
+      'twir.app:99999',
+      'v1.2.3',
+    ].join(' ')
+    const tokens = buildMessageTokens(makeMessage({ text }))
+    expect(tokens.some((token) => token.kind === 'link')).toBe(false)
+    expect(tokens.map((token) => ('text' in token ? token.text : '')).join('')).toBe(text)
+  })
+
   test('encoded Cyrillic links wrap readable labels and retain the original target', () => {
     const path = 'очень-длинное-название-темы-на-русском-языке-для-проверки-переноса'
     const url = `https://forum.example.com/t/${encodeURIComponent(path)}/123`

@@ -258,6 +258,16 @@ try {
   await until(() => opened.length === 1, 'keyboard link activation')
   assert.deepEqual(opened, [encodedLink], 'readable link opens its original encoded URL')
   pause({})
+  incoming('bare-domain', 'twir.app')
+  await until(() => painted('twir.app'), 'bare domain label')
+  const domain = nodes().find((node) => node.text === 'twir.app')
+  assert.ok(domain)
+  const domainBox = renderer.getElementBounds(domain.id)
+  assert.ok(domainBox)
+  renderer.simulateMouseDown(domainBox.x + 5, domainBox.y + 5, 0)
+  renderer.simulateMouseUp(domainBox.x + 5, domainBox.y + 5, 0)
+  await until(() => opened.length === 2, 'bare domain click')
+  assert.deepEqual(opened, [encodedLink, 'https://twir.app'])
   messageSimilarityStore.update({
     value: { ...messageSimilarityStore.get().value, enabled: true, hideSimilar: false },
   })
