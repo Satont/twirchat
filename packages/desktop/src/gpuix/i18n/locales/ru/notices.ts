@@ -195,6 +195,7 @@ export const ruNotices = {
   'notices.seventv.emoteRemoved': '{prefix}{placeholder}{was} удалён из канала',
   'notices.seventv.emoteUpdated': '{prefix}{placeholder}{was} переименован в канале',
   'notices.seventv.wasAlias': ' (был {alias})',
+  'notices.seventv.actorSuffix': ' · Автор — {actor}',
 
   'notices.twitchModeration.unbanned': 'разбанил {user}',
   'notices.twitchModeration.removedTimeout': 'снял тайм-аут с {user}',

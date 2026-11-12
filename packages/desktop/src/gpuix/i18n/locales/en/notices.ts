@@ -188,6 +188,7 @@ export const notices = {
   'notices.seventv.emoteRemoved': '{prefix}{placeholder}{was} removed from the channel',
   'notices.seventv.emoteUpdated': '{prefix}{placeholder}{was} renamed in the channel',
   'notices.seventv.wasAlias': ' (was {alias})',
+  'notices.seventv.actorSuffix': ' by {actor}',
 
   'notices.twitchModeration.unbanned': 'unbanned {user}',
   'notices.twitchModeration.removedTimeout': 'removed the timeout for {user}',

@@ -87,6 +87,7 @@ export type BackendToDesktopMessage =
       action: 'added' | 'removed' | 'updated'
       emote: SevenTVEmote
       oldAlias?: string
+      actorName?: string
     }
   | {
       type: 'seventv_system_message'

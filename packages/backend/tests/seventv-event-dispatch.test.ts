@@ -46,7 +46,7 @@ const emote = {
     },
   },
 }
-const actor = { id: 'editor', display_name: 'Editor' }
+const actor = { id: 'editor', display_name: ' Editor ', username: 'editor' }
 const pushed = { key: 'emotes', index: 694, type: 'object', value: emote }
 
 afterEach(() => {
@@ -59,6 +59,8 @@ afterEach(() => {
 test('7TV object change fields validate emote contents for insert, remove and update', () => {
   const valid = [
     { pushed: [pushed] },
+    { actor: null, pushed: [pushed] },
+    { actor: 'unavailable', pushed: [pushed] },
     { pulled: [{ key: 'emotes', index: 694, type: 'object', old_value: emote }] },
     {
       updated: [
@@ -103,7 +105,7 @@ async function until(check: () => boolean): Promise<void> {
   }
 }
 
-test('a real object dispatch updates both platform caches and sends chat system notices', async () => {
+test('real object dispatches update both platform caches and attribute chat notices', async () => {
   const opened = Promise.withResolvers<Bun.ServerWebSocket>()
   const server = Bun.serve({
     hostname: '127.0.0.1',
@@ -179,6 +181,7 @@ test('a real object dispatch updates both platform caches and sends chat system 
         expect.objectContaining({
           type: 'seventv_system_message',
           action: 'added',
+          actorName: 'Editor',
           platform: channel.platform,
           channelId: channel.channelId,
           emote: expect.objectContaining({ alias: 'RAGEY' }),
@@ -192,7 +195,7 @@ test('a real object dispatch updates both platform caches and sends chat system 
           type: 'emote_set.update',
           body: {
             id: setId,
-            actor,
+            actor: { id: 'remover', display_name: ' ', username: ' removing_editor ' },
             pulled: [{ key: 'emotes', index: 694, type: 'object', old_value: emote }],
           },
         },
@@ -204,6 +207,7 @@ test('a real object dispatch updates both platform caches and sends chat system 
       expect(received.findLast((entry) => entry.client === channel.client)?.message).toMatchObject({
         type: 'seventv_system_message',
         action: 'removed',
+        actorName: 'removing_editor',
         emote: { alias: 'RAGEY' },
       })
     }

@@ -516,6 +516,7 @@ export const backendToDesktopMessageSchema = z.toZod<BackendToDesktopMessage>()(
       action: z.union([z.literal('added'), z.literal('removed'), z.literal('updated')]),
       emote: sevenTVEmoteSchema,
       oldAlias: z.string().optional(),
+      actorName: z.string().trim().min(1).optional().catch(undefined),
     }),
     z.object({
       type: z.literal('seventv_system_message'),

@@ -29,7 +29,7 @@ for (const action of actions) {
       channelId: 'satont',
       action,
       emote,
-      ...(action === 'updated' ? { oldAlias: 'OldRagey' } : {}),
+      ...(action === 'updated' ? { oldAlias: 'OldRagey' } : { actorName: 'Editor' }),
     })
     if (incoming.type !== 'seventv_system_message') throw new Error('Expected 7TV notice.')
     const message = buildSevenTvSystemMessage(incoming, identity)
@@ -64,8 +64,27 @@ for (const action of actions) {
       action === 'added' ? 'added to' : action === 'removed' ? 'removed from' : 'renamed in',
     )
     if (action === 'updated') expect(visibleText).toContain('(was OldRagey)')
+    else expect(visibleText).toEndWith(' by Editor')
   })
 }
+
+test('7TV add and remove notices still work without an actor name', () => {
+  const changes = [
+    { action: 'added', expected: 'Emote «RAGEY» :RAGEY: added to the channel' },
+    { action: 'removed', expected: 'Emote «RAGEY» :RAGEY: removed from the channel' },
+  ]
+  for (const { action, expected } of changes) {
+    const incoming = backendToDesktopMessageSchema.parse({
+      type: 'seventv_system_message',
+      platform: 'kick',
+      channelId: 'satont',
+      action,
+      emote,
+    })
+    if (incoming.type !== 'seventv_system_message') throw new Error('Expected 7TV notice.')
+    expect(buildSevenTvSystemMessage(incoming, identity).text).toBe(expected)
+  }
+})
 
 test('7TV set notifications preserve their text without artwork', () => {
   const changes: Array<Extract<BackendToDesktopMessage, { type: 'seventv_system_message' }>> = [
@@ -111,10 +130,17 @@ test('7TV notices carry their action so translated text keeps its styling', () =
     }
     for (const action of actions) {
       const message = buildSevenTvSystemMessage(
-        { type: 'seventv_system_message', platform: 'twitch', channelId: 'satont', action, emote },
+        {
+          type: 'seventv_system_message',
+          platform: 'twitch',
+          channelId: 'satont',
+          action,
+          emote,
+          actorName: action === 'updated' ? undefined : 'Редактор',
+        },
         identity,
       )
-      expect(message.text).not.toContain(' added ')
+      if (action !== 'updated') expect(message.text).toEndWith(' · Автор — Редактор')
       expect(message.metadata?.sevenTvAction).toBe(expected[action])
     }
   } finally {

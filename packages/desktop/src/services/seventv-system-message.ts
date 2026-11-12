@@ -58,9 +58,12 @@ export function buildSevenTvSystemMessage(
       const was = message.oldAlias ? t('notices.seventv.wasAlias', { alias: message.oldAlias }) : ''
       const prefix = t('notices.seventv.emotePrefix', { alias: message.emote.alias })
       const placeholder = `:${message.emote.alias}:`
+      const attribution = message.actorName
+        ? t('notices.seventv.actorSuffix', { actor: message.actorName })
+        : ''
       return {
         ...base,
-        text: t(actionKey, { prefix, placeholder, was }),
+        text: t(actionKey, { prefix, placeholder, was }) + attribution,
         emotes: [
           {
             id: message.emote.id,
