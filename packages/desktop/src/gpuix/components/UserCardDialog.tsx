@@ -128,8 +128,9 @@ export function UserCardDialog({
     return collectUserBadges(newestFirst, target.platform, target.platformUserId)
   }, [target.platform, target.platformUserId])
 
-  // Fetch Twitch user badges from backend (global + role badges)
-  const [userBadges, setUserBadges] = useState<Badge[]>([])
+  // Fetch Twitch user badge catalog from backend (global + role badges)
+  // Used as a lookup to enrich retainedBadges with imageUrl/description
+  const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
   useEffect(() => {
     if (target.platform !== 'twitch' || !target.username) return
     let cancelled = false
@@ -139,33 +140,50 @@ export function UserCardDialog({
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) {
-          // Convert badge catalog to Badge array
-          const badges: Badge[] = []
+          const catalog = new Map<string, Badge>()
           for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
+            if (typeof imageUrl !== 'string') continue
             const [setId, version] = key.split('/')
             const meta = data.badgeMetadata?.[key]
-            badges.push({
+            const badge: Badge = {
               id: `twitch:${key}`,
               type: 'twitch',
               text: meta?.title ?? setId,
               ...(meta?.description ? { description: meta.description } : {}),
-              imageUrl: imageUrl as string,
-            })
+              imageUrl,
+            }
+            catalog.set(badge.id, badge)
+            // Also index by setId/version for matching with retained badges
+            catalog.set(`${setId}/${version}`, badge)
           }
-          setUserBadges(badges)
+          setUserBadgeCatalog(catalog)
         }
       })
       .catch((err) => {
-        log.warn('Failed to fetch user badges', { error: String(err) })
+        log.warn('Failed to fetch user badge catalog', { error: String(err) })
       })
     return () => {
       cancelled = true
     }
   }, [target.platform, target.username])
 
+  // Enrich retainedBadges with catalog data (imageUrl, description)
+  const enrichedRetainedBadges = useMemo(() => {
+    return retainedBadges.map((badge) => {
+      const catalogBadge = userBadgeCatalog.get(badge.id)
+      if (catalogBadge) {
+        return {
+          ...badge,
+          imageUrl: badge.imageUrl ?? catalogBadge.imageUrl,
+          description: badge.description ?? catalogBadge.description,
+        }
+      }
+      return badge
+    })
+  }, [retainedBadges, userBadgeCatalog])
+
   const extraBadges = mergeBadges(
-    retainedBadges,
-    userBadges,
+    enrichedRetainedBadges,
     profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
     profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
   )
