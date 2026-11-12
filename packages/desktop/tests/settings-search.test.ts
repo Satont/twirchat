@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 
 import { translatorFor, type Language } from '../src/gpuix/i18n'
+import { en } from '../src/gpuix/i18n/locales/en'
+import { ru } from '../src/gpuix/i18n/locales/ru'
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_SECTIONS,
@@ -90,7 +92,50 @@ describe('settings search index', () => {
     ]
     for (const [query, expected] of queries) expect(ids(query)).toContain(expected)
     expect(ids('fontFamily')).toEqual(['appearance'])
-    expect(ids('notifications')).toEqual(['notifications'])
+    // A single-word title stays prefix-inclusive; Streamer Mode mentions notifications too.
+    expect(ids('notifications')).toEqual(['streamer-mode', 'notifications'])
+  })
+  test('short prefixes stay searchable even when another section contains the whole word', () => {
+    expect(ids('use')).toContain('streamer-mode')
+    expect(ids('use')).toContain('translation')
+    expect(ids('user')).toContain('streamer-mode')
+    expect(ids('hide')).toContain('streamer-mode')
+  })
+  test('full visible names and descriptions find their section instead of only their first word', () => {
+    const names: [string, SettingsSectionId][] = [
+      ['Hide user card avatars', 'streamer-mode'],
+      ['Hide viewer counts and stream duration', 'streamer-mode'],
+      ['Скрывать аватары в карточке пользователя', 'streamer-mode'],
+      ['Require double-click to open links', 'pause'],
+      ['Открывать ссылки двойным щелчком', 'pause'],
+      ['Automatically translate incoming messages', 'translation'],
+      ['Автоматически переводить входящие сообщения', 'translation'],
+      ['Дополнительные заголовки', 'image-uploader'],
+      ['Включить подсветку', 'self-ping'],
+      ['Reply on double-click', 'replies'],
+      ['Ответ двойным кликом', 'replies'],
+      ['Choose how to start a reply to a message', 'replies'],
+      ['Protect private details while streaming', 'streamer-mode'],
+      ['Скрывайте личные данные во время стрима', 'streamer-mode'],
+      ['Keep chat still while reading or opening links', 'pause'],
+      ['Настройте отображение времени в чате', 'timestamps'],
+    ]
+    for (const [query, expected] of names) {
+      expect(ids(query)).toContain(expected)
+      expect(ids(query.split(' ')[0] ?? '')).toContain(expected)
+    }
+  })
+  test('every section indexes the labels and hints it renders in both languages', () => {
+    for (const section of SETTINGS_SECTIONS) {
+      expect(section.searchPrefixes.length).toBeGreaterThan(0)
+      for (const dictionary of [en, ru]) {
+        const values = Object.entries(dictionary)
+          .filter(([key]) => section.searchPrefixes.some((prefix) => key.startsWith(prefix)))
+          .map(([, value]) => value)
+        expect(values.length).toBeGreaterThan(0)
+        for (const value of values) expect(ids(value)).toContain(section.id)
+      }
+    }
   })
   test('terms use AND within one section, with case-insensitive prefix and punctuation normalization', () => {
     expect(ids('  AZURE---REG  ')).toEqual(['translation'])
