@@ -1865,6 +1865,17 @@ export function ChatInput(props: ChatInputProps) {
                 return
               }
               if (!autocomplete.isOpen) {
+                if (
+                  event.key === 'tab' &&
+                  !event.modifiers?.ctrl &&
+                  !event.modifiers?.shift &&
+                  !event.modifiers?.alt &&
+                  !event.modifiers?.cmd &&
+                  autocomplete.completeBareEmote()
+                ) {
+                  event.preventDefault()
+                  return
+                }
                 const up = event.key === 'up'
                 const down = event.key === 'down'
                 if (

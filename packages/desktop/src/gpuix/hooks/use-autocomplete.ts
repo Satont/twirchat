@@ -9,7 +9,7 @@ import type {
  * React port of composables/useAutocomplete.ts.
  * Logic unchanged; Vue refs become React state + memos.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
 import type { FossabotCommandTarget } from '../../services/fossabot-commands'
@@ -46,6 +46,7 @@ import {
   twitchMentionArguments,
   type SignaturePart,
 } from '../../views/main/utils/botCommandArguments'
+import { bareEmoteQuery, rankEmoteMatches } from '../../views/main/utils/emoteCompletion'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
@@ -602,8 +603,8 @@ export function useAutocomplete(params: {
           ? prefixedQuery || `!${query}`
           : query
 
-  const emoteSuggestions = useMemo((): EmoteSuggestion[] => {
-    if (!emoteCompletionActive || !platform || !channelId) return EMPTY_EMOTE_SUGGESTIONS
+  const getEmoteSuggestions = useCallback((): EmoteSuggestion[] => {
+    if (!platform || !channelId) return EMPTY_EMOTE_SUGGESTIONS
     const favorites = new Set(emotePreferences.favorites.map(favoriteEmoteKey))
     const entries = [...(emotes.get(`${platform}:${channelId}`) ?? [])].sort(
       (a, b) =>
@@ -615,7 +616,12 @@ export function useAutocomplete(params: {
       imageUrl: e.imageUrl,
       animated: e.animated,
     }))
-  }, [emoteCompletionActive, emotes, platform, channelId, emotePreferences.favorites])
+  }, [emotes, platform, channelId, emotePreferences.favorites])
+
+  const emoteSuggestions = useMemo(
+    () => (emoteCompletionActive ? getEmoteSuggestions() : EMPTY_EMOTE_SUGGESTIONS),
+    [emoteCompletionActive, getEmoteSuggestions],
+  )
 
   const suggestions = useMemo((): AutocompleteSuggestion[] => {
     if (!mode) return []
@@ -658,7 +664,7 @@ export function useAutocomplete(params: {
     if (mode === 'mention') {
       return fuzzyFilter(mentionSuggestions, query).slice(0, 15)
     }
-    const emoteMatches = fuzzyFilter(emoteSuggestions, query).slice(
+    const emoteMatches = rankEmoteMatches(emoteSuggestions, query).slice(
       0,
       emotePreferences.emojiCompletion ? 10 : 15,
     )
@@ -709,6 +715,16 @@ export function useAutocomplete(params: {
     setClosedQuery('')
   }
 
+  function completeBareEmote(): boolean {
+    if (mode !== null) return false
+    const bareQuery = bareEmoteQuery(text)
+    if (!bareQuery) return false
+    const match = rankEmoteMatches(getEmoteSuggestions(), bareQuery)[0]
+    if (!match) return false
+    setText(`${text.slice(0, -bareQuery.length)}${match.label} `)
+    return true
+  }
+
   function moveUp(): void {
     if (suggestions.length === 0) return
     setSelectedIndex(activeIndex <= 0 ? suggestions.length - 1 : activeIndex - 1)
@@ -734,6 +750,7 @@ export function useAutocomplete(params: {
     selectedIndex: activeIndex,
     mode,
     selectSuggestion,
+    completeBareEmote,
     moveUp,
     moveDown,
     close,
