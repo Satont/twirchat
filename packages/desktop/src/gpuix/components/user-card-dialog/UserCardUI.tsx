@@ -119,6 +119,7 @@ export function GhostButton({
   children,
   style,
   icon,
+  justify = 'center',
   tone = 'default',
   active = false,
 }: {
@@ -129,6 +130,7 @@ export function GhostButton({
   icon?: IconName
   tone?: 'default' | 'danger'
   active?: boolean
+  justify?: 'center' | 'start'
 }) {
   const theme = useTheme()
   const foreground =
@@ -147,7 +149,7 @@ export function GhostButton({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: justify,
         gap: 6,
         minHeight: 34,
         backgroundColor: active ? theme.accent.tint12 : 'transparent',

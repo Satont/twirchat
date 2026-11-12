@@ -3,15 +3,16 @@ import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
 import { useGpuixRequired, motion, type PublicInstance } from '@gpuix/react'
-import { showNotice } from '@gpuix/state/app'
+import { showNotice, homeMessagesStore, watchedMessagesStore } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Modal } from './ui/Modal'
 import type { MetadataItem, UserCardTab } from './user-card-dialog'
@@ -30,6 +31,7 @@ import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
 import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
+import { collectUserBadges, mergeBadges } from './user-card-dialog/utils'
 import {
   accountAgeText,
   followAgeText,
@@ -102,6 +104,30 @@ export function UserCardDialog({
   const [openingWindow, setOpeningWindow] = useState(false)
 
   const effectiveAlias = currentAlias ?? target.currentAlias
+  /**
+   * Twitch only reports chat badges with messages, so collect every badge the
+   * user displayed in the retained buffers. This also fills in platform badges
+   * when the card is opened from chatters, search, or history.
+   */
+  const retainedBadges = useMemo(() => {
+    const newestFirst: NormalizedChatMessage[] = []
+    for (const messages of watchedMessagesStore.get().values())
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index]
+        if (message) newestFirst.push(message)
+      }
+    const home = homeMessagesStore.get()
+    for (let index = home.length - 1; index >= 0; index -= 1) {
+      const message = home[index]
+      if (message) newestFirst.push(message)
+    }
+    return collectUserBadges(newestFirst, target.platform, target.platformUserId)
+  }, [target.platform, target.platformUserId])
+  const extraBadges = mergeBadges(
+    retainedBadges,
+    profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
+    profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
+  )
   const channelUrl = target.username
     ? publicChannelURL(target.platform, target.username)
     : undefined
@@ -181,13 +207,17 @@ export function UserCardDialog({
             platformUserId: target.platformUserId,
             displayName: target.displayName,
             username: target.username,
-            avatarUrl: target.avatarUrl,
+            avatarUrl,
             badges: target.badges,
           }}
+          extraBadges={extraBadges}
+          windows={windows}
+          standalone={standalone}
+          openingWindow={openingWindow}
           hideAvatar={hideAvatar}
           channelUrl={channelUrl}
           openingPublicChannel={publicChannel.isOpening}
-          openPublicChannel={() => void publicChannel.openPublicChannel()}
+          openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
           onAvatarClick={openPicture}
           effectiveAlias={effectiveAlias}
           accent={headerAccent}

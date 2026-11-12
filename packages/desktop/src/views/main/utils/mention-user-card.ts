@@ -1,7 +1,12 @@
-import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Account, Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import type { MentionUser, MentionUserRequest } from '../../../services/mention-user'
 import type { UserCardTarget } from './chatCommands'
+
+type MentionAuthor = Pick<
+  NormalizedChatMessage['author'],
+  'id' | 'username' | 'displayName' | 'avatarUrl' | 'color'
+> & { badges?: Badge[] }
 
 interface MentionTargetRequest {
   message: NormalizedChatMessage
@@ -17,12 +22,7 @@ function normalizeUsername(username: string): string {
 }
 
 function mentionedAuthor(
-  author:
-    | Pick<
-        NormalizedChatMessage['author'],
-        'id' | 'username' | 'displayName' | 'avatarUrl' | 'color'
-      >
-    | undefined,
+  author: MentionAuthor | undefined,
   username: string,
 ): MentionUser | undefined {
   return author?.id && author.username && normalizeUsername(author.username) === username
@@ -32,6 +32,7 @@ function mentionedAuthor(
         displayName: author.displayName,
         avatarUrl: author.avatarUrl,
         color: author.color,
+        ...(author.badges && author.badges.length > 0 ? { badges: author.badges } : {}),
       }
     : undefined
 }

@@ -126,7 +126,12 @@ let sequence = 0
 backend.api.getChannelEmotes = async () => []
 backend.api.getUserCosmetics = async () => {
   cosmeticsRequests++
-  return { sevenTvUserId: 'qa-7tv-user', badges: providerBadges, lookupStatus: 'available' }
+  return {
+    sevenTvUserId: 'qa-7tv-user',
+    badges: providerBadges,
+    inventoryBadges: [],
+    lookupStatus: 'available',
+  }
 }
 backend.api.getUserProfile = async () => ({ id: 'qa-author', errors: [] })
 initCosmeticCaches(backend.api)

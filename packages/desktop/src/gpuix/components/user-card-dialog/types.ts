@@ -3,7 +3,7 @@ import type { IconName } from '@desktop/gpuix/icons'
 import type { DesktopWindows } from '@desktop/gpuix/state/desktop-windows'
 import type { useTextInputFocusTracking } from '@desktop/gpuix/state/focus'
 import type { UserCardTarget } from '@desktop/views/main/utils/chatCommands'
-import type { Badge as BadgeData } from '@twirchat/shared/types'
+import type { Badge as BadgeData, Platform } from '@twirchat/shared/types'
 
 export interface UserProfileProps {
   target: UserCardTarget
@@ -14,12 +14,12 @@ export interface UserProfileProps {
 export interface ProfileEntry {
   icon: IconName
   label: string
-  value: string
+  value: string | React.ReactNode
   color?: string
 }
 
 export interface UserCardHeaderTarget {
-  platform: string
+  platform: Platform
   platformUserId: string
   displayName: string
   username?: string
@@ -36,6 +36,10 @@ export interface UserCardHeaderProps {
   onAvatarClick: () => void
   effectiveAlias?: string
   accent?: UserCardHeaderAccent
+  extraBadges?: BadgeData[]
+  windows: DesktopWindows | null
+  standalone: boolean
+  openingWindow: boolean
 }
 
 export interface UserCardHeaderAccent {

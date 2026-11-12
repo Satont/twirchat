@@ -147,6 +147,26 @@ describe('mention user identity', () => {
     ).rejects.toThrow()
   })
 
+  test('preserves every badge from a matched message author', async () => {
+    const badges = [
+      { id: 'moderator/1', type: 'moderator', text: 'Moderator' },
+      { id: 'subscriber/12', type: 'subscriber', text: 'Subscriber' },
+      { id: '7tv/1', type: 'seventv', text: '7TV' },
+    ]
+    const target = await resolveMentionTarget({
+      message: message(),
+      username: 'viewer',
+      accounts: [],
+      messages: [
+        message({
+          author: { id: 'viewer-id', username: 'viewer', displayName: 'Viewer', badges },
+        }),
+      ],
+      resolveUser: async () => null,
+    })
+    expect(target.badges).toEqual(badges)
+  })
+
   test('uses Kick broadcaster user ID, not chatroom ID, and retains API errors', async () => {
     const user = await resolveMentionUser(
       { platform: 'kick', username: 'viewer' },

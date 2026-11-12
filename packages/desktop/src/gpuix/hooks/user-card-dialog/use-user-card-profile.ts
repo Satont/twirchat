@@ -37,7 +37,14 @@ export function useUserCardProfile({
   const [paintImage, setPaintImage] = useState<PaintImage | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { platform, platformUserId, username, channelSlug, displayName } = target
+  const {
+    platform,
+    platformUserId,
+    username,
+    channelSlug,
+    displayName,
+    avatarUrl: targetAvatarUrl,
+  } = target
 
   useEffect(() => {
     let active = true
@@ -54,7 +61,12 @@ export function useUserCardProfile({
             platform,
             platformUserId,
             username,
-            preferences: { badges: badgesEnabled, paints: paintsEnabled, communityBadges },
+            preferences: {
+              badges: badgesEnabled,
+              paints: paintsEnabled,
+              communityBadges,
+              inventory: badgesEnabled,
+            },
           })
           .then(async (value) => {
             if (!active) return
@@ -104,19 +116,27 @@ export function useUserCardProfile({
     communityBadges,
   ])
 
+  const resolvedAvatarUrl = profile?.avatarUrl ?? targetAvatarUrl
+
   useEffect(() => {
-    onAvatarChange?.(hideAvatar ? undefined : profile?.avatarUrl)
-  }, [profile?.avatarUrl, hideAvatar, onAvatarChange])
+    onAvatarChange?.(hideAvatar ? undefined : resolvedAvatarUrl)
+  }, [resolvedAvatarUrl, hideAvatar, onAvatarChange])
+
+  const copyText = useCallback(
+    async (text: string): Promise<void> => {
+      try {
+        await backend.api.copyText({ text })
+      } catch (cause) {
+        setError(errorText(cause))
+      }
+    },
+    [backend],
+  )
 
   const copyAvatarUrl = useCallback(async (): Promise<void> => {
-    const url = profile?.avatarUrl
-    if (!url) return
-    try {
-      await backend.api.copyText({ text: url })
-    } catch (cause) {
-      setError(errorText(cause))
-    }
-  }, [backend, profile?.avatarUrl])
+    if (!resolvedAvatarUrl) return
+    await copyText(resolvedAvatarUrl)
+  }, [copyText, resolvedAvatarUrl])
 
   const openSevenTvProfile = useCallback(async (): Promise<void> => {
     const sevenTvUserId = cosmetics?.sevenTvUserId
@@ -136,6 +156,7 @@ export function useUserCardProfile({
     paintsEnabled,
     loading,
     error,
+    copyText,
     copyAvatarUrl,
     openSevenTvProfile,
   }

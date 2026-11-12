@@ -6,6 +6,7 @@ import type { UserCosmetics } from '../src/services/cosmetics'
 function cosmetics(overrides: Partial<UserCosmetics> = {}): UserCosmetics {
   return {
     badges: [],
+    inventoryBadges: [],
     lookupStatus: 'available',
     ...overrides,
   }

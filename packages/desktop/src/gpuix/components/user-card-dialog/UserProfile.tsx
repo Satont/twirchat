@@ -1,5 +1,5 @@
 import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
-import { Icon, type IconName } from '@gpuix/components/ui/Icon'
+import { Icon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
@@ -13,19 +13,10 @@ import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { initialsOf } from '@views/shared/utils/display-text'
 
+import { ProfileDescription } from './ProfileDescription'
 import type { ProfileEntry, UserProfileProps } from './types'
 import { GhostButton, UserCardPanel } from './UserCardUI'
-import { accentGradient, userCardWellColor } from './utils'
-
-function pushEntry(
-  entries: ProfileEntry[],
-  icon: IconName,
-  label: string,
-  value: string | undefined,
-  color?: string,
-): void {
-  if (value !== undefined) entries.push({ icon, label, value, color })
-}
+import { accentGradient, mergeBadges, userCardWellColor } from './utils'
 
 function ProfileAvatarFallback({ name, size }: { name: string; size: number }) {
   const theme = useTheme()
@@ -111,7 +102,7 @@ export function UserProfileView({
   state: UserCardProfileState
 }) {
   const theme = useTheme()
-  const { t, tPlural, language } = useT()
+  const { t, language } = useT()
   const {
     profile,
     cosmetics,
@@ -120,27 +111,33 @@ export function UserProfileView({
     paintsEnabled,
     loading,
     error,
+    copyText,
     copyAvatarUrl,
     openSevenTvProfile,
   } = state
 
-  const avatarUrl = hideAvatar ? undefined : profile?.avatarUrl
+  const avatarUrl = hideAvatar ? undefined : (profile?.avatarUrl ?? target.avatarUrl)
+  const cosmeticBadges = mergeBadges(cosmetics?.badges, cosmetics?.inventoryBadges)
   const entries: ProfileEntry[] = []
+  const STREAM_NAME_MAX_LENGHT = 15
   if (profile) {
-    pushEntry(
-      entries,
-      'eye',
-      t('userCard.profile.live'),
-      profile.live
-        ? t('userCard.profile.liveValue', {
-            title: profile.live.title,
-            category: profile.live.category,
-            viewers: tPlural('userCard.profile.viewers', profile.live.viewers),
-          })
-        : profile.errors.some((item) => item.section === 'live')
-          ? undefined
-          : t('userCard.profile.offline'),
-    )
+    const labelStream =
+      `${profile.live?.title ? (profile.live?.title.length >= STREAM_NAME_MAX_LENGHT ? profile.live?.title.slice(STREAM_NAME_MAX_LENGHT) + '...' : profile.live?.title) : ''}${' '.repeat(2)}` +
+      `${profile.live?.viewers ? t('userCard.profile.viewers.other', { count: profile.live?.viewers }) : ''}${' '.repeat(2)}`
+
+    const streamStatus = profile.live
+      ? true
+      : profile.errors.some((item) => item.section === 'live')
+        ? undefined
+        : false
+
+    entries.push({
+      icon: 'eye',
+      label: t('userCard.profile.live'),
+      value: streamStatus !== false ? labelStream : t('userCard.profile.offline'),
+      color: streamStatus === false ? 'red' : 'green',
+    })
+
     if (profile.followers !== undefined)
       entries.push({
         icon: 'users',
@@ -159,13 +156,23 @@ export function UserProfileView({
         label: t('userCard.profile.pronouns'),
         value: profile.pronouns,
       })
-    if (profile.color)
+    const chatColor = profile.color
+    if (chatColor)
       entries.push({
         icon: 'chat',
         label: t('userCard.profile.chatColor'),
-        value: profile.color,
-        color: profile.color,
+        value: (
+          <GhostButton
+            style={{ maxWidth: 150 }}
+            icon="copy"
+            onClick={() => runUiTask(copyText(chatColor))}
+          >
+            {t('userCard.profile.copyColor')}
+          </GhostButton>
+        ),
+        color: chatColor,
       })
+
     if (profile.broadcasterType)
       entries.push({
         icon: 'monitor',
@@ -175,7 +182,7 @@ export function UserProfileView({
     if (profile.roles) {
       const roles = Object.entries(profile.roles)
         .filter(([, enabled]) => enabled)
-        .map(([name]) => name)
+        .map(([name]) => name.toUpperCase())
         .join(', ')
       entries.push({
         icon: 'star',
@@ -253,12 +260,30 @@ export function UserProfileView({
               gap: 10,
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                minWidth: 0,
+                paddingLeft: 4,
+              }}
+            >
               <Text style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
                 {profile?.displayName ?? target.displayName}
               </Text>
               {profile?.login ? (
-                <Text style={{ fontSize: 12, color: theme.text2 }}>@{profile.login}</Text>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    fontSize: 13,
+                    color: theme.text2,
+                  }}
+                >
+                  <div>@</div>
+                  <div>{profile?.login}</div>
+                </div>
               ) : null}
             </div>
             {avatarUrl ? (
@@ -268,11 +293,7 @@ export function UserProfileView({
             ) : null}
           </div>
 
-          {profile?.description ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: theme.text }}>
-              {profile.description}
-            </Text>
-          ) : null}
+          <ProfileDescription description={profile?.description} />
 
           {loading ? (
             <Text style={{ fontSize: 12, color: theme.text2 }}>
@@ -305,7 +326,7 @@ export function UserProfileView({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 7 }}>
             <Icon name="clock" size={14} color={theme.accent.primary} />
-            <Text style={{ fontSize: 11, fontWeight: 700, color: theme.text2 }}>
+            <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text2 }}>
               {t('userCard.profile.nameHistory')}
             </Text>
           </div>
@@ -339,10 +360,18 @@ export function UserProfileView({
                     gap: 8,
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: theme.text,
+                    }}
+                  >
                     {entry.login}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: theme.text2 }}>
+                  </div>
+                  <Text style={{ fontSize: 18, color: theme.text2 }}>
                     {`${firstSeen} – ${lastSeen}`}
                   </Text>
                 </div>
@@ -391,8 +420,8 @@ export function UserProfileView({
                 />
               ) : null}
               {badgesEnabled
-                ? cosmetics.badges.map((badge) => (
-                    <BadgeTooltip key={badge.id} badge={badge}>
+                ? cosmeticBadges.map((badge) => (
+                    <BadgeTooltip key={`${badge.type}:${badge.id}`} badge={badge}>
                       {badge.imageUrl ? (
                         <RemoteImage
                           url={badge.imageUrl}
@@ -429,12 +458,6 @@ export function UserProfileView({
           {t('userCard.profile.cosmeticsUnavailable')}
         </Text>
       ) : null}
-
-      {profile?.errors.map((item) => (
-        <Text key={item.section} style={{ fontSize: 10, color: theme.text2, marginTop: 6 }}>
-          {item.section}: {item.message}
-        </Text>
-      ))}
     </UserCardPanel>
   )
 }

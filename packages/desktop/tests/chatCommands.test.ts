@@ -100,4 +100,31 @@ describe('resolveUserCardCommand', () => {
       error: 'missing-query',
     })
   })
+
+  test('carries every author badge into the target', () => {
+    const badges = [
+      { id: 'moderator/1', type: 'moderator', text: 'Moderator' },
+      { id: 'subscriber/12', type: 'subscriber', text: 'Subscriber' },
+      { id: '7tv/1', type: 'seventv', text: '7TV' },
+    ]
+    const result = resolveUserCardCommand('/user @satont', [
+      createMessage({
+        author: { id: 'user-1', username: 'satont', displayName: 'Satont', badges },
+      }),
+    ])
+
+    expect(result).toEqual({
+      ok: true,
+      target: {
+        platform: 'twitch',
+        platformUserId: 'user-1',
+        channelId: 'channel-1',
+        displayName: 'Satont',
+        username: 'satont',
+        avatarUrl: undefined,
+        currentAlias: undefined,
+        badges,
+      },
+    })
+  })
 })

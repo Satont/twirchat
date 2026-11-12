@@ -1,18 +1,19 @@
+import { useTheme } from '@desktop/gpuix/theme-context'
 import { useBackend } from '@gpuix/backend/context'
-import { ActionButton, FormError } from '@gpuix/components/ui/Form'
+import { ActionButton } from '@gpuix/components/ui/Form'
 import { Modal } from '@gpuix/components/ui/Modal'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
-import { Text } from '@gpuix/components/ui/Text'
 import { usePopupHotkeys } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
-import { useTheme } from '@gpuix/theme-context'
 import { useState } from 'react'
+
+import { Icon } from '../ui'
 
 export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () => void }) {
   const backend = useBackend()
-  const theme = useTheme()
   const { t } = useT()
-  const [error, setError] = useState('')
+  const theme = useTheme()
+  const [, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const popupContextId = usePopupHotkeys('profile-picture', { delete: onClose })
   async function run(action: () => Promise<unknown>): Promise<void> {
@@ -28,31 +29,64 @@ export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () 
     }
   }
   return (
-    <Modal hotkeyContextId={popupContextId} width={420} onClose={onClose}>
+    <Modal hotkeyContextId={popupContextId} width={320} onClose={onClose}>
       <div
         testId="profile-picture-menu"
-        style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}
+        style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 12 }}
       >
-        <Text style={{ color: theme.text, fontSize: 16, fontWeight: 700 }}>
-          {t('userCard.picture.title')}
-        </Text>
-        <RemoteImage url={url} objectFit="contain" style={{ width: '100%', height: 300 }} />
-        <FormError>{error}</FormError>
-        <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
           <ActionButton
             disabled={busy}
             onClick={() => void run(() => backend.api.openExternalUrl({ url }))}
           >
             {t('userCard.picture.openFull')}
           </ActionButton>
-          <ActionButton
-            disabled={busy}
+
+          <div
+            style={{
+              borderColor: theme.border,
+              borderRadius: 6,
+              borderWidth: 2,
+              cursor: 'pointer',
+              paddingLeft: 6,
+              paddingRight: 6,
+              display: 'flex',
+              flexDirection: 'center',
+              alignItems: 'center',
+              hover: { backgroundColor: theme.fill },
+            }}
             onClick={() => void run(() => backend.api.copyText({ text: url }))}
           >
-            {t('userCard.picture.copyUrl')}
-          </ActionButton>
-          <ActionButton onClick={onClose}>{t('common.close')}</ActionButton>
+            <Icon name="copy" size={14} color={theme.navText} />
+          </div>
+
+          <div
+            style={{
+              borderColor: theme.border,
+              borderRadius: 6,
+              borderWidth: 2,
+              cursor: 'pointer',
+              paddingLeft: 6,
+              paddingRight: 6,
+              display: 'flex',
+              flexDirection: 'center',
+              alignItems: 'center',
+              hover: { backgroundColor: theme.fill },
+            }}
+            onClick={onClose}
+          >
+            <Icon name="close" size={14} color={theme.navText} />
+          </div>
         </div>
+        <RemoteImage url={url} objectFit="contain" style={{ width: '100%', height: 300 }} />
       </div>
     </Modal>
   )

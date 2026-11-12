@@ -1,3 +1,4 @@
+import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
@@ -9,7 +10,7 @@ import { useTheme } from '@gpuix/theme-context'
 
 import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
 import { GhostButton, HeaderPill as HeaderPillUI } from './UserCardUI'
-import { formatDisplayUsername, initials } from './utils'
+import { formatDisplayUsername, initials, mergeBadges } from './utils'
 
 function headerGradient(
   theme: Theme,
@@ -76,10 +77,15 @@ export function UserCardHeader({
   onAvatarClick,
   effectiveAlias,
   accent,
+  extraBadges,
+  windows,
+  standalone,
+  openingWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
+  const badges = mergeBadges(target.badges, extraBadges)
   const headerText = theme.isLight ? theme.text : '#ffffff'
   const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
   const headerBorder = theme.isLight
@@ -221,83 +227,91 @@ export function UserCardHeader({
           <div
             style={{
               display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 6,
+              flexDirection: 'column',
+              alignItems: 'start',
               minWidth: 0,
             }}
           >
-            <Text style={{ fontSize: 20, fontWeight: 800, color: headerText }}>
-              {formatDisplayUsername(target.displayName)}
-            </Text>
-            {target.badges && target.badges.length > 0 ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                {target.badges.slice(0, 4).map((badge, index) => (
-                  <div
-                    key={`${badge.id}-${index}`}
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 5,
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                      borderWidth: 1,
-                      borderColor: withAlpha('#ffffff', 0.18),
-                    }}
-                  >
-                    {badge.imageUrl ? (
-                      <RemoteImage
-                        url={badge.imageUrl}
-                        objectFit="cover"
-                        style={{ width: 18, height: 18 }}
-                      />
-                    ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 4,
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
+              <Text style={{ fontSize: 20, fontWeight: 800, color: headerText }}>
+                {formatDisplayUsername(target.displayName)}
+              </Text>
+              {badges.length > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    marginTop: 8,
+                    gap: 4,
+                    minWidth: 0,
+                  }}
+                >
+                  {badges.map((badge) => (
+                    <BadgeTooltip
+                      key={`${badge.type}:${badge.id}`}
+                      badge={badge}
+                      platform={target.platform}
+                    >
                       <div
                         style={{
-                          width: 18,
-                          height: 18,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 10,
-                          fontWeight: 700,
-                          backgroundColor: withAlpha('#000000', 0.2),
-                          color: headerText,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 5,
+                          overflow: 'hidden',
+                          flexShrink: 0,
                         }}
                       >
-                        {badge.text[0]?.toUpperCase() ?? '?'}
+                        {badge.imageUrl ? (
+                          <RemoteImage
+                            url={badge.imageUrl}
+                            objectFit="cover"
+                            style={{ width: 18, height: 18 }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              backgroundColor: withAlpha('#000000', 0.2),
+                              color: headerText,
+                            }}
+                          >
+                            {badge.text[0]?.toUpperCase() ?? '?'}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
-                {target.badges.length > 4 ? (
-                  <div
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      backgroundColor: withAlpha('#000000', 0.2),
-                      color: headerMuted,
-                    }}
-                  >
-                    +{target.badges.length - 4}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                    </BadgeTooltip>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                fontSize: 13,
+                color: headerMuted,
+              }}
+            >
+              <div>@</div>
+              <div>{titleHandle}</div>
+            </div>
           </div>
 
           <div
@@ -305,65 +319,84 @@ export function UserCardHeader({
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 8,
+              gap: 6,
               minWidth: 0,
             }}
+          ></div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              maxWidth: 80,
+              minHeight: 22,
+              paddingLeft: 8,
+              paddingRight: 8,
+              borderRadius: 999,
+              backgroundColor: withAlpha(
+                platformColor(target.platform),
+                theme.isLight ? 0.14 : 0.24,
+              ),
+              borderWidth: 1,
+              borderColor: withAlpha(platformColor(target.platform), 0.36),
+            }}
           >
-            <Text style={{ fontSize: 13, color: headerMuted }}>@{titleHandle}</Text>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-                minHeight: 22,
-                paddingLeft: 8,
-                paddingRight: 8,
-                borderRadius: 999,
-                backgroundColor: withAlpha(
-                  platformColor(target.platform),
-                  theme.isLight ? 0.14 : 0.24,
-                ),
-                borderWidth: 1,
-                borderColor: withAlpha(platformColor(target.platform), 0.36),
-              }}
-            >
-              <PlatformIcon
-                platform={target.platform}
-                size={12}
-                color={theme.isLight ? theme.text : '#ffffff'}
-              />
-              <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
-                {target.platform.toUpperCase()}
-              </Text>
-            </div>
+            <PlatformIcon
+              platform={target.platform}
+              size={12}
+              color={theme.isLight ? theme.text : '#ffffff'}
+            />
+            <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
+              {target.platform.toUpperCase()}
+            </Text>
           </div>
-
           {effectiveAlias ? (
             <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
           ) : null}
         </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {channelUrl ? (
-          <GhostButton
-            disabled={openingPublicChannel}
-            onClick={openPublicChannel}
-            icon="externalLink"
-            style={{
-              backgroundColor: headerButtonBg,
-              borderColor: headerBorder,
-              borderRadius: 10,
-              paddingLeft: 14,
-              paddingRight: 14,
-              hover: { backgroundColor: headerButtonHover },
-            }}
-          >
-            {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-          </GhostButton>
-        ) : null}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {channelUrl ? (
+            <GhostButton
+              disabled={openingPublicChannel}
+              onClick={openPublicChannel}
+              icon="externalLink"
+              justify="start"
+              style={{
+                width: '100%',
+                backgroundColor: headerButtonBg,
+                borderColor: headerBorder,
+                borderRadius: 10,
+                paddingLeft: 14,
+                paddingRight: 14,
+                hover: { backgroundColor: headerButtonHover },
+              }}
+            >
+              {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
+            </GhostButton>
+          ) : null}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {windows && !standalone ? (
+            <GhostButton
+              disabled={openingPublicChannel}
+              onClick={openPublicChannel}
+              icon="externalLink"
+              style={{
+                backgroundColor: headerButtonBg,
+                borderColor: headerBorder,
+                borderRadius: 10,
+                paddingLeft: 14,
+                paddingRight: 14,
+                hover: { backgroundColor: headerButtonHover },
+              }}
+            >
+              {openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
+            </GhostButton>
+          ) : null}
+        </div>
       </div>
     </div>
   )

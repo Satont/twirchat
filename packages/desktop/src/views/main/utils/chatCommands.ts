@@ -77,6 +77,7 @@ export function resolveUserCardCommand(
       avatarUrl: msg.author.avatarUrl,
       color: msg.author.color,
       currentAlias: getAlias(aliasMap, msg.platform, msg.author.id),
+      ...(msg.author.badges.length > 0 ? { badges: msg.author.badges } : {}),
     })
   }
 

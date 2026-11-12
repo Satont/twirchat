@@ -17,15 +17,7 @@ export function UserCardAliasSection({
   aliasFocus,
   handleSaveAlias,
   handleRemoveAlias,
-  pinned,
-  togglePin,
   onClose,
-  windows,
-  standalone,
-  target,
-  openingWindow,
-  setOpeningWindow,
-  showNotice,
   publicChannelError,
   openPublicChannel,
 }: UserCardAliasSectionProps) {
@@ -99,38 +91,21 @@ export function UserCardAliasSection({
           flexDirection: 'row',
           flexWrap: 'wrap',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
+          gap: 10,
           marginTop: 12,
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <GhostButton icon="pin" active={pinned} onClick={togglePin}>
-            {pinned ? t('userCard.unpin') : t('userCard.pin')}
-          </GhostButton>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
           {effectiveAlias ? (
             <GhostButton tone="danger" icon="trash" onClick={() => runUiTask(handleRemoveAlias())}>
               {t('userCard.alias.remove')}
-            </GhostButton>
-          ) : null}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {windows && !standalone ? (
-            <GhostButton
-              icon="externalLink"
-              disabled={openingWindow}
-              onClick={() => {
-                setOpeningWindow(true)
-                windows
-                  .openUser(target)
-                  .then(onClose)
-                  .catch((error) => {
-                    setOpeningWindow(false)
-                    showNotice('error', String(error))
-                  })
-              }}
-            >
-              {openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
             </GhostButton>
           ) : null}
         </div>

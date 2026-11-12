@@ -77,7 +77,14 @@ export function UserCardMetadataSection({
                 backgroundColor: userCardWellColor(theme),
               }}
             >
-              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 7,
+                }}
+              >
                 <div
                   style={{
                     width: 24,
@@ -92,7 +99,14 @@ export function UserCardMetadataSection({
                 >
                   <Icon name={item.icon} size={13} color={theme.accent.primary} />
                 </div>
-                <Text style={{ fontSize: 10, fontWeight: 700, color: theme.text2 }}>
+
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: theme.text2,
+                  }}
+                >
                   {item.label.toUpperCase()}
                 </Text>
               </div>
