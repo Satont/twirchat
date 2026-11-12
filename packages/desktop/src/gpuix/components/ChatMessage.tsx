@@ -286,7 +286,7 @@ function ReplyPreview({
       onClick={
         open
           ? (event) => {
-              claimMessageRowClick(event)
+              if (!claimMessageRowClick(event)) return
               open(message)
             }
           : undefined
@@ -382,7 +382,7 @@ function ActionButton({
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
       onClick={(event) => {
-        claimMessageRowClick(event)
+        if (!claimMessageRowClick(event)) return
         onClick()
       }}
       style={{

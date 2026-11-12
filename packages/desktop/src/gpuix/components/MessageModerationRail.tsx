@@ -16,7 +16,7 @@ import {
   unbanDistanceFrom,
 } from '../../views/main/utils/moderation-drag'
 import { createDragMotion, useDragCancellation } from '../hooks/use-drag-motion'
-import { claimMessageRowClick } from '../message-row-click'
+import { armMessageRowDrag, claimMessageRowClick } from '../message-row-click'
 import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Text } from './ui/Text'
@@ -28,6 +28,7 @@ const RAIL_WIDTH = 14
 interface RailDrag {
   startX: number
   motion: ReturnType<typeof createDragMotion>
+  disarm: () => void
 }
 
 /** The painted drag state; null while idle. */
@@ -77,6 +78,7 @@ export function MessageModerationRail({
 
   const cancel = () => {
     drag.current?.motion.cancel()
+    drag.current?.disarm()
     drag.current = null
     setGesture(null)
   }
@@ -95,6 +97,7 @@ export function MessageModerationRail({
           motion: createDragMotion(({ x }) =>
             setGesture({ distance: dragDistance(startX, x), unbanDistance }),
           ),
+          disarm: armMessageRowDrag(cancel),
         }
         setGesture({ distance: 0, unbanDistance })
       }}
@@ -111,13 +114,14 @@ export function MessageModerationRail({
       onMouseUp={(event) => {
         const current = drag.current
         if (event.button !== 0 || !current) return
-        claimMessageRowClick(event)
         // Commit what the pointer points at now, not the last coalesced frame.
         const action = moderationActionForDrag(platform, dragDistance(current.startX, event.x), {
           messageDeleted,
           unbanDistance: unbanDistanceFrom(current.startX),
         })
+        // Disarms first, so the claim below is this drag's own release.
         cancel()
+        claimMessageRowClick(event)
         if (action) onModerate(action)
       }}
       style={{

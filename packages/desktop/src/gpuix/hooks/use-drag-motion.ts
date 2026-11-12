@@ -51,6 +51,17 @@ export function useDragMotion(move: (point: DragPoint) => void) {
   return motion
 }
 
+/**
+ * Window activity is polled, so a press that activates the window arrives while
+ * the store still reports it inactive. Only a change to inactive ends a drag.
+ */
+export function windowLostActivation(
+  previous: boolean | undefined,
+  current: boolean | undefined,
+): boolean {
+  return previous === true && current === false
+}
+
 export function useDragCancellation(active: boolean, id: string, cancel: () => void): void {
   const scope = useWindowScope()
   const windowActive = useStoreSelector(
@@ -58,11 +69,14 @@ export function useDragCancellation(active: boolean, id: string, cancel: () => v
     (entries) => entries.get(scope)?.active,
   )
   const callback = useRef(cancel)
+  const previousWindowActive = useRef(windowActive)
   useLayoutEffect(() => {
     callback.current = cancel
   }, [cancel])
   useEffect(() => {
-    if (active && windowActive === false) callback.current()
+    const previous = previousWindowActive.current
+    previousWindowActive.current = windowActive
+    if (active && windowLostActivation(previous, windowActive)) callback.current()
   }, [active, windowActive])
   useEffect(() => {
     if (!active) return undefined

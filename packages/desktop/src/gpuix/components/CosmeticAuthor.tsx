@@ -48,7 +48,7 @@ export function CosmeticAuthorName({
       aria-label={t('misc.userCard.openFor', { name })}
       tabIndex={0}
       onClick={(event) => {
-        claimMessageRowClick(event)
+        if (!claimMessageRowClick(event)) return
         onClick()
       }}
       onKeyDown={(event) => {
