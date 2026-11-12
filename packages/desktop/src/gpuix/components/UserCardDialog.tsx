@@ -175,7 +175,7 @@ export function UserCardDialog({
           }}
           hideAvatar={hideAvatar}
           channelUrl={channelUrl}
-          openingPublicChannel={publicChannel.openingPublicChannel}
+          openingPublicChannel={publicChannel.isOpening}
           openPublicChannel={() => void publicChannel.openPublicChannel()}
           onAvatarClick={openPicture}
           effectiveAlias={effectiveAlias}
@@ -207,7 +207,7 @@ export function UserCardDialog({
             openingWindow={openingWindow}
             setOpeningWindow={setOpeningWindow}
             showNotice={showNotice}
-            publicChannelError={publicChannel.publicChannelError}
+            publicChannelError={publicChannel.openError}
             openPublicChannel={() => void publicChannel.openPublicChannel()}
           />
 
