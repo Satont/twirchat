@@ -1,5 +1,5 @@
-import { withAlpha, type Theme } from '@gpuix/theme'
 import type { LinearGradientBackground } from '@gpuix/react'
+import { withAlpha, type Theme } from '@gpuix/theme'
 import type { Badge, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { initialsOf } from '@views/shared/utils/display-text'
 
