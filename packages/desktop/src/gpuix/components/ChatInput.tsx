@@ -1955,7 +1955,9 @@ export function ChatInput(props: ChatInputProps) {
           >
             <Icon name="smile" size={16} color={emotePickerOpen ? theme.link : theme.text2} />
           </div>
-          <Tooltip delayDuration={200}>
+          {/* The tooltip renders its own flex wrapper, so the frame alignment
+              that keeps the button on the bottom row must live on the Tooltip. */}
+          <Tooltip delayDuration={200} style={{ alignSelf: 'flex-end', flexShrink: 0 }}>
             <TooltipTrigger asChild>
               <div
                 testId="send-button"
