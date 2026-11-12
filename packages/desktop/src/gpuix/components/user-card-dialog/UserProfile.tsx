@@ -8,6 +8,7 @@ import {
   type UserCardProfileState,
 } from '@gpuix/hooks/user-card-dialog/use-user-card-profile'
 import { useT } from '@gpuix/i18n'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
@@ -46,6 +47,7 @@ function ProfileAvatarFallback({ name, size }: { name: string; size: number }) {
 
 function ProfileInfoRow({ entry, first }: { entry: ProfileEntry; first: boolean }) {
   const theme = useTheme()
+  const isStringValue = typeof entry.value === 'string'
   return (
     <div
       style={{
@@ -80,9 +82,24 @@ function ProfileInfoRow({ entry, first }: { entry: ProfileEntry; first: boolean 
           }}
         />
       ) : null}
-      <Text style={{ flexGrow: 1, minWidth: 0, fontSize: 12, lineHeight: 18, color: theme.text }}>
-        {entry.value}
-      </Text>
+      <div style={{ flexGrow: 1, minWidth: 0 }}>
+        {isStringValue ? (
+          <Text
+            style={{
+              fontSize: 12,
+              lineHeight: 18,
+              color: theme.text,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {entry.value}
+          </Text>
+        ) : (
+          entry.value
+        )}
+      </div>
     </div>
   )
 }
@@ -119,22 +136,61 @@ export function UserProfileView({
   const avatarUrl = hideAvatar ? undefined : (profile?.avatarUrl ?? target.avatarUrl)
   const cosmeticBadges = mergeBadges(cosmetics?.badges, cosmetics?.inventoryBadges)
   const entries: ProfileEntry[] = []
-  const STREAM_NAME_MAX_LENGHT = 15
   if (profile) {
-    const labelStream =
-      `${profile.live?.title ? (profile.live?.title.length >= STREAM_NAME_MAX_LENGHT ? profile.live?.title.slice(STREAM_NAME_MAX_LENGHT) + '...' : profile.live?.title) : ''}${' '.repeat(2)}` +
-      `${profile.live?.viewers ? t('userCard.profile.viewers.other', { count: profile.live?.viewers }) : ''}${' '.repeat(2)}`
-
     const streamStatus = profile.live
       ? true
       : profile.errors.some((item) => item.section === 'live')
         ? undefined
         : false
 
+    const liveValue =
+      streamStatus !== false ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            flexGrow: 1,
+            minWidth: 0,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 12,
+              lineHeight: 18,
+              color: theme.text,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              flexGrow: 1,
+              minWidth: 0,
+            }}
+          >
+            {profile.live?.title ?? ''}
+          </Text>
+          {profile.live?.viewers && (
+            <Text
+              style={{
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.text,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {t('userCard.profile.viewers.other', { count: profile.live.viewers })}
+            </Text>
+          )}
+        </div>
+      ) : (
+        t('userCard.profile.offline')
+      )
+
     entries.push({
       icon: 'eye',
       label: t('userCard.profile.live'),
-      value: streamStatus !== false ? labelStream : t('userCard.profile.offline'),
+      value: liveValue,
       color: streamStatus === false ? 'red' : 'green',
     })
 
@@ -162,13 +218,34 @@ export function UserProfileView({
         icon: 'chat',
         label: t('userCard.profile.chatColor'),
         value: (
-          <GhostButton
-            style={{ maxWidth: 150 }}
-            icon="copy"
-            onClick={() => runUiTask(copyText(chatColor))}
-          >
-            {t('userCard.profile.copyColor')}
-          </GhostButton>
+          <Tooltip delayDuration={200} style={{ width: 28, height: 28, flexShrink: 0 }}>
+            <TooltipTrigger asChild>
+              <div
+                onClick={() => runUiTask(copyText(chatColor))}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  backgroundColor: theme.fill,
+                  hover: { backgroundColor: theme.fillHover },
+                }}
+              >
+                <Icon name="copy" size={14} color={theme.text} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6} style={{ padding: 6, borderRadius: 6 }}>
+              <Text style={{ fontSize: 12, color: theme.text }}>
+                {t('userCard.profile.copyColor')}
+              </Text>
+            </TooltipContent>
+          </Tooltip>
         ),
         color: chatColor,
       })
@@ -191,6 +268,77 @@ export function UserProfileView({
       })
     }
   }
+
+  // Render cosmetics section (7TV badges, paints, etc.)
+  const cosmeticsSection =
+    cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          marginTop: 16,
+          paddingTop: 14,
+          borderTopWidth: 1,
+          borderColor: theme.hairline,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+              minWidth: 0,
+            }}
+          >
+            {paintsEnabled && paintImage ? (
+              <img
+                src={paintImage.path}
+                style={{ width: paintImage.width, height: paintImage.height }}
+              />
+            ) : null}
+            {badgesEnabled
+              ? cosmeticBadges.map((badge) => (
+                  <BadgeTooltip key={`${badge.type}:${badge.id}`} badge={badge}>
+                    {badge.imageUrl ? (
+                      <RemoteImage
+                        url={badge.imageUrl}
+                        style={{ width: 24, height: 24, pointerEvents: 'none' }}
+                      />
+                    ) : (
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontSize: 12,
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {badge.text}
+                      </Text>
+                    )}
+                  </BadgeTooltip>
+                ))
+              : null}
+            <GhostButton icon="externalLink" onClick={() => runUiTask(openSevenTvProfile())}>
+              {t('userCard.profile.openSevenTv')}
+            </GhostButton>
+          </div>
+        </div>
+      </div>
+    ) : null
 
   return (
     <UserCardPanel>
@@ -269,22 +417,45 @@ export function UserProfileView({
                 paddingLeft: 4,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
-                {profile?.displayName ?? target.displayName}
-              </Text>
-              {profile?.login ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    fontSize: 13,
-                    color: theme.text2,
-                  }}
-                >
-                  <div>@</div>
-                  <div>{profile?.login}</div>
-                </div>
-              ) : null}
+              {loading ? (
+                <>
+                  <div
+                    style={{
+                      width: 160,
+                      height: 20,
+                      borderRadius: 4,
+                      backgroundColor: withAlpha(theme.text2, 0.15),
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: 100,
+                      height: 15,
+                      borderRadius: 3,
+                      backgroundColor: withAlpha(theme.text2, 0.1),
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+                    {profile?.displayName ?? target.displayName}
+                  </Text>
+                  {profile?.login ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        fontSize: 13,
+                        color: theme.text2,
+                      }}
+                    >
+                      <div>@</div>
+                      <div>{profile?.login}</div>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
             {avatarUrl ? (
               <GhostButton icon="copy" onClick={() => runUiTask(copyAvatarUrl())}>
@@ -293,16 +464,101 @@ export function UserProfileView({
             ) : null}
           </div>
 
-          <ProfileDescription description={profile?.description} />
+          {loading ? (
+            <div
+              style={{
+                width: '100%',
+                height: 40,
+                borderRadius: 8,
+                backgroundColor: withAlpha(theme.text2, 0.1),
+              }}
+            />
+          ) : (
+            <ProfileDescription description={profile?.description} />
+          )}
 
           {loading ? (
-            <Text style={{ fontSize: 12, color: theme.text2 }}>
-              {t('userCard.profile.loading')}
-            </Text>
-          ) : null}
-          {error ? <Text style={{ fontSize: 12, color: theme.dangerText }}>{error}</Text> : null}
-
-          {entries.length > 0 ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                borderWidth: 1,
+                borderColor: theme.hairline,
+                borderRadius: 12,
+                overflow: 'hidden',
+                backgroundColor: userCardWellColor(theme),
+              }}
+            >
+              {[
+                { label: 'Live', hasColor: true },
+                { label: 'Followers' },
+                { label: 'Last live' },
+                { label: 'Pronouns' },
+                { label: 'Chat color', hasColor: true },
+                { label: 'Broadcaster' },
+                { label: 'Roles' },
+              ].map((skeleton, index) => (
+                <div
+                  key={skeleton.label}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    paddingTop: 9,
+                    paddingBottom: 9,
+                    paddingLeft: 12,
+                    paddingRight: 12,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderColor: theme.hairline,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      flexShrink: 0,
+                      borderRadius: 3,
+                      backgroundColor: withAlpha(theme.text2, 0.15),
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: 104,
+                      flexShrink: 0,
+                      height: 11,
+                      borderRadius: 2,
+                      backgroundColor: withAlpha(theme.text2, 0.15),
+                    }}
+                  />
+                  {skeleton.hasColor ? (
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        flexShrink: 0,
+                        backgroundColor: withAlpha(theme.text2, 0.15),
+                        borderWidth: 1,
+                        borderColor: withAlpha('#ffffff', 0.25),
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    style={{
+                      flexGrow: 1,
+                      minWidth: 0,
+                      height: 12,
+                      borderRadius: 2,
+                      backgroundColor: withAlpha(theme.text2, 0.15),
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <Text style={{ fontSize: 12, color: theme.dangerText }}>{error}</Text>
+          ) : entries.length > 0 ? (
             <div
               style={{
                 display: 'flex',
@@ -379,85 +635,72 @@ export function UserProfileView({
             })}
           </div>
         </div>
-      ) : null}
-
-      {cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            marginTop: 16,
-            paddingTop: 14,
-            borderTopWidth: 1,
-            borderColor: theme.hairline,
-          }}
-        >
+      ) : loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <div
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 3,
+                backgroundColor: withAlpha(theme.text2, 0.15),
+              }}
+            />
+            <div
+              style={{
+                width: 120,
+                height: 16,
+                borderRadius: 3,
+                backgroundColor: withAlpha(theme.text2, 0.15),
+              }}
+            />
+          </div>
           <div
             style={{
               display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 10,
+              flexDirection: 'column',
+              gap: 5,
+              padding: 10,
+              borderWidth: 1,
+              borderColor: theme.hairline,
+              borderRadius: 10,
+              backgroundColor: userCardWellColor(theme),
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 8,
-                minWidth: 0,
-              }}
-            >
-              {paintsEnabled && paintImage ? (
-                <img
-                  src={paintImage.path}
-                  style={{ width: paintImage.width, height: paintImage.height }}
+            {[0, 1, 2, 3].map((_, index) => (
+              <div
+                key={index}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    width: 100,
+                    height: 20,
+                    borderRadius: 3,
+                    backgroundColor: withAlpha(theme.text2, 0.15),
+                  }}
                 />
-              ) : null}
-              {badgesEnabled
-                ? cosmeticBadges.map((badge) => (
-                    <BadgeTooltip key={`${badge.type}:${badge.id}`} badge={badge}>
-                      {badge.imageUrl ? (
-                        <RemoteImage
-                          url={badge.imageUrl}
-                          style={{ width: 24, height: 24, pointerEvents: 'none' }}
-                        />
-                      ) : (
-                        <Text
-                          style={{
-                            color: theme.text,
-                            fontSize: 12,
-                            pointerEvents: 'none',
-                            userSelect: 'none',
-                          }}
-                        >
-                          {badge.text}
-                        </Text>
-                      )}
-                    </BadgeTooltip>
-                  ))
-                : null}
-              {paintsEnabled && cosmetics.paint ? (
-                <Text style={{ color: theme.text2, fontSize: 12 }}>
-                  {t('userCard.profile.paint', { name: cosmetics.paint.name })}
-                </Text>
-              ) : null}
-            </div>
-            <GhostButton icon="externalLink" onClick={() => runUiTask(openSevenTvProfile())}>
-              {t('userCard.profile.openSevenTv')}
-            </GhostButton>
+                <div
+                  style={{
+                    width: 140,
+                    height: 20,
+                    borderRadius: 3,
+                    backgroundColor: withAlpha(theme.text2, 0.1),
+                  }}
+                />
+              </div>
+            ))}
           </div>
         </div>
-      ) : cosmetics?.lookupStatus === 'unavailable' ? (
-        <Text style={{ fontSize: 12, color: theme.text2, marginTop: 12 }}>
-          {t('userCard.profile.cosmeticsUnavailable')}
-        </Text>
       ) : null}
+
+      {cosmeticsSection}
     </UserCardPanel>
   )
 }

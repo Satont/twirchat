@@ -1,6 +1,7 @@
 import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
 import { useT } from '@gpuix/i18n'
+import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 
 import type { UserCardMetadataSectionProps } from './types'
@@ -43,9 +44,83 @@ export function UserCardMetadataSection({
           </Text>
         </MetadataState>
       ) : metadataLoading ? (
-        <MetadataState>
-          <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.metadata.loading')}</Text>
-        </MetadataState>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 10,
+          }}
+        >
+          {[0, 1, 2, 3].map((_, index) => (
+            <div
+              key={index}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                flexGrow: 1,
+                flexBasis: 150,
+                minWidth: 0,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: theme.hairline,
+                borderRadius: 12,
+                backgroundColor: userCardWellColor(theme),
+                minHeight: 72,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 7,
+                }}
+              >
+                <div
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 7,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: withAlpha(theme.text2, 0.15),
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 13,
+                      height: 13,
+                      borderRadius: 3,
+                      backgroundColor: withAlpha(theme.text2, 0.3),
+                    }}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    width: 60,
+                    height: 10,
+                    borderRadius: 2,
+                    backgroundColor: withAlpha(theme.text2, 0.15),
+                    marginTop: 2,
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  width: '100%',
+                  height: 18,
+                  borderRadius: 2,
+                  backgroundColor: withAlpha(theme.text2, 0.1),
+                }}
+              />
+            </div>
+          ))}
+        </div>
       ) : metadataError ? (
         <MetadataState error>
           <Text style={{ fontSize: 13, color: theme.dangerText }}>{metadataError}</Text>

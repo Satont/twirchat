@@ -9,11 +9,13 @@ import { useDesktopWindows } from '@gpuix/state/desktop-windows'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { logger } from '@twirchat/shared/logger'
+import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { getBackendUrl } from '../../runtime-config'
 import { Modal } from './ui/Modal'
 import type { MetadataItem, UserCardTab } from './user-card-dialog'
 import {
@@ -38,6 +40,8 @@ import {
   subAgeText,
   subscriptionDurationText,
 } from './user-card/format'
+
+const log = logger('user-card')
 
 export function UserCardDialog({
   target,
@@ -111,20 +115,82 @@ export function UserCardDialog({
    */
   const retainedBadges = useMemo(() => {
     const newestFirst: NormalizedChatMessage[] = []
-    for (const messages of watchedMessagesStore.get().values())
-      for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const message = messages[index]
-        if (message) newestFirst.push(message)
-      }
+    // Collect from current channel's messages (if available) for channel-specific badges
+    const currentChannelMessages = target.channelId
+      ? (watchedMessagesStore.get().get(target.channelId) ?? [])
+      : []
+    for (let index = currentChannelMessages.length - 1; index >= 0; index -= 1) {
+      const message = currentChannelMessages[index]
+      if (message) newestFirst.push(message)
+    }
+    // Also include home messages for global badges
     const home = homeMessagesStore.get()
     for (let index = home.length - 1; index >= 0; index -= 1) {
       const message = home[index]
       if (message) newestFirst.push(message)
     }
     return collectUserBadges(newestFirst, target.platform, target.platformUserId)
-  }, [target.platform, target.platformUserId])
+  }, [target.platform, target.platformUserId, target.channelId])
+
+  // Fetch Twitch user badge catalog from backend (global + role badges)
+  // Used as a lookup to enrich retainedBadges with imageUrl/description
+  const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
+  useEffect(() => {
+    if (target.platform !== 'twitch' || !target.username) return
+    let cancelled = false
+    const url = new URL(`${getBackendUrl()}/api/twitch/user-badges`)
+    url.searchParams.set('broadcasterLogin', target.username)
+    fetch(url.toString())
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) {
+          const catalog = new Map<string, Badge>()
+          for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
+            if (typeof imageUrl !== 'string') continue
+            const [setId, version] = key.split('/')
+            const meta = data.badgeMetadata?.[key]
+            const badge: Badge = {
+              id: `twitch:${key}`,
+              type: 'twitch',
+              text: meta?.title ?? setId,
+              ...(meta?.description ? { description: meta.description } : {}),
+              imageUrl,
+            }
+            catalog.set(badge.id, badge)
+            // Also index by setId/version for matching with retained badges
+            catalog.set(`${setId}/${version}`, badge)
+          }
+          setUserBadgeCatalog(catalog)
+        }
+      })
+      .catch((err) => {
+        log.warn('Failed to fetch user badge catalog', { error: String(err) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [target.platform, target.username])
+
+  // Enrich retainedBadges with catalog data (imageUrl, description)
+  const enrichedRetainedBadges = useMemo(() => {
+    return retainedBadges.map((badge) => {
+      const catalogBadge = userBadgeCatalog.get(badge.id)
+      if (catalogBadge) {
+        return {
+          ...badge,
+          imageUrl: badge.imageUrl ?? catalogBadge.imageUrl,
+          description: badge.description ?? catalogBadge.description,
+        }
+      }
+      return badge
+    })
+  }, [retainedBadges, userBadgeCatalog])
+
+  // retainedBadges now contains badges from current channel + home (global)
+  // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
   const extraBadges = mergeBadges(
-    retainedBadges,
+    enrichedRetainedBadges,
+    target.badges,
     profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
     profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
   )

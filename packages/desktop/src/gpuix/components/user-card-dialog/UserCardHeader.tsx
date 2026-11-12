@@ -1,4 +1,3 @@
-import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
@@ -85,7 +84,7 @@ export function UserCardHeader({
   const theme = useTheme()
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
-  const badges = mergeBadges(target.badges, extraBadges)
+  const userBadges = mergeBadges(target.badges, extraBadges)
   const headerText = theme.isLight ? theme.text : '#ffffff'
   const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
   const headerBorder = theme.isLight
@@ -242,64 +241,53 @@ export function UserCardHeader({
                 minWidth: 0,
               }}
             >
-              <Text style={{ fontSize: 20, fontWeight: 800, color: headerText }}>
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: headerText,
+                  minWidth: 0,
+                  flexShrink: 1,
+                }}
+              >
                 {formatDisplayUsername(target.displayName)}
               </Text>
-              {badges.length > 0 ? (
+              {userBadges.map((badge, index) => (
                 <div
+                  key={`${badge.type}:${badge.id}:${index}`}
                   style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    marginTop: 8,
-                    gap: 4,
-                    minWidth: 0,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 5,
+                    overflow: 'hidden',
+                    flexShrink: 0,
                   }}
                 >
-                  {badges.map((badge) => (
-                    <BadgeTooltip
-                      key={`${badge.type}:${badge.id}`}
-                      badge={badge}
-                      platform={target.platform}
+                  {badge.imageUrl ? (
+                    <RemoteImage
+                      url={badge.imageUrl}
+                      objectFit="cover"
+                      style={{ width: 18, height: 18 }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 18,
+                        height: 18,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        backgroundColor: withAlpha('#000000', 0.2),
+                        color: headerText,
+                      }}
                     >
-                      <div
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 5,
-                          overflow: 'hidden',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {badge.imageUrl ? (
-                          <RemoteImage
-                            url={badge.imageUrl}
-                            objectFit="cover"
-                            style={{ width: 18, height: 18 }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 18,
-                              height: 18,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 10,
-                              fontWeight: 700,
-                              backgroundColor: withAlpha('#000000', 0.2),
-                              color: headerText,
-                            }}
-                          >
-                            {badge.text[0]?.toUpperCase() ?? '?'}
-                          </div>
-                        )}
-                      </div>
-                    </BadgeTooltip>
-                  ))}
+                      {badge.text[0]?.toUpperCase() ?? '?'}
+                    </div>
+                  )}
                 </div>
-              ) : null}
+              ))}
             </div>
             <div
               style={{
@@ -313,47 +301,50 @@ export function UserCardHeader({
               <div>{titleHandle}</div>
             </div>
           </div>
-
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                maxWidth: 80,
+                minHeight: 22,
+                paddingLeft: 8,
+                paddingRight: 8,
+                borderRadius: 999,
+                backgroundColor: withAlpha(
+                  platformColor(target.platform),
+                  theme.isLight ? 0.14 : 0.24,
+                ),
+                borderWidth: 1,
+                borderColor: withAlpha(platformColor(target.platform), 0.36),
+              }}
+            >
+              <PlatformIcon
+                platform={target.platform}
+                size={12}
+                color={theme.isLight ? theme.text : '#ffffff'}
+              />
+              <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
+                {target.platform.toUpperCase()}
+              </Text>
+            </div>
+            {effectiveAlias ? (
+              <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
+            ) : null}
+          </div>
           <div
             style={{
               display: 'flex',
+              justifyContent: 'start',
               flexDirection: 'row',
+              flexWrap: 'wrap',
+              marginTop: 10,
+              gap: 4,
               alignItems: 'center',
-              gap: 6,
-              minWidth: 0,
             }}
           ></div>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 5,
-              maxWidth: 80,
-              minHeight: 22,
-              paddingLeft: 8,
-              paddingRight: 8,
-              borderRadius: 999,
-              backgroundColor: withAlpha(
-                platformColor(target.platform),
-                theme.isLight ? 0.14 : 0.24,
-              ),
-              borderWidth: 1,
-              borderColor: withAlpha(platformColor(target.platform), 0.36),
-            }}
-          >
-            <PlatformIcon
-              platform={target.platform}
-              size={12}
-              color={theme.isLight ? theme.text : '#ffffff'}
-            />
-            <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
-              {target.platform.toUpperCase()}
-            </Text>
-          </div>
-          {effectiveAlias ? (
-            <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
-          ) : null}
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

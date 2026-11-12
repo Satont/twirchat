@@ -25,6 +25,8 @@ export interface UserCardHeaderTarget {
   username?: string
   avatarUrl?: string
   badges?: BadgeData[]
+  channelId?: string
+  channelSlug?: string
 }
 
 export interface UserCardHeaderProps {

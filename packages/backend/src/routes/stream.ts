@@ -4,7 +4,7 @@ import { handleChannelsStatus, InvalidChannelsStatusRequestError } from '../api/
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
 import { handleSearchCategories } from '../api/search-categories.ts'
 import { handleStreamStatus } from '../api/stream-status.ts'
-import { handleTwitchBadges } from '../api/twitch-badges.ts'
+import { handleTwitchBadges, handleTwitchUserBadges } from '../api/twitch-badges.ts'
 import { fetchTwitchUserById, fetchTwitchUserByLogin } from '../api/twitch-users.ts'
 import { handleUpdateStream } from '../api/update-stream.ts'
 import { json, requireClient } from './utils.ts'
@@ -78,6 +78,17 @@ export const streamRoutes = {
         return json(result)
       } catch (err) {
         log.error('twitch/badges failed', { err: String(err) })
+        return json({ error: String(err) }, 500)
+      }
+    },
+  },
+  '/api/twitch/user-badges': {
+    async GET(req: Request) {
+      try {
+        const result = await handleTwitchUserBadges(new URL(req.url))
+        return json(result)
+      } catch (err) {
+        log.error('twitch/user-badges failed', { err: String(err) })
         return json({ error: String(err) }, 500)
       }
     },

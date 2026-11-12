@@ -9,6 +9,36 @@ export function initials(name: string): string {
   return initialsOf(name, 2)
 }
 
+/** Badge set IDs that are global (not tied to a specific channel). */
+export const GLOBAL_BADGE_SETS = new Set<string>([
+  'staff',
+  'admin',
+  'global_mod',
+  'turbo',
+  'premium',
+  'partner',
+])
+
+/** Extracts badge set ID from badge id (format: "twitch:setId/version" or "type:id"). */
+export function getBadgeSetId(badge: Badge): string | null {
+  // badge.id format: "twitch:setId/version" or "twitch:id" or "seventv:..." etc.
+  const parts = badge.id.split(':')
+  if (parts.length >= 2 && parts[0] === 'twitch') {
+    const twitchPart = parts[1]
+    if (!twitchPart) return null
+    const slashIdx = twitchPart.indexOf('/')
+    if (slashIdx > 0) return twitchPart.slice(0, slashIdx)
+    return twitchPart
+  }
+  return null
+}
+
+/** Checks if a badge is global (should show in any channel). */
+export function isGlobalBadge(badge: Badge): boolean {
+  const setId = getBadgeSetId(badge)
+  return setId !== null && GLOBAL_BADGE_SETS.has(setId)
+}
+
 /** Merges platform and cosmetic badges without dropping distinct badges that share an id. */
 export function mergeBadges(...collections: Array<readonly Badge[] | undefined>): Badge[] {
   const merged: Badge[] = []
