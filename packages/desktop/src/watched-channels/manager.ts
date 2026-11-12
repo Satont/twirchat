@@ -192,6 +192,25 @@ export class WatchedChannelManager {
     return undefined
   }
 
+  /** Delivers a 7TV notice to every connected chat that subscribed with this 7TV channel ID. */
+  injectSevenTvNotice(
+    platform: WatchedChannel['platform'],
+    sevenTvChannelId: string,
+    message: NormalizedChatMessage,
+  ): void {
+    const key = platform === 'youtube' ? sevenTvChannelId : sevenTvChannelId.toLowerCase()
+    for (const entry of this.entries.values()) {
+      const { watchedChannel } = entry
+      if (watchedChannel.platform !== platform) continue
+      const entryKey =
+        platform === 'youtube' ? entry.sevenTvChannelId : entry.sevenTvChannelId.toLowerCase()
+      if (entryKey !== key) continue
+      const notice = this.enrich({ ...message, channelId: watchedChannel.channelSlug })
+      entry.messages = [notice, ...entry.messages].slice(0, MAX_BUFFER)
+      for (const handler of this.messageHandlers) handler(watchedChannel.id, notice)
+    }
+  }
+
   /** Get buffered messages for a specific watched channel */
   getMessages(id: string): NormalizedChatMessage[] {
     return this.entries.get(id)?.messages ?? []

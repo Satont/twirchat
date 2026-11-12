@@ -174,3 +174,44 @@ test('closing a connecting channel removes its listeners and prevents late 7TV o
     sevenTVService.getSubscribedChannels().some((entry) => entry.channelId === 'late-connect'),
   ).toBe(false)
 })
+
+test('7TV notices reach the watched chat subscribed with the event channel ID', async () => {
+  const adapters: FixtureAdapter[] = []
+  const manager = new WatchedChannelManager(
+    (message) => message,
+    () => {
+      const adapter = new FixtureAdapter()
+      adapters.push(adapter)
+      return adapter
+    },
+  )
+  const target = await manager.addChannel('twitch', 'Target')
+  const other = await manager.addChannel('twitch', 'other')
+  await manager.setActiveChannels([target.id, other.id])
+  const received: Array<[string, string]> = []
+  manager.onMessage((channelId, message) => received.push([channelId, message.channelId]))
+  manager.injectSevenTvNotice('twitch', 'TARGET', {
+    id: '7tv-notice',
+    platform: 'twitch',
+    channelId: 'TARGET',
+    author: { id: '7tv-system', displayName: '7TV', badges: [] },
+    text: 'RAGEY added',
+    timestamp: new Date(),
+    emotes: [],
+    type: 'system',
+  })
+  manager.injectSevenTvNotice('kick', 'target', {
+    id: 'kick-notice',
+    platform: 'kick',
+    channelId: 'target',
+    author: { id: '7tv-system', displayName: '7TV', badges: [] },
+    text: 'ignored',
+    timestamp: new Date(),
+    emotes: [],
+    type: 'system',
+  })
+  expect(received).toEqual([[target.id, 'target']])
+  expect(manager.getMessages(target.id).map((message) => message.id)).toEqual(['7tv-notice'])
+  expect(manager.getMessages(other.id)).toEqual([])
+  await manager.setActiveChannels([])
+})
