@@ -10,7 +10,10 @@
  * `columnGap: 0`.
  */
 
+import { domainToASCII } from 'node:url'
+
 import type { Emote, NormalizedChatMessage } from '@twirchat/shared/types'
+import tlds from 'tlds'
 
 import { chunkGraphemes, sanitizeDisplayText } from '../views/shared/utils/display-text'
 import { buildMessageParts } from '../views/shared/utils/messageParts'
@@ -82,9 +85,28 @@ export function layerEmoteTokens(
 }
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
+const DOMAIN_CANDIDATE = /\.[\p{L}\p{N}]/u
+const DOMAIN_CHAR = String.raw`\p{L}\p{M}\p{N}`
+const DOMAIN_LABEL = `[${DOMAIN_CHAR}](?:[${DOMAIN_CHAR}-]{0,61}[${DOMAIN_CHAR}])?`
+const DOMAIN_PATH = String.raw`(?:[/?#][^\s<>"'\\]*[^\s<>"'\\.,;:!?)\]]|/)?`
+const URL_OR_DOMAIN_REGEX = new RegExp(
+  String.raw`${URL_REGEX.source}|(?<![${DOMAIN_CHAR}_.@:/\\%+=?#&-])` +
+    String.raw`((?:${DOMAIN_LABEL}\.)+${DOMAIN_LABEL}(?::\d+)?${DOMAIN_PATH})` +
+    String.raw`(?![${DOMAIN_CHAR}_@\\%-]|\.[${DOMAIN_CHAR}_.-])`,
+  'gu',
+)
+const PUBLIC_TLDS = new Set(tlds.map(domainToASCII))
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
 const ENCODED_UNICODE_RUN = /(?:%[89a-f][\da-f])+/gi
 const INVISIBLE_UNICODE = /[\p{C}\p{Z}]/u
+
+function bareDomainUrl(domain: string): string | undefined {
+  const url = `https://${domain}`
+  const parsed = URL.parse(url)
+  if (!parsed) return undefined
+  const tld = parsed.hostname.slice(parsed.hostname.lastIndexOf('.') + 1)
+  return PUBLIC_TLDS.has(tld) ? url : undefined
+}
 
 function linkDisplayText(url: string): string {
   if (!url.includes('%')) return url
@@ -159,15 +181,19 @@ export function buildMessageTokens(
 
     // Split out links first, then mentions inside the remaining text.
     let cursor = 0
-    for (const match of content.matchAll(URL_REGEX)) {
+    const urls = DOMAIN_CANDIDATE.test(content) ? URL_OR_DOMAIN_REGEX : URL_REGEX
+    for (const match of content.matchAll(urls)) {
+      const [label, bareDomain] = match
+      const url = bareDomain === undefined ? label : bareDomainUrl(bareDomain)
+      if (!url) continue
       const before = content.slice(cursor, match.index)
       pushMentions(tokens, before)
-      pushSegment(tokens, linkDisplayText(match[0]), (word) => ({
+      pushSegment(tokens, linkDisplayText(label), (word) => ({
         kind: 'link',
         text: word,
-        url: match[0],
+        url,
       }))
-      cursor = match.index + match[0].length
+      cursor = match.index + label.length
     }
     pushMentions(tokens, content.slice(cursor))
   }
