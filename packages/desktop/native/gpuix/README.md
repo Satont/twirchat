@@ -410,6 +410,12 @@ after removal. A minute timer releases resources that have been outside the last
 scene and unused for at least four minutes. An empty cache or a closed view stops its timer.
 Cache epochs follow actual draws, including layouts reached without a root render.
 
+The process also accounts for decoded pixels once per shared resource. Above
+128 MiB, live caches retire their least recently used cold entries until the
+shared total reaches 96 MiB or only live images remain. Each window protects
+its last painted scene, including while idle. A shared resource releases its
+pixels only after the final window drops its lease.
+
 The raster loader checks canvas size before expanding pixels. Animated GIF and WebP
 preflight frame count from compressed metadata. Images that fit the 20 MiB animation
 budget retain their original pixels. For larger animations within the canvas and frame-count

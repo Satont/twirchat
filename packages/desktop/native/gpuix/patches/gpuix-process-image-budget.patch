@@ -1,0 +1,578 @@
+diff --git a/packages/native/src/image_resources.rs b/packages/native/src/image_resources.rs
+index 7dc0bca..2f78ad6 100644
+--- a/packages/native/src/image_resources.rs
++++ b/packages/native/src/image_resources.rs
+@@ -2,7 +2,7 @@
+ //! The cache targets 64 MiB/256 entries; current visible images may exceed that
+ //! budget and stay pinned so painting never causes a decode/eviction loop.
+ 
+-use futures::FutureExt as _;
++use futures::{channel::mpsc, FutureExt as _, StreamExt as _};
+ use gpui::{
+     App, AppContext as _, Asset as _, AssetLogger, Entity, ImageAssetLoader, ImageCache,
+     ImageCacheError, ImageLoadingTask, RenderImage, Resource, Task, WeakEntity, Window,
+@@ -10,6 +10,7 @@ use gpui::{
+ use std::cell::{Cell, RefCell};
+ use std::collections::{BTreeMap, HashMap};
+ use std::rc::Rc;
++use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::Arc;
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ use std::sync::LazyLock;
+@@ -170,6 +171,8 @@ const COLD_TTL: Duration = Duration::from_secs(4 * 60);
+ const EXPIRY_INTERVAL: Duration = Duration::from_secs(60);
+ const MAX_ENTRIES: usize = 256;
+ const MAX_DECODED_BYTES: usize = 64 * 1024 * 1024;
++const PROCESS_HIGH_BYTES: usize = 128 * 1024 * 1024;
++const PROCESS_LOW_BYTES: usize = 96 * 1024 * 1024;
+ 
+ #[derive(Clone, Debug)]
+ #[cfg_attr(
+@@ -308,6 +311,16 @@ impl ResourceBudget {
+         Some(resource)
+     }
+ 
++    fn cold_decoded_resources(&self) -> impl Iterator<Item = &Resource> {
++        self.order
++            .values()
++            .map_while(|resource| {
++                let access = self.entries.get(resource)?;
++                (access.epoch < self.epoch).then_some((resource, access.bytes))
++            })
++            .filter_map(|(resource, bytes)| (bytes != 0).then_some(resource))
++    }
++
+     fn evict_oldest(&mut self, protect_previous: bool) -> Option<Resource> {
+         self.oldest_evictable(protect_previous)?;
+         let (_, resource) = self.order.pop_first()?;
+@@ -364,10 +377,17 @@ impl SharedResource {
+ struct SharedEntry {
+     state: ImageState,
+     owners: HashMap<ImageOwner, usize>,
++    bytes: usize,
+ }
+ 
+ #[derive(Default)]
+-struct SharedImages(HashMap<SharedResource, SharedEntry>);
++struct SharedImages {
++    entries: HashMap<SharedResource, SharedEntry>,
++    decoded_bytes: usize,
++    pressure: Arc<AtomicBool>,
++    next_subscriber: u64,
++    subscribers: HashMap<u64, mpsc::Sender<()>>,
++}
+ 
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ static SHARED_IMAGES: LazyLock<parking_lot::Mutex<SharedImages>> =
+@@ -390,6 +410,51 @@ impl SharedImages {
+         }
+     }
+ 
++    fn under_pressure(&self) -> bool {
++        self.pressure.load(Ordering::Relaxed)
++    }
++
++    fn set_decoded_bytes(&mut self, bytes: usize) {
++        self.decoded_bytes = bytes;
++        let was_under_pressure = self.under_pressure();
++        let under_pressure = if was_under_pressure {
++            bytes > PROCESS_LOW_BYTES
++        } else {
++            bytes > PROCESS_HIGH_BYTES
++        };
++        if under_pressure != was_under_pressure {
++            self.pressure.store(under_pressure, Ordering::Relaxed);
++            if under_pressure {
++                // Each cache has one sender with a single pending slot. A full
++                // channel already has a wakeup queued for that cache.
++                self.subscribers
++                    .retain(|_, sender| match sender.try_send(()) {
++                        Ok(()) => true,
++                        Err(error) => error.is_full(),
++                    });
++            }
++        }
++    }
++
++    fn complete(
++        &mut self,
++        resource: &Resource,
++        owner: ImageOwner,
++        result: &Result<Arc<RenderImage>, ImageCacheError>,
++        bytes: usize,
++    ) -> Option<ImageState> {
++        let entry = self
++            .entries
++            .get_mut(&SharedResource::new(resource, owner))?;
++        if !matches!(entry.state, ImageState::Loading(_)) {
++            return None;
++        }
++        let previous = std::mem::replace(&mut entry.state, ImageState::Loaded(result.clone()));
++        entry.bytes = bytes;
++        self.set_decoded_bytes(self.decoded_bytes + bytes);
++        Some(previous)
++    }
++
+     fn acquire(
+         &mut self,
+         resource: &Resource,
+@@ -397,7 +462,7 @@ impl SharedImages {
+         cx: &mut App,
+     ) -> (ImageState, bool) {
+         let key = SharedResource::new(resource, owner);
+-        if let Some(entry) = self.0.get_mut(&key) {
++        if let Some(entry) = self.entries.get_mut(&key) {
+             *entry.owners.entry(owner).or_default() += 1;
+             return (entry.state.clone(), false);
+         }
+@@ -415,11 +480,12 @@ impl SharedImages {
+                 })
+                 .shared(),
+         );
+-        self.0.insert(
++        self.entries.insert(
+             key,
+             SharedEntry {
+                 state: state.clone(),
+                 owners: HashMap::from([(owner, 1)]),
++                bytes: 0,
+             },
+         );
+         (state, true)
+@@ -428,7 +494,7 @@ impl SharedImages {
+     // Move retired tasks/pixels outside the mutex before dropping them.
+     fn release(&mut self, resource: &Resource, owner: ImageOwner) -> (Option<SharedEntry>, bool) {
+         let key = SharedResource::new(resource, owner);
+-        let Some(entry) = self.0.get_mut(&key) else {
++        let Some(entry) = self.entries.get_mut(&key) else {
+             return (None, false);
+         };
+         if let Some(count) = entry.owners.get_mut(&owner) {
+@@ -439,7 +505,11 @@ impl SharedImages {
+         }
+         let window_owned = entry.owners.contains_key(&owner);
+         let retired = if entry.owners.is_empty() {
+-            self.0.remove(&key)
++            let retired = self.entries.remove(&key);
++            if let Some(entry) = &retired {
++                self.set_decoded_bytes(self.decoded_bytes - entry.bytes);
++            }
++            retired
+         } else {
+             None
+         };
+@@ -447,6 +517,43 @@ impl SharedImages {
+     }
+ }
+ 
++struct PressureSubscription {
++    id: u64,
++    pressure: Arc<AtomicBool>,
++}
++
++impl PressureSubscription {
++    fn new() -> (Self, mpsc::Receiver<()>) {
++        let (mut sender, receiver) = mpsc::channel(0);
++        let subscription = SharedImages::with(|images| {
++            let id = images.next_subscriber;
++            images.next_subscriber += 1;
++            if images.under_pressure() {
++                // The new receiver is live and its single slot is empty.
++                sender.try_send(()).ok();
++            }
++            images.subscribers.insert(id, sender);
++            Self {
++                id,
++                pressure: images.pressure.clone(),
++            }
++        });
++        (subscription, receiver)
++    }
++}
++
++impl Drop for PressureSubscription {
++    fn drop(&mut self) {
++        let sender = SharedImages::with(|images| images.subscribers.remove(&self.id));
++        drop(sender);
++    }
++}
++
++struct ImageMaintenance {
++    _task: Task<()>,
++    subscription: PressureSubscription,
++}
++
+ struct ImageLease {
+     resource: Resource,
+     owner: ImageOwner,
+@@ -454,11 +561,20 @@ struct ImageLease {
+ }
+ 
+ impl ImageLease {
+-    fn release(&mut self) -> (Option<SharedEntry>, bool) {
+-        if !std::mem::replace(&mut self.active, false) {
+-            return (None, false);
++    fn release_if(
++        &mut self,
++        can_release: impl FnOnce(&SharedImages) -> bool,
++    ) -> Option<(Option<SharedEntry>, bool)> {
++        if !self.active {
++            return None;
+         }
+-        SharedImages::with(|images| images.release(&self.resource, self.owner))
++        SharedImages::with(|images| {
++            if !can_release(images) {
++                return None;
++            }
++            self.active = false;
++            Some(images.release(&self.resource, self.owner))
++        })
+     }
+ }
+ 
+@@ -466,12 +582,22 @@ impl Drop for ImageLease {
+     fn drop(&mut self) {
+         // App teardown/unwinding may skip observe_release. No atlas operation is
+         // needed then: the window owns it. The registry must still lose its lease.
+-        drop(self.release());
++        drop(self.release_if(|_| true));
+     }
+ }
+ 
+ fn release_image(mut entry: Entry, window: Option<&mut Window>, cx: &mut App) {
+-    let (retired, window_owned) = entry.lease.release();
++    if let Some(released) = entry.lease.release_if(|_| true) {
++        retire_image(entry, released, window, cx);
++    }
++}
++
++fn retire_image(
++    entry: Entry,
++    (retired, window_owned): (Option<SharedEntry>, bool),
++    window: Option<&mut Window>,
++    cx: &mut App,
++) {
+     let last = retired.is_some();
+     drop(retired);
+     let ImageState::Loaded(Ok(image)) = entry.state else {
+@@ -507,7 +633,7 @@ pub(crate) struct ImageResources {
+     decodes: u64,
+     evictions: u64,
+     settle_pending: bool,
+-    expiry: Option<Task<()>>,
++    maintenance: Option<ImageMaintenance>,
+ }
+ 
+ impl ImageResources {
+@@ -521,10 +647,10 @@ impl ImageResources {
+             decodes: 0,
+             evictions: 0,
+             settle_pending: false,
+-            expiry: None,
++            maintenance: None,
+         });
+         cx.observe_release(&cache, |cache, cx| {
+-            cache.expiry = None;
++            cache.maintenance = None;
+             for (_, entry) in cache.entries.drain() {
+                 release_image(entry, None, cx);
+             }
+@@ -544,10 +670,25 @@ impl ImageResources {
+         self.publish();
+     }
+ 
++    fn under_pressure(&self) -> bool {
++        self.maintenance
++            .as_ref()
++            .is_some_and(|maintenance| maintenance.subscription.pressure.load(Ordering::Relaxed))
++    }
++
+     pub(crate) fn begin_frame(&mut self, window: &mut Window, cx: &mut App) {
+         if self.budget.begin_draw(window.draw_id()) {
+             self.budget.now = cx.background_executor().now();
+             self.trim(true, window, cx);
++            if self.under_pressure() && self.budget.bytes != 0 {
++                // Let the draw finish marking its live entries before checking
++                // which decoded images have become cold.
++                let weak = self.weak.clone();
++                window.defer(cx, move |window, cx| {
++                    weak.update(cx, |cache, cx| cache.trim_pressure(window, cx))
++                        .ok();
++                });
++            }
+         }
+     }
+ 
+@@ -607,32 +748,84 @@ impl ImageResources {
+             self.publish();
+         }
+         if self.entries.is_empty() {
+-            self.expiry = None;
++            self.maintenance = None;
+         }
+         if protect_previous {
+             self.schedule_settle(window, cx);
+         }
+     }
+ 
+-    fn start_expiry(&mut self, window: &Window, cx: &App) {
+-        if self.expiry.is_some() {
++    fn trim_pressure(&mut self, window: &mut Window, cx: &mut App) {
++        if !self.under_pressure() {
++            return;
++        }
++        let candidates: Vec<_> = self.budget.cold_decoded_resources().cloned().collect();
++        let before = self.evictions;
++        for resource in candidates {
++            let Some(entry) = self.entries.get_mut(&resource) else {
++                continue;
++            };
++            if entry.completing.get() {
++                continue;
++            }
++            // Check the shared threshold and release this lease under the same
++            // lock, so another window reaching the target stops this sweep.
++            let Some(released) = entry.lease.release_if(SharedImages::under_pressure) else {
++                break;
++            };
++            self.budget.remove(&resource);
++            if let Some(entry) = self.entries.remove(&resource) {
++                retire_image(entry, released, Some(window), cx);
++                self.evictions += 1;
++            }
++        }
++        if self.evictions != before {
++            self.publish();
++        }
++        if self.entries.is_empty() {
++            self.maintenance = None;
++        }
++    }
++
++    fn start_maintenance(&mut self, window: &Window, cx: &App) {
++        if self.maintenance.is_some() {
+             return;
+         }
+         let weak = self.weak.clone();
+-        self.expiry = Some(window.spawn(cx, async move |cx| {
++        let (subscription, mut pressure) = PressureSubscription::new();
++        let task = window.spawn(cx, async move |cx| {
++            let mut expiry = cx.background_executor().timer(EXPIRY_INTERVAL).fuse();
+             loop {
+-                cx.background_executor().timer(EXPIRY_INTERVAL).await;
++                let expired = futures::select! {
++                    () = expiry => true,
++                    signal = pressure.next().fuse() => {
++                        if signal.is_none() {
++                            break;
++                        }
++                        false
++                    }
++                };
+                 let keep_running = cx.update(|window, cx| {
+                     weak.update(cx, |cache, cx| {
+-                        cache.expire(cx.background_executor().now(), window, cx);
++                        if expired {
++                            cache.expire(cx.background_executor().now(), window, cx);
++                        }
++                        cache.trim_pressure(window, cx);
+                         !cache.entries.is_empty()
+                     })
+                 });
+                 if !matches!(keep_running, Ok(Ok(true))) {
+                     break;
+                 }
++                if expired {
++                    expiry = cx.background_executor().timer(EXPIRY_INTERVAL).fuse();
++                }
+             }
+-        }));
++        });
++        self.maintenance = Some(ImageMaintenance {
++            _task: task,
++            subscription,
++        });
+     }
+ 
+     fn expire(&mut self, now: Instant, window: &mut Window, cx: &mut App) {
+@@ -659,7 +852,7 @@ impl ImageResources {
+         }
+         self.publish();
+         if self.entries.is_empty() {
+-            self.expiry = None;
++            self.maintenance = None;
+         }
+     }
+ 
+@@ -695,12 +888,7 @@ impl ImageResources {
+         }
+         let bytes = result.as_ref().map_or(0, |image| decoded_bytes(image));
+         let previous = SharedImages::with(|images| {
+-            images
+-                .0
+-                .get_mut(&SharedResource::new(&resource, entry.lease.owner))
+-                .map(|shared| {
+-                    std::mem::replace(&mut shared.state, ImageState::Loaded(result.clone()))
+-                })
++            images.complete(&resource, entry.lease.owner, &result, bytes)
+         });
+         drop(previous);
+         entry.state = ImageState::Loaded(result);
+@@ -745,7 +933,7 @@ impl ImageCache for ImageResources {
+         self.decodes += u64::from(started);
+         // A lease gets a unique local generation even when no decode was started.
+         let load = self.budget.stamp;
+-        self.start_expiry(window, cx);
++        self.start_maintenance(window, cx);
+         let task = match state {
+             ImageState::Loaded(result) => {
+                 self.budget.set_bytes(
+@@ -863,27 +1051,27 @@ mod tests {
+         let image = Arc::new(RenderImage::from_bgra(1, 1, vec![0; 4]).unwrap());
+         let state = ImageState::Loaded(Ok(image.clone()));
+         let mut shared = SharedImages::default();
+-        shared.0.insert(
++        shared.entries.insert(
+             key.clone(),
+             SharedEntry {
+                 state,
+                 owners: HashMap::from([(window, 2)]),
++                bytes: 4,
+             },
+         );
+-        assert!(
+-            !shared
+-                .0
+-                .contains_key(&SharedResource::new(&resource("other"), window))
+-        );
++        shared.set_decoded_bytes(4);
++        assert!(!shared
++            .entries
++            .contains_key(&SharedResource::new(&resource("other"), window)));
+         let (retired, owned) = shared.release(&resource("exact"), window);
+         assert!(retired.is_none() && owned);
+-        let ImageState::Loaded(Ok(retained)) = &shared.0[&key].state else {
++        let ImageState::Loaded(Ok(retained)) = &shared.entries[&key].state else {
+             panic!("decoded image must remain available to the surviving lease");
+         };
+         assert!(Arc::ptr_eq(&image, retained));
+         let (retired, owned) = shared.release(&resource("exact"), window);
+         assert!(retired.is_some() && !owned);
+-        assert!(shared.0.is_empty());
++        assert!(shared.entries.is_empty());
+     }
+ 
+     #[test]
+@@ -895,16 +1083,17 @@ mod tests {
+             ImageState::Loading(Task::ready(Err(error.clone())).shared()),
+             ImageState::Loaded(Err(error)),
+         ] {
+-            shared.0.insert(
++            shared.entries.insert(
+                 SharedResource::new(&resource("missing"), window),
+                 SharedEntry {
+                     state,
+                     owners: HashMap::from([(window, 1)]),
++                    bytes: 0,
+                 },
+             );
+             let (retired, owned) = shared.release(&resource("missing"), window);
+             assert!(retired.is_some() && !owned);
+-            assert!(shared.0.is_empty());
++            assert!(shared.entries.is_empty());
+         }
+     }
+ 
+@@ -927,21 +1116,33 @@ mod tests {
+         let mut shared = SharedImages::default();
+         let key = SharedResource::new(&absolute, first);
+         let image = Arc::new(RenderImage::from_bgra(1, 1, vec![0; 4]).unwrap());
+-        shared.0.insert(
++        shared.entries.insert(
+             key.clone(),
+             SharedEntry {
+-                state: ImageState::Loaded(Ok(image.clone())),
++                state: ImageState::Loading(
++                    Task::ready(Err(ImageCacheError::Asset("pending".into()))).shared(),
++                ),
+                 owners: HashMap::from([(first, 1), (second, 1)]),
++                bytes: 0,
+             },
+         );
++        assert!(shared
++            .complete(&absolute, first, &Ok(image.clone()), 4)
++            .is_some());
++        assert!(shared
++            .complete(&absolute, second, &Ok(image.clone()), 4)
++            .is_none());
++        assert_eq!(shared.decoded_bytes, 4);
+         let (retired, owned) = shared.release(&absolute, first);
++        assert_eq!(shared.decoded_bytes, 4);
+         assert!(retired.is_none() && !owned);
+-        let ImageState::Loaded(Ok(retained)) = &shared.0[&key].state else {
++        let ImageState::Loaded(Ok(retained)) = &shared.entries[&key].state else {
+             panic!("surviving App lost pixels");
+         };
+         assert!(Arc::ptr_eq(&image, retained));
+         let (retired, owned) = shared.release(&absolute, second);
+-        assert!(retired.is_some() && !owned && shared.0.is_empty());
++        assert!(retired.is_some() && !owned && shared.entries.is_empty());
++        assert_eq!(shared.decoded_bytes, 0);
+     }
+ 
+     #[test]
+@@ -950,11 +1151,12 @@ mod tests {
+         let resource = resource("drop-without-observer");
+         let key = SharedResource::new(&resource, owner);
+         SharedImages::with(|shared| {
+-            shared.0.insert(
++            shared.entries.insert(
+                 key.clone(),
+                 SharedEntry {
+                     state: ImageState::Loaded(Err(ImageCacheError::Asset("missing".into()))),
+                     owners: HashMap::from([(owner, 1)]),
++                    bytes: 0,
+                 },
+             );
+         });
+@@ -963,7 +1165,39 @@ mod tests {
+             owner,
+             active: true,
+         });
+-        SharedImages::with(|shared| assert!(!shared.0.contains_key(&key)));
++        SharedImages::with(|shared| assert!(!shared.entries.contains_key(&key)));
++    }
++
++    #[test]
++    fn process_pressure_starts_above_high_and_stops_at_low() {
++        let mut shared = SharedImages::default();
++        shared.set_decoded_bytes(PROCESS_HIGH_BYTES);
++        assert!(!shared.under_pressure());
++        shared.set_decoded_bytes(PROCESS_HIGH_BYTES + 1);
++        assert!(shared.under_pressure());
++        shared.set_decoded_bytes(PROCESS_LOW_BYTES + 1);
++        assert!(shared.under_pressure());
++        shared.set_decoded_bytes(PROCESS_LOW_BYTES);
++        assert!(!shared.under_pressure());
++    }
++
++    #[test]
++    fn process_pressure_only_selects_cold_decoded_entries_in_use_order() {
++        let mut budget = ResourceBudget::new(256, usize::MAX);
++        budget.begin_frame();
++        for name in ["pending", "old", "recent", "live"] {
++            budget.touch(&resource(name));
++        }
++        for name in ["old", "recent", "live"] {
++            budget.set_bytes(&resource(name), 4);
++        }
++        budget.begin_frame();
++        budget.touch(&resource("live"));
++
++        assert_eq!(
++            budget.cold_decoded_resources().cloned().collect::<Vec<_>>(),
++            [resource("old"), resource("recent")],
++        );
+     }
+ 
+     #[test]

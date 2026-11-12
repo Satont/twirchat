@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.26",
+  "version": "0.11.0-twirchat.27",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -225,6 +225,11 @@
       "path": "patches/gpuix-virtual-list-inner-overlap.patch",
       "root": "gpuix",
       "sha256": "7fc040f4a7c87eecff616e8c8b4e88461788716bde996bbcef29d05cc11cd649"
+    },
+    {
+      "path": "patches/gpuix-process-image-budget.patch",
+      "root": "gpuix",
+      "sha256": "2c4d09a705f56b4e4d47893e89f8d1633ad0e080a0d63717bb34424b3c88e6d3"
     }
   ],
   "cosmicText": {
