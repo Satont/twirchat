@@ -398,6 +398,30 @@ describe('Twitch incoming message appearance', () => {
 })
 
 describe('Twitch writer and reader', () => {
+  test('decodes IRC actions before resolving emote positions', async () => {
+    const { adapter, client, messages } = readerFixture()
+    const received = Promise.withResolvers<void>()
+    adapter.on('message', (message) => {
+      if (message.id === 'plain') received.resolve()
+    })
+    client.irc.receiveLine(
+      '@id=action;emotes=25:2-6 :maya!maya@maya.tmi.twitch.tv PRIVMSG #satont :\u0001ACTION 🚀 Kappa\u0001',
+    )
+    client.irc.receiveLine('@id=plain :maya!maya@maya.tmi.twitch.tv PRIVMSG #satont :ACTION 123')
+    await received.promise
+
+    expect(messages).toHaveLength(2)
+    expect(messages).toMatchObject([
+      {
+        id: 'action',
+        text: '🚀 Kappa',
+        type: 'action',
+        emotes: [{ id: '25', name: 'Kappa', positions: [{ start: 3, end: 7 }] }],
+      },
+      { id: 'plain', text: 'ACTION 123', type: 'message' },
+    ])
+  })
+
   test('a writer acknowledgment creates no row and the incoming IRC reply supplies its metadata', async () => {
     const written: Array<{ channel: string; text: string; replyTo?: string }> = []
     const senders = writerFixture(async (writer, channel, text, replyTo) => {

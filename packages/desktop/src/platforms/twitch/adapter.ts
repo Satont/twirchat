@@ -361,7 +361,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     // Actions (/me)
     client.onAction((channel, user, text, msg) => {
       if (!current()) return
-      runInBackground(this.handleChatMessage(msg, true), 'adapter background operation failed')
+      runInBackground(this.handleChatMessage(msg, text), 'adapter background operation failed')
     })
     client.onAnnouncement((channel, user, info, msg) => {
       if (!current()) return
@@ -602,7 +602,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
   }
 
-  private async handleChatMessage(msg: ChatMessage, isAction = false): Promise<void> {
+  private async handleChatMessage(msg: ChatMessage, actionText?: string): Promise<void> {
     // Messages only arrive after a successful join — recover the status if the
     // matching onJoin was missed (e.g. join fired before handlers attached).
     if (!this.isConnected) {
@@ -616,7 +616,11 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     const avatarUrl = await resolveTwitchAvatarUrl({ authorId: msg.tags.get('user-id') })
-    const normalized = normalizeTwitchChatMessage(msg, this.badgeCache, { avatarUrl, isAction })
+    const normalized = normalizeTwitchChatMessage(msg, this.badgeCache, {
+      avatarUrl,
+      text: actionText,
+      isAction: actionText !== undefined,
+    })
 
     this.emit('message', normalized)
   }
