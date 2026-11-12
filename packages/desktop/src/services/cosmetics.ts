@@ -1,4 +1,7 @@
-import { SEVENTV_COSMETICS_QUERY } from '@twirchat/shared/emote-proxy'
+import {
+  SEVENTV_COSMETICS_INVENTORY_QUERY,
+  SEVENTV_COSMETICS_QUERY,
+} from '@twirchat/shared/emote-proxy'
 import type { Badge, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
@@ -44,14 +47,20 @@ export interface CosmeticPaint {
 export interface UserCosmetics {
   sevenTvUserId?: string
   personalEmoteSetId?: string
+  /** Badges displayed next to the author name in chat (7TV active badge + providers). */
   badges: Badge[]
+  /** Every accessible badge in the user's 7TV inventory; user-card only. */
+  inventoryBadges: Badge[]
   paint?: CosmeticPaint
   lookupStatus: 'available' | 'not-found' | 'unavailable'
 }
-export type UserCosmeticPreferences = Pick<
+export interface UserCosmeticPreferences extends Pick<
   EmotePreferences,
   'badges' | 'paints' | 'communityBadges'
->
+> {
+  /** Fetch the full 7TV badge inventory for the user card. */
+  inventory?: boolean
+}
 
 function cosmeticsCacheKey(
   platform: Platform,
@@ -63,21 +72,48 @@ function cosmeticsCacheKey(
     userId,
     preferences.badges,
     preferences.paints,
+    preferences.inventory === true,
     COMMUNITY_BADGE_PROVIDERS.map((provider) => preferences.communityBadges[provider]),
   ])
 }
 
 export function parseCosmetics(value: unknown): UserCosmetics {
   const user = row(row(row(row(value).data).users).userByConnection)
-  if (!str(user.id)) return { badges: [], lookupStatus: 'not-found' }
+  if (!str(user.id)) return { badges: [], inventoryBadges: [], lookupStatus: 'not-found' }
   const style = row(user.style),
     badge = row(style.activeBadge),
     paint = row(style.activePaint)
-  const image =
-    list(badge.images)
-      .map(row)
-      .find((item) => number(item.scale) >= 2) ?? row(list(badge.images)[0])
-  const badgeUrl = safeUrl(image.url)
+  const imageOf = (entry: Row): string | undefined => {
+    const images = list(entry.images).map(row)
+    const image = images.find((item) => number(item.scale) >= 2) ?? images[0]
+    return safeUrl(row(image).url)
+  }
+  const badgeOf = (entry: Row): Badge | undefined => {
+    const id = str(entry.id)
+    const imageUrl = imageOf(entry)
+    if (!id || !imageUrl) return undefined
+    const description = str(entry.description)
+    return {
+      id: `7tv:${id}`,
+      type: 'seventv',
+      text: str(entry.name),
+      ...(description ? { description } : {}),
+      imageUrl,
+    }
+  }
+  const activeBadge = badgeOf(badge)
+  const inventoryBadges: Badge[] = []
+  const seenBadges = new Set<string>()
+  for (const edge of list(row(user.inventory).badges).slice(0, 100)) {
+    const entry = row(edge)
+    if (entry.accessible !== true) continue
+    const owned = badgeOf(row(row(entry.to).badge))
+    if (!owned) continue
+    const key = `${owned.type}:${owned.id}`
+    if (seenBadges.has(key)) continue
+    seenBadges.add(key)
+    inventoryBadges.push(owned)
+  }
   const data = row(paint.data)
   const layers = list(data.layers)
     .slice(0, 16)
@@ -133,9 +169,8 @@ export function parseCosmetics(value: unknown): UserCosmetics {
   return {
     sevenTvUserId: str(user.id),
     personalEmoteSetId: str(row(user.personalEmoteSet).id) || undefined,
-    badges: badgeUrl
-      ? [{ id: `7tv:${str(badge.id)}`, type: 'seventv', text: str(badge.name), imageUrl: badgeUrl }]
-      : [],
+    badges: activeBadge ? [activeBadge] : [],
+    inventoryBadges,
     ...(str(paint.id) && layers.length
       ? {
           paint: {
@@ -179,7 +214,8 @@ export function createCosmeticsService(
     if (old && old.expires > Date.now()) return Promise.resolve(old.value)
     const inflight = pending.get(key)
     if (inflight) return inflight
-    if (pending.size >= 500) return Promise.resolve({ badges: [], lookupStatus: 'unavailable' })
+    if (pending.size >= 500)
+      return Promise.resolve({ badges: [], inventoryBadges: [], lookupStatus: 'unavailable' })
     const task = (async () => {
       if (active >= 4) await new Promise<void>((resolve) => waiting.push(resolve))
       else active++
@@ -187,13 +223,16 @@ export function createCosmeticsService(
         ? badges(platform, userId, username, preferences).catch(() => [])
         : Promise.resolve([])
       try {
-        let result: UserCosmetics = { badges: [], lookupStatus: 'not-found' }
+        let result: UserCosmetics = { badges: [], inventoryBadges: [], lookupStatus: 'not-found' }
         if (platform !== 'youtube' && userId) {
+          const query = preferences.inventory
+            ? SEVENTV_COSMETICS_INVENTORY_QUERY
+            : SEVENTV_COSMETICS_QUERY
           const response = await fetcher('https://7tv.io/v4/gql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: SEVENTV_COSMETICS_QUERY,
+              query,
               variables: { platform: platform.toUpperCase(), platformId: userId },
             }),
             signal: AbortSignal.timeout(10_000),
@@ -206,7 +245,10 @@ export function createCosmeticsService(
             throw new Error(str(row(list(row(json).errors)[0]).message))
           result = parseCosmetics(json)
         }
-        if (!preferences.badges) result.badges = []
+        if (!preferences.badges) {
+          result.badges = []
+          result.inventoryBadges = []
+        }
         if (!preferences.paints) delete result.paint
         result.badges.push(...(await providerBadges))
         cache.set(key, { value: result, expires: Date.now() + 600_000 })
@@ -214,6 +256,7 @@ export function createCosmeticsService(
       } catch {
         const value: UserCosmetics = old?.value ?? {
           badges: await providerBadges,
+          inventoryBadges: [],
           lookupStatus: 'unavailable',
         }
         cache.set(key, { value, expires: Date.now() + 60_000 })

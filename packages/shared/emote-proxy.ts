@@ -108,11 +108,8 @@ export function providerMetadataTarget(value: string): ProviderMetadataTarget | 
     : null
 }
 
-export const SEVENTV_COSMETICS_QUERY = `query DesktopCosmetics($platform: Platform!, $platformId: String!) {
-  users { userByConnection(platform: $platform, platformId: $platformId) {
-    id personalEmoteSet { id }
-    style {
-      activeBadge { id name images { url scale frameCount } }
+const SEVENTV_COSMETICS_STYLE = `style {
+      activeBadge { id name description images { url scale frameCount } }
       activePaint { id name data {
         layers { opacity ty { __typename
           ... on PaintLayerTypeSingleColor { color { hex } }
@@ -122,6 +119,24 @@ export const SEVENTV_COSMETICS_QUERY = `query DesktopCosmetics($platform: Platfo
         } }
         shadows { color { hex } offsetX offsetY blur }
       } }
+    }`
+
+export const SEVENTV_COSMETICS_QUERY = `query DesktopCosmetics($platform: Platform!, $platformId: String!) {
+  users { userByConnection(platform: $platform, platformId: $platformId) {
+    id personalEmoteSet { id }
+    ${SEVENTV_COSMETICS_STYLE}
+  } }
+}`
+
+/** User-card only: the chat path must not download every badge a user owns. */
+export const SEVENTV_COSMETICS_INVENTORY_QUERY = `query DesktopCosmeticsWithInventory($platform: Platform!, $platformId: String!) {
+  users { userByConnection(platform: $platform, platformId: $platformId) {
+    id personalEmoteSet { id }
+    ${SEVENTV_COSMETICS_STYLE}
+    inventory(includeInaccessible: false) {
+      badges { accessible to { badgeId badge {
+        id name description images { url scale frameCount }
+      } } }
     }
   } }
 }`
