@@ -115,8 +115,9 @@ import {
 } from '../../services/mention-user'
 import { createModerationService } from '../../services/moderation/service'
 import { createNightbotCommandsClient } from '../../services/nightbot-commands'
+import { createPotatCommandsClient } from '../../services/potat-commands'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
-import type { PublicBotCommand } from '../../services/public-bot-commands'
+import type { PrefixedBotCommand, PublicBotCommand } from '../../services/public-bot-commands'
 import { createSnapshotRequests } from '../../services/snapshot-requests'
 import type {
   StreamerMode,
@@ -124,6 +125,10 @@ import type {
   StreamerModeSettings,
   StreamerModeStatus,
 } from '../../services/streamer-mode'
+import {
+  createSupibotCommandsClient,
+  type SupibotCommandTarget,
+} from '../../services/supibot-commands'
 import { systemIntegration } from '../../services/system-integration'
 import {
   createTwirCommandsClient,
@@ -373,6 +378,8 @@ export interface DesktopApi {
   ): Promise<readonly JeetbotCommand[]>
   getFossabotCommands: (target: FossabotCommandTarget) => Promise<readonly PublicBotCommand[]>
   getNightbotCommands: (channelLogin: string) => Promise<readonly PublicBotCommand[]>
+  getPotatCommands: (channelLogin: string) => Promise<readonly PrefixedBotCommand[]>
+  getSupibotCommands: (target: SupibotCommandTarget) => Promise<readonly PrefixedBotCommand[]>
   getUserAliases(): Promise<UserAlias[]>
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
@@ -980,6 +987,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getJeetbotCommands: createJeetbotCommandsClient(),
     getFossabotCommands: createFossabotCommandsClient(),
     getNightbotCommands: createNightbotCommandsClient(),
+    getPotatCommands: createPotatCommandsClient(),
+    getSupibotCommands: createSupibotCommandsClient(),
     getTwitchActivities: async (params) => {
       const snapshot = await requestTwitchActivitiesSnapshot(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)

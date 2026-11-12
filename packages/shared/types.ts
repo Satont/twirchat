@@ -285,6 +285,8 @@ export interface AppSettings {
   jeetbotIntegrationEnabled?: boolean
   fossabotIntegrationEnabled?: boolean
   nightbotIntegrationEnabled?: boolean
+  potatIntegrationEnabled?: boolean
+  supibotIntegrationEnabled?: boolean
   /** Chat layout configuration (combined / split) */
   chatLayout?: ChatLayout
   /** Self-ping highlight settings */
@@ -349,6 +351,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   jeetbotIntegrationEnabled: true,
   fossabotIntegrationEnabled: true,
   nightbotIntegrationEnabled: true,
+  potatIntegrationEnabled: true,
+  supibotIntegrationEnabled: true,
   chatLayout: {
     version: 1,
     mode: 'combined',

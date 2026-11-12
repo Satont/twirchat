@@ -18,7 +18,7 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and a save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(26)
+    expect(SETTINGS_SECTIONS).toHaveLength(28)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
     )
@@ -76,6 +76,8 @@ describe('settings search index', () => {
       ['jeetbot аргументы', 'jeetbot-integration'],
       ['Fossabot алиасы', 'fossabot-integration'],
       ['Nightbot автодополнение', 'nightbot-integration'],
+      ['PotatBotat', 'potat-integration'],
+      ['SupiBot', 'supibot-integration'],
       ['plugin manifest', 'plugins'],
       ['DonationAlerts', 'donations'],
       ['DonatePay API key', 'donations'],

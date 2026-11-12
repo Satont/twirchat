@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import type { GpuixRenderer } from '@gpuix/native'
 import type {
+  Account,
   NormalizedChatMessage,
   WatchedChannel,
   WatchedChannelsLayout,
@@ -73,6 +74,16 @@ const twitchChannel: WatchedChannel = {
 const twitchTabId = `tab:${twitchChannel.id}`
 const twitchPaneId = `${twitchTabId}:${panelId}`
 const twitchComposerKey = `${twitchPaneId}:${twitchChannel.id}`
+const twitchAccount: Account = {
+  id: 'qa-twitch-account',
+  platform: 'twitch',
+  platformUserId: '9001',
+  username: 'qa_twitch_sender',
+  displayName: 'QA Twitch Sender',
+  scopes: [],
+  createdAt: 0,
+  updatedAt: 0,
+}
 const layout: WatchedChannelsLayout = {
   version: 2,
   root: {
@@ -87,6 +98,8 @@ let twirRequests = 0
 let twirReloads = 0
 let fossabotRequests = 0
 let nightbotRequests = 0
+let potatRequests = 0
+const supibotUsers: Array<string | undefined> = []
 let waitForTwirCommands: Promise<void> | undefined
 backend.api.getChannelEmotes = async () => []
 backend.api.getTwirCommands = async (target, options) => {
@@ -117,6 +130,22 @@ backend.api.getNightbotCommands = async (login) => {
   assert.equal(login, twitchChannel.channelSlug)
   nightbotRequests++
   return [{ name: 'sens' }, { name: 'nighttimer' }]
+}
+backend.api.getPotatCommands = async (login) => {
+  assert.equal(login, twitchChannel.channelSlug)
+  potatRequests++
+  return [
+    { prefix: '#', name: 'potato' },
+    { prefix: '~~', name: 'potato' },
+  ]
+}
+backend.api.getSupibotCommands = async ({ channelLogin, userLogin }) => {
+  assert.equal(channelLogin, twitchChannel.channelSlug)
+  supibotUsers.push(userLogin)
+  return [
+    { prefix: '$', name: 'ping' },
+    { prefix: '$$', name: userLogin === 'qa_twitch_sender' ? 'ping' : 'other' },
+  ]
 }
 backend.api.sendWatchedChannelMessage = async ({ id, text }) => {
   assert.equal(id, channel.id)
@@ -367,16 +396,7 @@ try {
       createdAt: 0,
       updatedAt: 0,
     },
-    {
-      id: 'qa-twitch-account',
-      platform: 'twitch',
-      platformUserId: '9001',
-      username: 'qa_twitch_sender',
-      displayName: 'QA Twitch Sender',
-      scopes: [],
-      createdAt: 0,
-      updatedAt: 0,
-    },
+    twitchAccount,
   ])
   traffic = setInterval(() => {
     incoming++
@@ -584,6 +604,12 @@ try {
   assert((app.chatActivityStore.get().get(channel.id)?.total ?? 0) > beforeHistory + 5)
   assert.equal(fossabotRequests, 0, 'Kick completion never requests Fossabot commands')
   assert.equal(nightbotRequests, 0)
+  await draft('')
+  await typeNative('$$')
+  await until(() => composerStore.get().get(composerKey)?.text === '$$', 'Kick draft')
+  assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
+  assert.equal(potatRequests, 0)
+  assert.equal(supibotUsers.length, 0)
 
   const kickInputId = find('chat-input').id
   const sentBeforeFossabot = sent.length
@@ -654,10 +680,74 @@ try {
   assert.equal(sent.length, sentBeforeFossabot, 'Nightbot completion does not send a message')
   assert.equal(nightbotRequests, 2, 'Typing a prefix reuses Nightbot suggestions')
 
+  /* eslint-disable no-await-in-loop -- Each native check uses the resized window. */
+  for (const size of [
+    { width: 420, height: 300 },
+    { width: 900, height: 600 },
+  ]) {
+    await currentRenderer().setWindowBounds(size)
+    await pressNative('ctrl+a', 'BackSpace')
+    await typeNative('~~PO')
+    await until(() => selectedLabel('~~') === '~~potato', 'Potat custom prefix')
+    const popup = paintedBounds('autocomplete-popup')
+    assert(popup.x >= 7 && popup.x + popup.width <= size.width - 7)
+    assert(popup.y >= 7 && popup.y + popup.height <= size.height - 7)
+    assert(flatten(find('autocomplete-selected')).some((node) => node.text === 'PotatBotat'))
+    await pressNative('Escape')
+    await until(() => !selectedLabel('~~'), 'Escape closes Potat autocomplete')
+    await typeNative('T')
+    await until(() => selectedLabel('~~') === '~~potato', 'Editing reopens Potat autocomplete')
+    await pressNative('Tab')
+    await until(() => twitchDraft() === '~~potato ', 'Potat custom prefix inserted')
+    await pressNative('ctrl+a', 'BackSpace')
+    await typeNative('#p')
+    await until(() => selectedLabel('#') === '#potato', 'Potat default prefix')
+    await pressNative('Tab')
+    await until(() => twitchDraft() === '#potato ', 'Potat command inserted')
+
+    await pressNative('ctrl+a', 'BackSpace')
+    await typeNative('$')
+    await until(() => selectedLabel('$') === '$ping', 'Supibot global command')
+    assert(!nodes().some((node) => node.text === '$$ping'))
+    await typeNative('$')
+    await until(() => selectedLabel('$$') === '$$ping', 'Supibot personal alias')
+    assert(!nodes().some((node) => node.text === '$ping'))
+    await pressNative('Tab')
+    await until(() => twitchDraft() === '$$ping ', 'Supibot alias inserted')
+  }
+  /* eslint-enable no-await-in-loop */
+  await pressNative('ctrl+a', 'BackSpace')
+  await typeNative('$$')
+  await until(() => selectedLabel('$$') === '$$ping', 'Original Supibot account alias')
+  const alternateAccount: Account = {
+    ...twitchAccount,
+    id: 'qa-other-account',
+    platformUserId: '9002',
+    username: 'qa_other',
+  }
+  app.accountsStore.set(
+    app.accountsStore
+      .get()
+      .map((account) => (account.id === twitchAccount.id ? alternateAccount : account)),
+  )
+  await until(() => selectedLabel('$$') === '$$other', 'Supibot alias follows the sending account')
+  assert(!nodes().some((node) => node.text === '$$ping'))
+  assert(supibotUsers.includes('qa_twitch_sender'))
+  assert(supibotUsers.includes('qa_other'))
+  assert.equal(sent.length, sentBeforeFossabot, 'Selecting either bot never sends a message')
+  app.settingsStore.update({ potatIntegrationEnabled: false, supibotIntegrationEnabled: false })
+  await until(() => !selectedLabel('$$'), 'Disabling Supibot clears its suggestions')
+  const beforeDisabled = { potatRequests, supibotRequests: supibotUsers.length }
+  await pressNative('ctrl+a', 'BackSpace')
+  await typeNative('~~po')
+  await until(() => twitchDraft() === '~~po', 'Typing while Potat is disabled')
+  assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
+  assert.deepEqual({ potatRequests, supibotRequests: supibotUsers.length }, beforeDisabled)
+
   await Bun.write(
     join(session, 'autocomplete-result.json'),
     JSON.stringify(
-      { ok: true, incoming, fossabotRequests, nightbotRequests, screenshots },
+      { ok: true, incoming, fossabotRequests, nightbotRequests, potatRequests, screenshots },
       null,
       2,
     ),

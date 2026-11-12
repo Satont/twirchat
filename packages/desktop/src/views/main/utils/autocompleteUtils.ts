@@ -1,3 +1,6 @@
+import type { PrefixedBotCommand } from '../../../services/public-bot-commands'
+import { sanitizeDisplayText } from '../../shared/utils/display-text'
+
 export interface MentionSuggestion {
   type: 'mention'
   label: string
@@ -20,14 +23,14 @@ export interface EmoteSuggestion {
   emoji?: string
 }
 
-export type BotCommandSource = 'twir' | 'jeetbot' | 'fossabot' | 'nightbot'
+export type BotCommandSource = 'twir' | 'jeetbot' | 'fossabot' | 'nightbot' | 'potat' | 'supibot'
 
 export interface CommandSuggestion {
   type: 'command'
   label: string
   insertText: string
   description: string
-  /** The chat bot that answers this `!command`; absent for TwirChat's own `/commands`. */
+  /** The chat bot that answers this command. */
   source?: BotCommandSource
 }
 
@@ -72,6 +75,61 @@ export function parseToken(text: string): ParsedToken {
   }
 
   return { mode: null, query: '' }
+}
+
+export function createPrefixedBotCommandIndex(commands: readonly PrefixedBotCommand[]) {
+  const byPrefix = new Map<string, PrefixedBotCommand[]>()
+  for (const command of commands) {
+    const prefix = command.prefix.toLowerCase()
+    const group = byPrefix.get(prefix)
+    if (group) group.push(command)
+    else byPrefix.set(prefix, [command])
+  }
+  return byPrefix
+}
+
+export function matchPrefixedBotCommands(
+  index: ReadonlyMap<string, readonly PrefixedBotCommand[]>,
+  query: string,
+  source: BotCommandSource,
+): CommandSuggestion[] {
+  const trimmed = query.trimStart()
+  if (!trimmed || trimmed.startsWith('/') || /\s/u.test(trimmed)) return []
+  const normalizedQuery = trimmed.toLowerCase()
+  if (normalizedQuery === '.w') return []
+  let longestPrefix = ''
+  if (source === 'supibot') {
+    if (!normalizedQuery.startsWith('$')) return []
+    // The alias namespace exists even for accounts without aliases.
+    longestPrefix = normalizedQuery.startsWith('$$') ? '$$' : '$'
+  } else {
+    for (const prefix of index.keys()) {
+      if (prefix.length > longestPrefix.length && normalizedQuery.startsWith(prefix)) {
+        longestPrefix = prefix
+      }
+    }
+  }
+  if (!longestPrefix && !/^[\p{P}\p{S}]/u.test(normalizedQuery)) return []
+
+  const nameQuery = longestPrefix ? normalizedQuery.slice(longestPrefix.length) : ''
+  const matches: CommandSuggestion[] = []
+  for (const [prefix, commands] of index) {
+    if (longestPrefix ? prefix !== longestPrefix : !prefix.startsWith(normalizedQuery)) continue
+    for (const command of commands) {
+      if (!command.name.toLowerCase().startsWith(nameQuery)) continue
+      const label = `${command.prefix}${command.name}`
+      matches.push({
+        type: 'command',
+        label,
+        insertText: label,
+        description: command.aliasFor
+          ? `${command.prefix}${command.aliasFor}`
+          : sanitizeDisplayText(command.description ?? ''),
+        source,
+      })
+    }
+  }
+  return matches
 }
 
 /** Twir matches keep their order; a jeetbot command of the same name follows its Twir twin. */

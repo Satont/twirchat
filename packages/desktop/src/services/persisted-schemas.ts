@@ -298,6 +298,8 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     jeetbotIntegrationEnabled: z.boolean().optional(),
     fossabotIntegrationEnabled: z.boolean().optional(),
     nightbotIntegrationEnabled: z.boolean().optional(),
+    potatIntegrationEnabled: z.boolean().optional(),
+    supibotIntegrationEnabled: z.boolean().optional(),
     chatLayout: chatLayoutSchema.optional(),
     selfPing: selfPingConfigSchema.optional(),
   }),

@@ -37,6 +37,8 @@ test('persisted partial settings retain nested defaults and reject wrong externa
     expect(settings.twirIntegrationEnabled).toBe(true)
     expect(settings.fossabotIntegrationEnabled).toBe(true)
     expect(settings.nightbotIntegrationEnabled).toBe(true)
+    expect(settings.potatIntegrationEnabled).toBe(true)
+    expect(settings.supibotIntegrationEnabled).toBe(true)
     expect(settings.showModerationRail).toBe(true)
     expect(settings.overlay).toEqual({ ...DEFAULT_SETTINGS.overlay, fontSize: 22 })
     expect(settings.hotkeys).toEqual({ ...DEFAULT_SETTINGS.hotkeys, newTab: 'ctrl+n' })
@@ -45,12 +47,16 @@ test('persisted partial settings retain nested defaults and reject wrong externa
       twirIntegrationEnabled: false,
       fossabotIntegrationEnabled: false,
       nightbotIntegrationEnabled: false,
+      potatIntegrationEnabled: false,
+      supibotIntegrationEnabled: false,
       showModerationRail: false,
     })
     expect(SettingsStore.get()).toMatchObject({
       twirIntegrationEnabled: false,
       fossabotIntegrationEnabled: false,
       nightbotIntegrationEnabled: false,
+      potatIntegrationEnabled: false,
+      supibotIntegrationEnabled: false,
       showModerationRail: false,
     })
     f.database.run('UPDATE settings SET value=? WHERE key=?', [
