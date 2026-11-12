@@ -55,6 +55,7 @@ const urls = {
   failed: `http://127.0.0.1:${server.port}/failed`,
 }
 const mode = createStore<keyof typeof urls>('cached')
+const action = createStore<'added' | 'removed'>('added')
 const emote = {
   id: '01GBFAYKGR000FWWN7MDZZ8XQN',
   name: 'RAGEY',
@@ -69,6 +70,7 @@ let renderer: GpuixRenderer | undefined
 function Content() {
   const active = useGpuixRequired()
   const selected = useStore(mode)
+  const selectedAction = useStore(action)
   React.useEffect(() => {
     assert(active instanceof NativeRenderer)
     renderer = active
@@ -78,7 +80,8 @@ function Content() {
       type: 'seventv_system_message',
       platform: 'kick',
       channelId: 'qa',
-      action: 'added',
+      action: selectedAction,
+      actorName: 'EmoteEditor',
       emote: { ...emote, imageUrl: urls[selected] },
     },
     { id: 'notice', timestamp: new Date('2026-11-03T06:36:18Z') },
@@ -126,8 +129,13 @@ try {
   await until(() => !!renderer, 'native mount')
   for (const width of [900, 420]) {
     await nativeWindow(current()).setWindowBounds({ width, height: 260 })
+    action.set('added')
     mode.set('cached')
     await until(() => typeof imageSnapshot(imageUrl) === 'string', 'cached artwork ready')
+    await until(
+      () => current().getPaintedText().join('').includes('added to the channel by EmoteEditor'),
+      'actor painted in add notice',
+    )
     await Bun.sleep(500)
     const cached = await captureGuiQaDisplay(`seventv-cached-${width}`)
     mode.set('pending')
@@ -176,6 +184,11 @@ try {
       'Alias remains visible after artwork failure.',
     )
     const failed = await captureGuiQaDisplay(`seventv-failed-${width}`)
+    action.set('removed')
+    await until(
+      () => current().getPaintedText().join('').includes('removed from the channel by EmoteEditor'),
+      'actor painted in remove notice',
+    )
     evidence.push({
       width,
       cached,

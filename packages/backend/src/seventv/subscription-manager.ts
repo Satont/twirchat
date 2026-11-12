@@ -442,6 +442,7 @@ export class SevenTVSubscriptionManager {
       updated: body.updated?.length ?? 0,
     })
 
+    const actorName = body.actor?.display_name ?? body.actor?.username
     for (const push of body.pushed ?? []) {
       if (push.key === 'emotes') {
         const emote = createSevenTvEmoteFromEventValue(push.value)
@@ -466,6 +467,7 @@ export class SevenTVSubscriptionManager {
 
           this.broadcastToChannel(channelKey, {
             action: 'added',
+            actorName,
             channelId,
             emote,
             platform,
@@ -499,6 +501,7 @@ export class SevenTVSubscriptionManager {
 
           this.broadcastToChannel(channelKey, {
             action: 'removed',
+            actorName,
             channelId,
             emote,
             platform,

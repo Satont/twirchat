@@ -28,7 +28,11 @@ export const sevenTVEventEmoteValueSchema = z.object({
     host: z.object({ url: z.string(), files: z.array(eventImageFileSchema) }),
   }),
 })
-const actorSchema = z.object({ id: z.string(), display_name: z.string() })
+const actorNameSchema = z.string().trim().min(1).optional().catch(undefined)
+const actorSchema = z
+  .object({ display_name: actorNameSchema, username: actorNameSchema })
+  .optional()
+  .catch(undefined)
 const emoteChangeTypeSchema = z.enum(['object', 'emote'])
 export const emoteInsertSchema = z.object({
   key: z.literal('emotes'),
@@ -58,12 +62,12 @@ export const fieldUpdateSchema = z.object({
 })
 export const emoteSetUpdateSchema = z.object({
   id: z.string(),
-  actor: actorSchema.optional(),
+  actor: actorSchema,
   pushed: z.array(emoteInsertSchema).optional(),
   pulled: z.array(emoteRemoveSchema).optional(),
   updated: z.array(z.union([emoteUpdateSchema, fieldUpdateSchema])).optional(),
 })
-export const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema.optional() })
+export const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema })
 export const userUpdateNestedFieldSchema = z.object({
   key: z.string(),
   value: z.unknown(),
