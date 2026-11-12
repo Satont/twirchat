@@ -2,6 +2,7 @@ import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 import type { Account, Badge, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { twitchAccessTokenIfAvailable } from '../auth/twitch-access-token'
 import { backendFetch } from '../runtime-config'
 import { sevenTVService } from '../seventv'
 import { AccountStore } from '../store/account-store'
@@ -608,7 +609,7 @@ export function createDesktopProviderRuntime(
     native: async (platform, channel, force) => {
       if (platform !== 'twitch') return []
       const account = AccountStore.findByPlatform(platform)
-      const token = account ? AccountStore.getTokens(account.id)?.accessToken : undefined
+      const token = account ? await twitchAccessTokenIfAvailable(account.id) : undefined
       return getNativeTwitchEmotes(channel, token, force)
     },
     sevenTv: (platform, channel) =>

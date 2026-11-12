@@ -88,7 +88,6 @@ function writerFixture(
   const client = new ChatClient({ logger: { minLevel: LogLevel.CRITICAL } })
   clients.push(client)
   return createTwitchSenderPool({
-    token: async () => 'fixture',
     refreshToken: async () => 'fixture',
     acquire,
     createClient: () => ({
@@ -477,7 +476,6 @@ describe('Twitch writer and reader', () => {
     const joined = Promise.withResolvers<void>()
     const closed = Promise.withResolvers<void>()
     const senders = createTwitchSenderPool({
-      token: async () => 'fixture',
       refreshToken: async () => 'fixture',
       acquire: async () => {},
       outcomeTimeoutMs: 1,
@@ -520,7 +518,6 @@ describe('Twitch writer and reader', () => {
   test('an anonymous reader does not open a writer', async () => {
     let created = 0
     const senders = createTwitchSenderPool({
-      token: async () => 'fixture',
       refreshToken: async () => 'fixture',
       acquire: async () => {},
       createClient: () => {

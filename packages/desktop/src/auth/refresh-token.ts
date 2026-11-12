@@ -1,7 +1,11 @@
+import { logger } from '@twirchat/shared/logger'
+
 import { t } from '../gpuix/i18n'
 import { AccountStore } from '../store/account-store'
 import { postOAuthForm } from './oauth-form'
 import { expiresAt, hasOAuthErrorMessage, oauthTokenSchema } from './response-schemas'
+
+const log = logger('oauth')
 
 export class OAuthRefreshError extends Error {
   constructor(
@@ -50,6 +54,11 @@ export function createOAuthRefresher(
         )
           return current.accessToken
       }
+      log.warn('Token refresh refused', {
+        platform: platform.toLowerCase(),
+        status: res.status,
+        reason: invalidRefreshToken ? 'invalid_refresh_token' : 'transient',
+      })
       throw new OAuthRefreshError(platform, res.status, invalidRefreshToken)
     }
     const response: unknown = await res.json()

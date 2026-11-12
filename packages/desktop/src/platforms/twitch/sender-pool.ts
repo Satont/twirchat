@@ -1,12 +1,11 @@
 import { logger } from '@twirchat/shared/logger'
 import type { Account, ChatSendReceipt } from '@twirchat/shared/types'
-import { StaticAuthProvider } from '@twurple/auth'
 import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
 import { refreshTwitchToken } from '../../auth/twitch'
+import { createTwitchChatAuthProvider } from '../../auth/twitch-access-token'
 import { t } from '../../gpuix/i18n'
 import { runInBackground } from '../../services/background-task'
-import { AccountStore } from '../../store/account-store'
 import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
 import {
   onTwitchSendRejected,
@@ -34,9 +33,8 @@ export interface TwitchSenderClient {
 }
 
 export interface TwitchSenderDependencies {
-  token(accountId: string): Promise<string>
   refreshToken(accountId: string): Promise<string>
-  createClient(token: string): TwitchSenderClient
+  createClient(accountId: string): TwitchSenderClient
   acquire(accountId: string, channel: string, privileged: boolean): Promise<void>
   connectTimeoutMs?: number
   outcomeTimeoutMs?: number
@@ -74,10 +72,8 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
   const connectTimeoutMs = dependencies.connectTimeoutMs ?? 10_000
 
   async function open(account: Pick<Account, 'id'>, refreshed: boolean): Promise<Session> {
-    const token = refreshed
-      ? await dependencies.refreshToken(account.id)
-      : await dependencies.token(account.id)
-    const client = dependencies.createClient(token)
+    if (refreshed) await dependencies.refreshToken(account.id)
+    const client = dependencies.createClient(account.id)
     const session: Session = {
       client,
       channels: new Map(),
@@ -304,17 +300,9 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
 
 export type TwitchSenderPool = ReturnType<typeof createTwitchSenderPool>
 
-async function storedToken(accountId: string): Promise<string> {
-  const tokens = AccountStore.getTokens(accountId)
-  if (!tokens?.accessToken) throw new Error(t('misc.twitchSender.signInAgain'))
-  if (tokens.expiresAt && tokens.expiresAt < Math.floor(Date.now() / 1000) + 300)
-    return refreshTwitchToken(accountId)
-  return tokens.accessToken
-}
-
-function twurpleSender(token: string): TwitchSenderClient {
+function twurpleSender(accountId: string): TwitchSenderClient {
   const client = new ChatClient({
-    authProvider: new StaticAuthProvider('twirchat-desktop', token, ['chat:read', 'chat:edit']),
+    authProvider: createTwitchChatAuthProvider(accountId),
     channels: [],
     // Limits are enforced per account by the send limiter, with the account's role per channel.
     isAlwaysMod: true,
@@ -353,7 +341,6 @@ function twurpleSender(token: string): TwitchSenderClient {
 
 export function createDefaultTwitchSenderPool(): TwitchSenderPool {
   return createTwitchSenderPool({
-    token: storedToken,
     refreshToken: refreshTwitchToken,
     createClient: twurpleSender,
     acquire: (accountId, channel, privileged) =>

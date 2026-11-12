@@ -15,6 +15,7 @@ import {
   requestTwitchDeviceCode,
   waitForTwitchDeviceToken,
 } from '../src/auth/twitch'
+import { createTwitchChatAuthProvider } from '../src/auth/twitch-access-token'
 import { getYouTubeAuthUrl, handleYouTubeCallback, refreshYouTubeToken } from '../src/auth/youtube'
 import { AccountStore } from '../src/store/account-store'
 import { getDb, initDb } from '../src/store/db'
@@ -171,6 +172,51 @@ test('Twitch refresh is serialized and persists the rotated public-client token'
   await expect(first).resolves.toBe('renewed')
   expect(requests).toBe(1)
   expect(AccountStore.getTokens('twitch:42')?.refreshToken).toBe('rotated')
+})
+
+test('Twitch chat connections take the stored token on every connect and refresh it once', async () => {
+  const now = Math.floor(Date.now() / 1000)
+  AccountStore.upsert({
+    id: 'twitch:42',
+    platform: 'twitch',
+    platformUserId: '42',
+    username: 'twitchlogin',
+    displayName: 'Twitch Login',
+    accessToken: 'expiring',
+    refreshToken: 'refresh-1',
+    expiresAt: now + 60,
+    scopes: ['chat:read', 'chat:edit'],
+  })
+  const refreshedWith: (string | null)[] = []
+  mockFetch(async (url, init) => {
+    expect(url).toBe(TWITCH_TOKEN_URL)
+    const form = readForm(init)
+    refreshedWith.push(form.get('refresh_token'))
+    const n = refreshedWith.length + 1
+    return Response.json({
+      access_token: `access-${n}`,
+      refresh_token: `refresh-${n}`,
+      expires_in: 14_000,
+    })
+  })
+  const provider = createTwitchChatAuthProvider('twitch:42')
+
+  const first = await provider.getAccessTokenForIntent?.('chat')
+  expect(first).toMatchObject({
+    accessToken: 'access-2',
+    userId: '42',
+    scope: ['chat:read', 'chat:edit'],
+  })
+  expect(first?.expiresIn).toBeGreaterThan(13_000)
+
+  // A sibling connection of the same account rotated the single-use refresh token first.
+  AccountStore.updateTokens('twitch:42', 'sibling', 'refresh-sibling', now + 14_000)
+  expect((await provider.refreshAccessTokenForIntent?.('chat'))?.accessToken).toBe('sibling')
+  expect((await provider.getAccessTokenForIntent?.('chat'))?.accessToken).toBe('sibling')
+
+  // The stored token itself was rejected: refresh it with the latest refresh token.
+  expect((await provider.refreshAccessTokenForIntent?.('chat'))?.accessToken).toBe('access-3')
+  expect(refreshedWith).toEqual(['refresh-1', 'refresh-sibling'])
 })
 
 test('YouTube validates one-time PKCE and exchanges and refreshes directly with Google', async () => {
