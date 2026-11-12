@@ -220,6 +220,11 @@
       "path": "patches/gpui-cached-pointer-capture.patch",
       "root": "gpui",
       "sha256": "9a56172a005dfce3f6da187b1c73e781ec85f199dac9f1fdd5e2e4a3047a8686"
+    },
+    {
+      "path": "patches/gpuix-virtual-list-inner-overlap.patch",
+      "root": "gpuix",
+      "sha256": "7fc040f4a7c87eecff616e8c8b4e88461788716bde996bbcef29d05cc11cd649"
     }
   ],
   "cosmicText": {
