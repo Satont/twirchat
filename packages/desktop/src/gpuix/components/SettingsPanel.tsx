@@ -104,6 +104,8 @@ type AppSettingsSectionId = Extract<
   | 'jeetbot-integration'
   | 'fossabot-integration'
   | 'nightbot-integration'
+  | 'potat-integration'
+  | 'supibot-integration'
   | 'moderation'
 >
 
@@ -119,6 +121,8 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'jeetbot-integration',
   'fossabot-integration',
   'nightbot-integration',
+  'potat-integration',
+  'supibot-integration',
   'moderation',
 ]
 
@@ -158,6 +162,10 @@ function appSectionFields(
       return { fossabotIntegrationEnabled: source.fossabotIntegrationEnabled }
     case 'nightbot-integration':
       return { nightbotIntegrationEnabled: source.nightbotIntegrationEnabled }
+    case 'potat-integration':
+      return { potatIntegrationEnabled: source.potatIntegrationEnabled }
+    case 'supibot-integration':
+      return { supibotIntegrationEnabled: source.supibotIntegrationEnabled }
     case 'moderation':
       return { showModerationRail: source.showModerationRail }
     default:
@@ -989,6 +997,48 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
                     {appFooter('nightbot-integration')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="potat-integration"
+                    title={t('settings.section.potat-integration')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.potat.suggest')}
+                      hint={t('settings.potat.suggestHint')}
+                    >
+                      <Switch
+                        checked={local.potatIntegrationEnabled !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.potatIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('potat-integration')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="supibot-integration"
+                    title={t('settings.section.supibot-integration')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.supibot.suggest')}
+                      hint={t('settings.supibot.suggestHint')}
+                    >
+                      <Switch
+                        checked={local.supibotIntegrationEnabled !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.supibotIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('supibot-integration')}
                   </SettingsSection>
                   <SettingsSection
                     id="players"

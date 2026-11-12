@@ -155,6 +155,8 @@ export type SettingsSectionId =
   | 'jeetbot-integration'
   | 'fossabot-integration'
   | 'nightbot-integration'
+  | 'potat-integration'
+  | 'supibot-integration'
   | 'players'
   | 'plugins'
   | 'donations'
@@ -354,6 +356,24 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     searchPrefixes: ['settings.nightbot.'],
     keywords:
       'nightbot night bot command autocomplete completion suggestions команды бота автодополнение интеграция',
+  },
+  {
+    id: 'potat-integration',
+    category: 'commands',
+    title: 'PotatBotat Integration',
+    saveMode: 'section',
+    searchPrefixes: ['settings.potat.'],
+    keywords:
+      'potat botat batat potatbot batatbot command autocomplete completion suggestions prefix команды бота автодополнение префиксы интеграция',
+  },
+  {
+    id: 'supibot-integration',
+    category: 'commands',
+    title: 'Supibot Integration',
+    saveMode: 'section',
+    searchPrefixes: ['settings.supibot.'],
+    keywords:
+      'supibot supi bot command autocomplete completion suggestions alias команды бота алиасы автодополнение интеграция',
   },
   {
     id: 'plugins',

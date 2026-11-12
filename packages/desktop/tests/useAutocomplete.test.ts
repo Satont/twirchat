@@ -1,12 +1,56 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  createPrefixedBotCommandIndex,
+  matchPrefixedBotCommands,
   parseToken,
   replaceToken,
   type CommandSuggestion,
   type EmoteSuggestion,
   type MentionSuggestion,
 } from '../src/views/main/utils/autocompleteUtils'
+
+describe('prefixed bot commands', () => {
+  test('keeps Supibot commands and personal aliases with the same name distinct', () => {
+    const index = createPrefixedBotCommandIndex([
+      { prefix: '$', name: 'ping' },
+      { prefix: '$$', name: 'ping' },
+      { prefix: '$$', name: 'shortcut' },
+    ])
+    const labels = (query: string) =>
+      matchPrefixedBotCommands(index, query, 'supibot').map(({ insertText }) => insertText)
+    expect(labels('$')).toEqual(['$ping'])
+    expect(labels('$$')).toEqual(['$$ping', '$$shortcut'])
+    expect(labels('$$PI')).toEqual(['$$ping'])
+  })
+
+  test('reserves the Supibot alias prefix even with no personal aliases loaded', () => {
+    const index = createPrefixedBotCommandIndex([
+      { prefix: '$', name: 'alias' },
+      { prefix: '$', name: '$', aliasFor: 'alias' },
+    ])
+    expect(matchPrefixedBotCommands(index, '$$', 'supibot')).toEqual([])
+  })
+
+  test('matches configured PotatBotat prefixes and inserts the whole invocation', () => {
+    const index = createPrefixedBotCommandIndex([
+      { prefix: '!!', name: 'potato' },
+      { prefix: '!', name: 'potato' },
+      { prefix: '#', name: 'potato' },
+      { prefix: '~~', name: 'potato' },
+      { prefix: 'bot:', name: 'potato' },
+    ])
+    const labels = (query: string) =>
+      matchPrefixedBotCommands(index, query, 'potat').map(({ insertText }) => insertText)
+    expect(labels('!!PO')).toEqual(['!!potato'])
+    expect(labels('!PO')).toEqual(['!potato'])
+    expect(labels('~')).toEqual(['~~potato'])
+    expect(labels('b')).toEqual([])
+    expect(labels('bot:po')).toEqual(['bot:potato'])
+    expect(labels('hello !!po')).toEqual([])
+    expect(labels('!!potato ')).toEqual([])
+  })
+})
 
 describe('parseToken', () => {
   test('detects mention mode for "@sa"', () => {

@@ -18,6 +18,8 @@ const BOT_SOURCE_LABELS: Record<BotCommandSource, string> = {
   jeetbot: 'jeetbot',
   fossabot: 'Fossabot',
   nightbot: 'Nightbot',
+  potat: 'PotatBotat',
+  supibot: 'Supibot',
 }
 
 function suggestionKey(suggestion: AutocompleteSuggestion): string {

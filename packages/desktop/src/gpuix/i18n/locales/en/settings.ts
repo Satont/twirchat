@@ -64,6 +64,8 @@ export const settings = {
   'settings.section.jeetbot-integration': 'jeetbot Integration',
   'settings.section.fossabot-integration': 'Fossabot Integration',
   'settings.section.nightbot-integration': 'Nightbot Integration',
+  'settings.section.potat-integration': 'PotatBotat Integration',
+  'settings.section.supibot-integration': 'Supibot Integration',
   'settings.section.players': 'Stream Players',
   'settings.section.players.desc': 'Open streams in a browser, external player or Streamlink',
   'settings.section.plugins': 'Plugins',
@@ -128,6 +130,11 @@ export const settings = {
     'Show public Fossabot commands and aliases when you type ! in Twitch chat',
   'settings.nightbot.suggest': 'Suggest Nightbot commands',
   'settings.nightbot.suggestHint': 'Show public Nightbot commands when you type ! in Twitch chat',
+  'settings.potat.suggest': 'Suggest PotatBotat commands',
+  'settings.potat.suggestHint': 'Use the command prefixes configured for the selected Twitch chat',
+  'settings.supibot.suggest': 'Suggest Supibot commands',
+  'settings.supibot.suggestHint':
+    'Show Supibot commands after $ and aliases for your Twitch account after $$',
 
   'settings.selfPing.enable': 'Enable highlights',
   'settings.selfPing.enableHint': 'Highlight messages mentioning you',

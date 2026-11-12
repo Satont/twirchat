@@ -508,14 +508,16 @@ export function ChatInput(props: ChatInputProps) {
         : undefined
     return commandTargets.find((target) => target.platform === 'twitch')?.channelSlug
   }
-  function jeetbotUserId(): string | undefined {
+  function twitchCommandAccount(): Account | undefined {
     if (props.watchedChannel)
-      return watchedAccount?.platform === 'twitch' ? watchedAccount.platformUserId : undefined
-    return props.accounts.find((account) => account.platform === 'twitch')?.platformUserId
+      return watchedAccount?.platform === 'twitch' ? watchedAccount : undefined
+    return props.accounts.find((account) => account.platform === 'twitch')
   }
   function jeetbotCommandTarget(): JeetbotCommandTarget | undefined {
     const channelLogin = twitchCommandChannelLogin()
-    return channelLogin ? { channelLogin, userId: jeetbotUserId() } : undefined
+    return channelLogin
+      ? { channelLogin, userId: twitchCommandAccount()?.platformUserId }
+      : undefined
   }
   function fossabotChannelId(login: string): string | undefined {
     const id = props.watchedChannel
@@ -527,19 +529,29 @@ export function ChatInput(props: ChatInputProps) {
     return id && /^\d+$/u.test(id) ? id : undefined
   }
 
-  const completingBotCommand =
-    editorFocused && !historySearchOpen && text.trimStart().startsWith('!')
+  const autocompleteFocused = editorFocused && !historySearchOpen
+  const autocompleteText = autocompleteFocused ? text.trimStart() : ''
+  const completingBotCommand = autocompleteText.startsWith('!')
   const twirEnabled = props.settings.twirIntegrationEnabled !== false
   const completingTwir = completingBotCommand && twirEnabled
   const jeetbotEnabled = props.settings.jeetbotIntegrationEnabled !== false
   const fossabotEnabled = props.settings.fossabotIntegrationEnabled !== false
   const nightbotEnabled = props.settings.nightbotIntegrationEnabled !== false
+  const preloadPotat = autocompleteFocused && props.settings.potatIntegrationEnabled !== false
+  const completingSupibot =
+    autocompleteText.startsWith('$') &&
+    composer.historyIndex === null &&
+    props.settings.supibotIntegrationEnabled !== false &&
+    !/\s/u.test(autocompleteText)
   const twitchBotLogin =
-    completingBotCommand && (jeetbotEnabled || fossabotEnabled || nightbotEnabled)
+    (completingBotCommand && (jeetbotEnabled || fossabotEnabled || nightbotEnabled)) ||
+    preloadPotat ||
+    completingSupibot
       ? twitchCommandChannelLogin()
       : undefined
-  const jeetbotLogin = jeetbotEnabled ? twitchBotLogin : undefined
-  const fossabotLogin = fossabotEnabled ? twitchBotLogin : undefined
+  const jeetbotLogin = completingBotCommand && jeetbotEnabled ? twitchBotLogin : undefined
+  const fossabotLogin = completingBotCommand && fossabotEnabled ? twitchBotLogin : undefined
+  const supibotLogin = completingSupibot ? twitchBotLogin : undefined
   const twirWatchedPlatform = completingTwir ? props.watchedChannel?.platform : undefined
   const twirWatchedSlug = completingTwir ? props.watchedChannel?.channelSlug : undefined
   const twirWatchedKickId =
@@ -579,10 +591,13 @@ export function ChatInput(props: ChatInputProps) {
     twirTargets,
     jeetbotEnabled,
     jeetbotChannelLogin: jeetbotLogin,
-    jeetbotUserId: jeetbotLogin ? jeetbotUserId() : undefined,
+    jeetbotUserId: jeetbotLogin ? twitchCommandAccount()?.platformUserId : undefined,
     fossabotChannelLogin: fossabotLogin,
     fossabotTwitchChannelId: fossabotLogin ? fossabotChannelId(fossabotLogin) : undefined,
-    nightbotChannelLogin: nightbotEnabled ? twitchBotLogin : undefined,
+    nightbotChannelLogin: completingBotCommand && nightbotEnabled ? twitchBotLogin : undefined,
+    potatChannelLogin: preloadPotat ? twitchBotLogin : undefined,
+    supibotChannelLogin: supibotLogin,
+    supibotUserLogin: supibotLogin ? twitchCommandAccount()?.username : undefined,
     customCommands: customCommands.commands.filter(
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),

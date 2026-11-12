@@ -69,6 +69,8 @@ export const ruSettings = {
   'settings.section.jeetbot-integration': 'Интеграция с jeetbot',
   'settings.section.fossabot-integration': 'Интеграция с Fossabot',
   'settings.section.nightbot-integration': 'Интеграция с Nightbot',
+  'settings.section.potat-integration': 'Интеграция с PotatBotat',
+  'settings.section.supibot-integration': 'Интеграция с Supibot',
   'settings.section.players': 'Плееры трансляций',
   'settings.section.players.desc':
     'Открывайте трансляции в браузере, внешнем плеере или Streamlink',
@@ -134,6 +136,11 @@ export const ruSettings = {
   'settings.nightbot.suggest': 'Подсказывать команды Nightbot',
   'settings.nightbot.suggestHint':
     'Показывать публичные команды Nightbot при вводе ! в Twitch-чате',
+  'settings.potat.suggest': 'Подсказывать команды PotatBotat',
+  'settings.potat.suggestHint': 'Использовать префиксы команд, заданные для выбранного Twitch-чата',
+  'settings.supibot.suggest': 'Подсказывать команды Supibot',
+  'settings.supibot.suggestHint':
+    'Показывать команды Supibot после $, а алиасы вашего аккаунта Twitch — после $$',
 
   'settings.selfPing.enable': 'Включить подсветку',
   'settings.selfPing.enableHint': 'Подсвечивать сообщения с упоминанием вас',
