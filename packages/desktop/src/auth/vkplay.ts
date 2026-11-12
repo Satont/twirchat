@@ -142,7 +142,7 @@ export async function handleVkPlayToken(params: URLSearchParams): Promise<{
     username: channelSlug,
   })
 
-  log.info(`Logged in as ${displayName}`)
+  log.info('Account signed in', { platform: 'vkplay' })
   return {
     channelSlug,
     response: new Response(successPage('VK Play Live'), {

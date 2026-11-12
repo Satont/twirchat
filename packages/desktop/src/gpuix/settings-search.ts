@@ -1,4 +1,6 @@
-import { t, translatorFor, type MessageKey } from './i18n'
+import { t, type MessageKey } from './i18n'
+import { en } from './i18n/locales/en'
+import { ru } from './i18n/locales/ru'
 import { THEME_PRESETS } from './theme'
 
 interface SettingsCategoryMetadata {
@@ -131,6 +133,8 @@ export interface SettingsSectionMetadata {
   category: SettingsCategoryId
   title: string
   keywords: string
+  /** i18n key prefixes for every string this section owns. */
+  searchPrefixes: readonly string[]
   saveMode: SettingsSaveMode
 }
 export type SettingsSectionId =
@@ -168,6 +172,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'privacy',
     title: 'Streamer Mode',
     saveMode: 'section',
+    searchPrefixes: ['streamerModeSettings.'],
     keywords:
       'streamer mode auto obs streaming software privacy private avatar thumbnails moderation restricted whispers blocked terms viewer count duration mute mentions hideUsercardAvatars hideLinkThumbnails hideModActions hideRestrictedUsers muteMentions suppressInlineWhispers hideBlockedTermText hideViewerCountAndDuration suppressLiveNotifications приватность стример автоматический скрыть аватар зрители',
   },
@@ -176,6 +181,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Message Timestamps',
     saveMode: 'section',
+    searchPrefixes: ['settings.chat.showTimestamp', 'settings.chat.timestampFormat'],
     keywords:
       'timestamp time clock format seconds milliseconds 12-hour 24-hour AM PM showTimestamp timestampFormat HH:MM:SS HH:MM HH:MM:SS.sss hh:MM A hh:MM:SS A время часы минуты секунды формат отображать сообщения',
   },
@@ -184,6 +190,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Replies',
     saveMode: 'section',
+    searchPrefixes: ['settings.chat.replyOnDoubleClick'],
     keywords:
       'reply replies double click double-click mouse message answer thread replyOnDoubleClick ответ ответить двойной клик дабл клик мышь сообщение',
   },
@@ -192,6 +199,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Similar Messages',
     saveMode: 'section',
+    searchPrefixes: ['similaritySettings.'],
     keywords:
       'similarity similar duplicates repetition R9K hideSimilar threshold maxMessages delaySeconds sameUserOnly excludeOwn graySimilar shownSimilarTriggerHighlights похожие одинаковые дубли повторы',
   },
@@ -200,6 +208,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Chat Pausing',
     saveMode: 'section',
+    searchPrefixes: ['chatPauseSettings.'],
     keywords:
       'pause hover mouse keyboard modifier control alt shift command double click links hoverSeconds doubleClickLinks пауза наведение мышь модификатор двойной клик ссылки',
   },
@@ -208,6 +217,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'commands',
     title: 'Stream Players',
     saveMode: 'section',
+    searchPrefixes: ['playerSettings.'],
     keywords:
       'players streamlink mpv vlc external executable custom player stream quality arguments url channel platform плеер стримлинк проигрыватель трансляция',
   },
@@ -216,6 +226,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'general',
     title: 'Appearance',
     saveMode: 'section',
+    searchPrefixes: ['settings.appearance.', 'themeSettings.'],
     keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color mode variant hex accent font fontFamily Inter Manrope system appearance typography language locale English Russian язык локаль английский русский шрифт тема темная светлая палитра цвет акцент`,
   },
   {
@@ -223,6 +234,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'general',
     title: 'Updates',
     saveMode: 'section',
+    searchPrefixes: ['settings.updates.'],
     keywords:
       'version installed release feed check now automatic auto check startup autoCheckUpdates версия обновления проверить автоматически запуск',
   },
@@ -231,6 +243,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Notifications',
     saveMode: 'section',
+    searchPrefixes: ['notificationSettings.'],
     keywords:
       'enable highlight notifications play rule sounds show desktop alerts custom sound file muted channels enabled soundEnabled desktopEnabled soundPath mutedChannels twitch kick youtube звук уведомления файл отключить каналы mute',
   },
@@ -239,6 +252,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Highlights, Ignores & Filters',
     saveMode: 'section',
+    searchPrefixes: ['chatRulesSettings.'],
     keywords:
       'chat rules highlights ignores ignored filters saved own messages replies platform highlight message username user id badge filter expression regular regex PCRE2 phrase whole words case sensitive name color RRGGBB RRGGBBAA mention sound flash window suppression replacement literal placeholder hidden enabled preview preset priority порядок подсветка игнор фильтр замена регулярное выражение значок пользователь',
   },
@@ -247,6 +261,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'History & Logging',
     saveMode: 'section',
+    searchPrefixes: ['chatLoggingSettings.'],
     keywords:
       'history logging retention keep messages days age limit write chat logs files absolute folder path include timestamps start new log daily session maximum file size MiB rotation channel overrides flush pending logs export история логи хранение дни папка файл ротация журнал',
   },
@@ -255,6 +270,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Image Uploader',
     saveMode: 'section',
+    searchPrefixes: ['imageUploaderSettings.'],
     keywords:
       'paste clipboard screenshot image upload Twir OAuth sign in account ShareX Chatterino Leafyrino sxcu HTTP request URL multipart form field custom headers authorization image link deletion link import export загрузка изображений картинки скриншот вставка буфер обмена заголовки вход',
   },
@@ -263,6 +279,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'chat',
     title: 'Self-Ping Highlight',
     saveMode: 'section',
+    searchPrefixes: ['settings.selfPing.'],
     keywords:
       'self ping nickname own mention enable highlights highlight color rgba preview selfPing самопинг никнейм упоминание цвет подсветки',
   },
@@ -271,6 +288,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'emotes',
     title: 'Emotes & Cosmetics',
     saveMode: 'section',
+    searchPrefixes: ['emoteProviderSettings.'],
     keywords:
       'platform emotes twitch 7TV seventv BetterTTV BTTV FrankerFaceZ FFZ FFZ:AP FFZAP DankChat Chatsen Homies Custom Twir community provider precedence priority move up down zero width layering modifiers personal badges paints name gradients emoji shortcode completion favorite emotes presence share active channel collectibles wide flip rotate shake party cursed эмоуты смайлы провайдеры порядок косметика краска значки избранное присутствие',
   },
@@ -279,6 +297,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'translation',
     title: 'Translation',
     saveMode: 'section',
+    searchPrefixes: ['translationSettings.'],
     keywords:
       'translation provider Google free Microsoft free DeepL LibreTranslate Google Cloud Azure endpoint region server API key credential secret clipboard paste remove source target language auto detection incoming outgoing off preview send Morse recognize decode channel override custom languages перевод переводчик язык источник цель автоопределение входящие исходящие морзе ключ сервер регион',
   },
@@ -287,6 +306,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'moderation',
     title: 'Moderation',
     saveMode: 'section',
+    searchPrefixes: ['settings.moderation.', 'moderationSettings.'],
     keywords:
       'show chat moderation slider drag user card eight timeout buttons label seconds durations quick reasons one per line default reason Twitch Kick 1 1209600 60 чат модерация слайдер ползунок перетаскивание карточка таймаут длительность секунды кнопки причины причина',
   },
@@ -295,6 +315,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'commands',
     title: 'Custom Commands',
     saveMode: 'section',
+    searchPrefixes: ['customCommandsSettings.'],
     keywords:
       'custom command name template variables placeholders platform scope channel message menu action add delete priority order move up down macro alias команды имя шаблон переменные платформа канал меню действия макрос',
   },
@@ -303,6 +324,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'commands',
     title: 'Twir Integration',
     saveMode: 'section',
+    searchPrefixes: ['settings.twir.'],
     keywords:
       'twir bot command autocomplete completion suggestions команды бота автодополнение интеграция',
   },
@@ -311,6 +333,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'commands',
     title: 'jeetbot Integration',
     saveMode: 'section',
+    searchPrefixes: ['settings.jeetbot.'],
     keywords:
       'jeetbot jeet bot command arguments voice tts autocomplete completion suggestions команды бота аргументы голос озвучка автодополнение интеграция',
   },
@@ -319,6 +342,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'commands',
     title: 'Fossabot Integration',
     saveMode: 'section',
+    searchPrefixes: ['settings.fossabot.'],
     keywords:
       'fossabot fossa bot command autocomplete completion suggestions alias команды бота алиасы автодополнение интеграция',
   },
@@ -327,6 +351,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'commands',
     title: 'Nightbot Integration',
     saveMode: 'section',
+    searchPrefixes: ['settings.nightbot.'],
     keywords:
       'nightbot night bot command autocomplete completion suggestions команды бота автодополнение интеграция',
   },
@@ -335,6 +360,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'plugins',
     title: 'Plugins',
     saveMode: 'action',
+    searchPrefixes: ['pluginSettings.'],
     keywords:
       'install enable disable remove manifest version transport TypeScript локальные установить включить выключить удалить',
   },
@@ -343,6 +369,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'donations',
     title: 'Donation Providers',
     saveMode: 'action',
+    searchPrefixes: ['settings.donations.'],
     keywords:
       'DonationAlerts donation alerts DonatePay DonatPay MemeAlerts MemoAlerts OAuth sign in API key clipboard events connect disconnect share viewers делиться зрители донаты пожертвования донаталертс донатпей мемалертс ключ подключить события',
   },
@@ -351,6 +378,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'overlay',
     title: 'OBS Overlay',
     saveMode: 'section',
+    searchPrefixes: ['settings.overlay.'],
     keywords:
       'OBS overlay browser source URL copy port background transparent chroma key text color colour font size max messages animation slide fade none position bottom top show platform icon avatars overlay.port overlay.background overlay.textColor overlay.fontSize overlay.maxMessages overlay.animation overlay.position showPlatformIcon showAvatar оверлей обс ссылка копировать порт фон прозрачный цвет размер шрифта сообщения анимация позиция аватары',
   },
@@ -359,6 +387,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'shortcuts',
     title: 'Keyboard Shortcuts',
     saveMode: 'section',
+    searchPrefixes: ['hotkeySettings.', 'settings.shortcuts.'],
     keywords:
       'keyboard shortcuts hotkeys recording press key newTab nextTab prevTab tabSelector open new tab next previous cycle fuzzy search Ctrl Tab Ctrl K Alt Shift arrow combination клавиатура хоткеи сочетания запись новая вкладка следующая предыдущая поиск клавиша',
   },
@@ -367,6 +396,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'twitch-session',
     title: 'Additional Twitch Session',
     saveMode: 'action',
+    searchPrefixes: ['twitchSessionSettings.'],
     keywords:
       'additional Twitch web session OAuth token clipboard paste connect clear encrypted credentials identity channel points rewards polls predictions pins following whispers session токен сессия аккаунт подключить очистить буфер обмена награды опросы прогнозы закрепления шепот',
   },
@@ -383,22 +413,45 @@ export const normalizeSettingsSearchText = (value: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
 const sectionTitleKey = (id: SettingsSectionId): MessageKey => `settings.section.${id}`
-const searchTranslators = [translatorFor('en'), translatorFor('ru')]
+const searchDictionaries: readonly Readonly<Record<string, string>>[] = [en, ru]
 /** Section and category names as either language shows them, so a visible title always finds its section. */
 function translatedNames(section: SettingsSectionMetadata): string {
-  return searchTranslators
-    .map(
-      (translate) =>
-        `${translate(sectionTitleKey(section.id))} ${translate(CATEGORY_LABEL_KEYS[section.category])}`,
-    )
+  const titleKey = sectionTitleKey(section.id)
+  const categoryKey = CATEGORY_LABEL_KEYS[section.category]
+  return searchDictionaries
+    .map((dictionary) => `${dictionary[titleKey] ?? ''} ${dictionary[categoryKey] ?? ''}`)
     .join(' ')
 }
-const index = SETTINGS_SECTIONS.map((section) => ({
-  section,
-  words: normalizeSettingsSearchText(
-    `${section.title} ${translatedNames(section)} ${section.keywords} ${section.saveMode === 'action' ? 'actions apply immediately connect clear' : 'save discard unsaved changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)?.aliases ?? ''}`,
-  ).split(/\s+/u),
-}))
+/**
+ * Every localized string the section shows, in either language: its title,
+ * description and field labels or hints. A field's full visible name is
+ * therefore searchable, not only one of its prefixes.
+ */
+function sectionVisibleStrings(section: SettingsSectionMetadata): string[] {
+  const values: string[] = [section.title]
+  const titleKey = sectionTitleKey(section.id)
+  const descriptionKey = `settings.section.${section.id}.desc`
+  for (const dictionary of searchDictionaries) {
+    const title = dictionary[titleKey]
+    if (title) values.push(title)
+    const description = dictionary[descriptionKey]
+    if (description) values.push(description)
+    for (const [key, value] of Object.entries(dictionary)) {
+      if (section.searchPrefixes.some((prefix) => key.startsWith(prefix))) values.push(value)
+    }
+  }
+  return values
+}
+const index = SETTINGS_SECTIONS.map((section) => {
+  const visible = sectionVisibleStrings(section)
+  return {
+    section,
+    words: normalizeSettingsSearchText(
+      `${section.title} ${translatedNames(section)} ${visible.join(' ')} ${section.keywords} ${section.saveMode === 'action' ? 'actions apply immediately connect clear' : 'save discard unsaved changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)?.aliases ?? ''}`,
+    ).split(/\s+/u),
+    phrases: visible.map(normalizeSettingsSearchText).filter(Boolean),
+  }
+})
 export interface SettingsSearchResult {
   query: string
   sections: readonly SettingsSectionMetadata[]
@@ -407,13 +460,19 @@ export interface SettingsSearchResult {
 export function searchSettings(query: string): SettingsSearchResult {
   const normalized = normalizeSettingsSearchText(query)
   const tokens = normalized.split(/\s+/u).filter(Boolean)
-  const sections = tokens.length
-    ? index
-        .filter((entry) =>
-          tokens.every((token) => entry.words.some((word) => word.startsWith(token))),
-        )
-        .map((entry) => entry.section)
-    : SETTINGS_SECTIONS
+  const matchesAll = (entry: (typeof index)[number]) =>
+    tokens.every((token) => entry.words.some((word) => word.startsWith(token)))
+  const matchesFullName = (entry: (typeof index)[number]) =>
+    entry.phrases.some((phrase) => phrase === normalized)
+  const candidates = tokens.length ? index.filter(matchesAll) : index
+  /*
+   * A multi-word query that equals a full visible name should not be diluted
+   * by sections that only match a prefix of one token (for example "mode"
+   * hitting "Moderator"). Single-word queries keep matching every prefix so a
+   * short token cannot hide the setting it starts.
+   */
+  const fullName = tokens.length > 1 ? candidates.filter(matchesFullName) : []
+  const sections = (fullName.length ? fullName : candidates).map((entry) => entry.section)
   return {
     query: normalized,
     sections,

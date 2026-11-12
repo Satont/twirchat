@@ -6,7 +6,12 @@ await import('../src/gpuix/native-bootstrap')
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 
-import type { Account, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import type {
+  Account,
+  NormalizedChatMessage,
+  Platform,
+  PlatformStatusInfo,
+} from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import type { DesktopBackend } from '../src/gpuix/backend/server'
@@ -66,6 +71,16 @@ const statuses: Partial<Record<Platform, PlatformStatusInfo>> = Object.fromEntri
   ]),
 )
 const submissions: Parameters<ChatInputProps['onSend']>[0][] = []
+const kickReplyTarget: NormalizedChatMessage = {
+  id: 'qa:kick-reply',
+  platform: 'kick',
+  channelId: 'qa_kick',
+  author: { id: 'qa:reply-user', displayName: 'QA User', badges: [] },
+  text: 'kick reply',
+  emotes: [],
+  timestamp: new Date(0),
+  type: 'message',
+}
 const props: ChatInputProps = {
   accounts,
   statuses,
@@ -198,12 +213,12 @@ async function sendHome(keys: string, expected: Platform[]) {
   assert.deepEqual(submissions[next]?.map((target) => target.platform).toSorted(), expected)
 }
 function checkFrame(minimumEditorWidth: number) {
-  assert(!nodes().some((node) => node.testId === 'send-button'), 'Send button must not exist')
   const frame = bounds('composer-frame'),
     editor = bounds('chat-input'),
     targets = bounds('composer-targets'),
-    emoji = bounds('emote-button')
-  for (const item of [targets, editor, emoji]) {
+    emoji = bounds('emote-button'),
+    send = bounds('send-button')
+  for (const item of [targets, editor, emoji, send]) {
     assert(item.x >= frame.x && item.y >= frame.y, 'control starts inside shared frame')
     assert(
       item.x + item.width <= frame.x + frame.width + 1 &&
@@ -213,6 +228,7 @@ function checkFrame(minimumEditorWidth: number) {
   }
   assert(targets.x + targets.width <= editor.x + 1, 'platform controls do not overlap typing')
   assert(editor.x + editor.width <= emoji.x + 1, 'emoji control does not overlap typing')
+  assert(emoji.x + emoji.width <= send.x + 1, 'send control does not overlap emoji')
   assert(editor.width >= minimumEditorWidth, `Typing width ${editor.width} is too small`)
   assert(frame.height <= 42, `Single-line frame too tall: ${frame.height}`)
   return { width: frame.width, height: frame.height, typingWidth: editor.width }
@@ -242,6 +258,23 @@ try {
   assert.deepEqual(submissions[0]?.map((target) => target.platform).toSorted(), ['kick', 'twitch'])
   assert.equal(composerStore.get().get('qa:compact-frame')?.text, '')
 
+  await focus()
+  renderer.simulateKeystrokes('m o u s e')
+  await until(
+    () => composerStore.get().get('qa:compact-frame')?.text === 'mouse',
+    'mouse-send draft',
+  )
+  await Bun.sleep(100)
+  await click('send-button')
+  await until(() => submissions.length === 2, 'Send button submits')
+  assert.deepEqual(submissions[1]?.map((target) => target.platform).toSorted(), ['kick', 'twitch'])
+  assert.equal(composerStore.get().get('qa:compact-frame')?.text, '')
+  assert.equal(
+    renderer.getFocusedElementId(),
+    find('chat-input').id,
+    'Send button returns focus to the composer',
+  )
+
   const kickId = find('composer-target-kick').id
   const kickWide = bounds('composer-target-kick')
   renderer.focusElement?.(kickId)
@@ -259,7 +292,7 @@ try {
   const afterClick = composerStore.get().get('qa:compact-frame')
   assert.equal(afterClick?.activePlatform, preferences?.activePlatform)
   assert.equal(afterClick?.disabledPlatforms, preferences?.disabledPlatforms)
-  assert.equal(submissions.length, 1, 'an unavailable Kick control cannot activate')
+  assert.equal(submissions.length, 2, 'an unavailable Kick control cannot activate')
   await sendHome('o u t a g e', ['twitch'])
 
   await nativeWindow(renderer).setWindowBounds({ width: 320, height: 240 })
@@ -383,12 +416,39 @@ try {
     { text: 'yt', channelId: 'youtube:qa-channel', replyToMessageId: undefined },
   ])
   const watched = checkFrame(150)
+
+  updateComposer('qa:compact-frame', (state) => ({
+    ...state,
+    text: 'reply mismatch',
+    activePlatform: 'twitch',
+  }))
+  renderComposer({ ...props, replyTarget: kickReplyTarget })
+  await until(
+    () => nodes().some((node) => node.testId === 'composer-target-twitch'),
+    'home composer',
+  )
+  await until(() => painted('QA User'), 'incompatible reply target visible')
+  await Bun.sleep(100)
+  const beforeMismatch = submissions.length
+  await click('send-button')
+  await Bun.sleep(150)
+  assert.equal(
+    submissions.length,
+    beforeMismatch,
+    'Send button does not send to an incompatible reply target',
+  )
+  assert(
+    !painted(t('composer.error.noPlatform')),
+    'Send button stays disabled for an incompatible reply target',
+  )
+
   const result = {
     result: 'pass',
     wide,
     compact,
     watched,
     enterExactlyOnce: true,
+    replyTargetMismatchDisabled: true,
     targetRouting: true,
     targetRoutingAfterRemount: true,
     kickReconnect: { kickErrorScreenshot, kickConnectingScreenshot, kickRecoveredScreenshot },

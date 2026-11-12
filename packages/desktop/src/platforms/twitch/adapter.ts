@@ -175,9 +175,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
     if (revision !== this.identityRevision) return
     if (this.anonymous) {
       this.accessToken = null
-      log.info(`[Twitch] Connecting anonymously to #${this.channelName}`)
+      log.info('[Twitch] Connecting anonymously', { channel: this.channelName })
     } else {
-      log.info(`[Twitch] Connecting as @${this.login} to #${this.channelName}`)
+      log.info('[Twitch] Connecting with an account', { channel: this.channelName })
     }
 
     this.emit('status', {
@@ -302,9 +302,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
         logger: {
           custom: (level, message) => {
             if (level === LogLevel.ERROR) {
-              log.error(`[Twurple] ${message}`)
+              log.error('[Twurple] Chat error', { detail: message })
             } else if (level === LogLevel.WARNING) {
-              log.warn(`[Twurple] ${message}`)
+              log.warn('[Twurple] Chat warning', { detail: message })
             }
             // INFO and DEBUG suppressed — avoids raw IRC message spam
           },
@@ -333,7 +333,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     // Connection successful
     client.onConnect(() => {
       if (!current()) return
-      log.info(`[Twitch] Connected to chat`)
+      log.info('[Twitch] Connected to chat')
     })
 
     // Joined channel
@@ -350,7 +350,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         return
       }
 
-      log.info(`[Twitch] Joined ${channel}`)
+      log.info('[Twitch] Joined channel', { channel })
       this.isConnected = true
       this.emit('status', {
         channelLogin: this.channelName,
@@ -363,7 +363,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     // Disconnected
     client.onDisconnect((manually, reason) => {
       if (!current()) return
-      log.warn(`[Twitch] Disconnected${reason ? `: ${reason}` : ''}`)
+      log.warn('[Twitch] Disconnected', { manually, detail: reason })
       this.isConnected = false
 
       // Intentional quit (teardown in connectChatClient / reconnectWithNewToken /
@@ -379,7 +379,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     // Authentication failure
     client.onAuthenticationFailure((text, retryCount) => {
       if (!current()) return
-      log.error(`[Twitch] Authentication failure: ${text} (retry ${retryCount})`)
+      log.error('[Twitch] Authentication failure', { retryCount, detail: text })
 
       // Try to refresh token on auth failure
       if (!this.anonymous && retryCount === 0) {
