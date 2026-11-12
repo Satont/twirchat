@@ -34,6 +34,20 @@ const c = {
 
 type Level = 'debug' | 'info' | 'warn' | 'error'
 
+export interface LogEntry {
+  level: Level
+  module: string
+  msg: string
+  ts: string
+  meta: Record<string, unknown> | undefined
+}
+
+let logSink: ((entry: LogEntry) => void) | undefined
+
+export function setLogSink(sink: (entry: LogEntry) => void): void {
+  logSink = sink
+}
+
 const LEVEL_ORDER: Record<Level, number> = {
   debug: 0,
   error: 3,
@@ -123,6 +137,7 @@ function emit(module: string, level: Level, msg: string, meta?: Record<string, u
   } else {
     process.stdout.write(line + '\n')
   }
+  logSink?.({ level, module, msg, ts: new Date().toISOString(), meta })
 }
 
 export interface Logger {

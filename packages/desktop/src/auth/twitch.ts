@@ -1,5 +1,6 @@
 import { setTimeout as wait } from 'node:timers/promises'
 
+import { logger } from '@twirchat/shared'
 import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
 import { z } from 'zod'
 
@@ -10,6 +11,8 @@ import { postOAuthForm } from './oauth-form'
 import { createOAuthRefresher, OAuthRefreshError } from './refresh-token'
 import { expiresAt, oauthTokenSchema } from './response-schemas'
 import { TwitchTokenValidationError, validateTwitchUserToken } from './twitch-user-token'
+
+const log = logger('auth-twitch')
 
 export const TWITCH_SCOPES: readonly string[] = [
   'chat:read',
@@ -176,6 +179,7 @@ export async function connectTwitchDevice(
     expiresAt: expiresAt(validation.expiresIn),
     scopes: validation.scopes,
   })
+  log.info('Account signed in', { platform: 'twitch' })
   return { channelSlug: validation.login, username: validation.login, displayName }
 }
 
@@ -215,5 +219,9 @@ export async function checkTwitchSession(
   }
   if (!isCurrent()) return false
   AccountStore.clearTokens(accountId)
+  log.warn('Account authorization ended', {
+    platform: 'twitch',
+    reason: tokens.refreshToken ? 'invalid_refresh_token' : 'missing_refresh_token',
+  })
   return true
 }

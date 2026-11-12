@@ -132,7 +132,7 @@ export async function handleYouTubeCallback(url: URL) {
     username,
   })
 
-  log.info(`Logged in as ${displayName}`)
+  log.info('Account signed in', { platform: 'youtube' })
 
   return {
     channelSlug: username,

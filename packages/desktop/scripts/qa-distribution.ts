@@ -1,6 +1,7 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readdir } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 
+import { diagnosticLogDirectory } from '../src/services/diagnostic-log-files'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 import { captureGuiQaDisplay, decodeQaFramebuffer } from '../src/services/gui-qa-screenshot'
 import { distributionFrameHasPaint } from './qa-distribution-frame'
@@ -115,6 +116,15 @@ try {
   )
   if (!distributionFrameHasPaint(settledFrame))
     throw new Error('Distribution became blank after its initial painted frame.')
+  const logDirectory = diagnosticLogDirectory()
+  const diagnosticFiles = (await readdir(logDirectory)).filter((name) =>
+    /^twirchat-.*\.log$/u.test(name),
+  )
+  const diagnostics = await Promise.all(
+    diagnosticFiles.map((name) => Bun.file(join(logDirectory, name)).text()),
+  )
+  if (!diagnostics.some((text) => text.includes('"msg":"GPUIX backend ready"')))
+    throw new Error('Distribution did not persist its startup diagnostics.')
   closeNativeQaWindow('TwirChat')
   await Promise.race([child.exited, Bun.sleep(2000)])
 } catch (error) {

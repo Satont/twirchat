@@ -12,6 +12,7 @@ import { z } from 'zod'
 
 import { APP_ENV } from '../build-info'
 import { getDbPath, setRuntimeConfig } from '../runtime-config'
+import { exitAfterFlushingDiagnosticLogs } from '../services/diagnostic-logging'
 import { assertGuiQaEnvironment } from '../services/gui-qa'
 import { establishLinuxSingleInstance } from '../services/linux-single-instance'
 import { getDesktopBackend } from './backend/server'
@@ -127,6 +128,12 @@ if (!g.__twirchatWatchedSubscriptionsWired) {
   wireActiveWatchedChannels(backend)
 }
 
+async function shutdownDesktop(): Promise<void> {
+  const stopActivation = instance.kind === 'primary' ? instance.stopActivation() : undefined
+  await Promise.allSettled([stopActivation, backend.shutdownPlugins?.()])
+  backend.dispose?.()
+}
+
 const windows = mountDesktopWindows(
   backend,
   (descriptor) => {
@@ -134,12 +141,7 @@ const windows = mountDesktopWindows(
     return <ChatWindow descriptor={descriptor} />
   },
   () => {
-    const exit = () => {
-      backend.dispose?.()
-      process.exit(0)
-    }
-    const stopActivation = instance.kind === 'primary' ? instance.stopActivation() : undefined
-    void Promise.allSettled([stopActivation, backend.shutdownPlugins?.()]).then(exit, exit)
+    void shutdownDesktop().then(exitAfterFlushingDiagnosticLogs, exitAfterFlushingDiagnosticLogs)
   },
 )
 

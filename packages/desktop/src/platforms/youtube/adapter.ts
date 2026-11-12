@@ -246,6 +246,6 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       throw new Error(`YouTube sendMessage failed: ${res.status} ${body}`)
     }
 
-    log.info(`[YouTube] Message sent: ${text.slice(0, 50)}...`)
+    log.info('[YouTube] Message sent')
   }
 }

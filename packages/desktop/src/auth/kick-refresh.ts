@@ -23,6 +23,7 @@ export class KickRefreshRequestError extends Error {
   constructor(
     message: string,
     readonly kind: 'transient' | 'reauthorize' = 'transient',
+    readonly status?: number,
   ) {
     super(message)
     this.name = 'KickRefreshRequestError'
@@ -32,6 +33,7 @@ export class KickTokenRefreshError extends Error {
   constructor(
     message: string,
     readonly kind: 'transient' | 'reauthorize' | 'stale',
+    readonly status?: number,
   ) {
     super(message)
     this.name = 'KickTokenRefreshError'
@@ -40,6 +42,7 @@ export class KickTokenRefreshError extends Error {
 interface KickRefreshProblem {
   message: string
   kind: 'transient' | 'reauthorize'
+  status?: number
 }
 interface RefreshBlock {
   error: KickRefreshProblem
@@ -85,8 +88,11 @@ function requestProblem(error: unknown): KickRefreshProblem {
     error.name === 'KickRefreshRequestError' &&
     'kind' in error &&
     (error.kind === 'transient' || error.kind === 'reauthorize')
-  )
-    return { message: error.message, kind: error.kind }
+  ) {
+    const problem: KickRefreshProblem = { message: error.message, kind: error.kind }
+    if ('status' in error && typeof error.status === 'number') problem.status = error.status
+    return problem
+  }
   return {
     message: t('misc.kickRefresh.requestFailed'),
     kind: 'transient',
@@ -112,8 +118,8 @@ export function createKickTokenRefresher(dependencies: KickRefreshDependencies) 
       const manualRetry = context.manual === true && now - failedAt >= 5000
       if (retryAt === null || (now < retryAt && !manualRetry)) {
         // Retained HMR state stores data, not a previous module's Error prototype.
-        entry.block.error = { message: error.message, kind: error.kind }
-        return Promise.reject(new KickTokenRefreshError(error.message, error.kind))
+        entry.block.error = { message: error.message, kind: error.kind, status: error.status }
+        return Promise.reject(new KickTokenRefreshError(error.message, error.kind, error.status))
       }
     }
     if (entry.completedAt !== undefined && now - entry.completedAt < 5000)
@@ -148,7 +154,7 @@ export function createKickTokenRefresher(dependencies: KickRefreshDependencies) 
           if (!stillCurrent())
             throw new KickTokenRefreshError(t('misc.kickRefresh.accountChanged'), 'stale')
           const failure = requestProblem(error)
-          const problem = new KickTokenRefreshError(failure.message, failure.kind)
+          const problem = new KickTokenRefreshError(failure.message, failure.kind, failure.status)
           current.failures = Math.min(current.failures + 1, 3)
           const failedAt = dependencies.now()
           const retryAt =
@@ -200,6 +206,7 @@ export async function requestKickRefresh(
         ? t('misc.kickRefresh.rejected')
         : t('misc.kickRefresh.backendHttp', { status: response.status }),
       permanent ? 'reauthorize' : 'transient',
+      response.status,
     )
   }
   let payload: unknown

@@ -1,7 +1,10 @@
+import { logger } from '@twirchat/shared'
 import type { Account, Platform } from '@twirchat/shared/types'
 
 import { t } from '../gpuix/i18n'
 import { runInBackground } from './background-task'
+
+const log = logger('account-sessions')
 
 export interface AccountSessionDependencies {
   find(id: string): Account | null
@@ -47,6 +50,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     if (!force && (dependencies.active(platform)?.id ?? null) === accountId) return
     await dependencies.disconnect(platform)
     const account = dependencies.select(platform, accountId)
+    if (accountId === null) log.info('Active account deactivated', { platform })
     const failures: string[] = []
     try {
       try {
@@ -94,6 +98,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
         await dependencies.removeSession?.(account)
         if (!isCurrent()) return
         dependencies.remove(accountId)
+        log.info('Saved account removed', { platform: account.platform })
         dependencies.changed(account.platform, false)
       })
     },

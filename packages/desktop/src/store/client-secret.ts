@@ -24,6 +24,6 @@ export function getClientSecret(): string {
 
   const secret = randomUUID()
   db.run('INSERT INTO client_identity (key, value) VALUES (?, ?)', [SECRET_KEY, secret])
-  log.info(`Generated new client secret: ${secret.slice(0, 8)}...`)
+  log.info('Generated new client secret')
   return secret
 }
