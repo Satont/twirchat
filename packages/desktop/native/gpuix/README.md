@@ -5,6 +5,20 @@ pins GPUIX and its GPUI submodule to full Git revisions and verifies the `cosmic
 source archive and each local patch by SHA-256. Build caches live outside the repository.
 No upstream commits, publishing, or downloaded native binaries are part of this build.
 
+Native version `0.11.0-twirchat.26` keeps pointer capture through cached replay.
+GPUI rebinds a captured element by identity only when it inserts a fresh hitbox,
+and a replayed row copies its old hitboxes instead. A chat row redrawn from the
+row cache in the middle of a moderation-rail drag lost the capture, so the release
+went to whatever lay under the pointer, such as the author name. Replay now rebinds
+the capture to the copied hitbox with the same identity.
+
+The same version keeps a virtual list's scroll anchor when its children grow at
+both ends in one commit. A chat leaving the tail expands from its tail window into
+the full history, and a message that arrives in that commit used to make the old
+window a run in the middle of the new one. Only edge runs were matched, so the
+whole range was replaced and the list jumped to its first row. Any contiguous run
+anchored at either list's first row is now kept.
+
 Native version `0.11.0-twirchat.25` copies text in one horizontal flex container
 as one logical line, including separate author, mention and word hosts. Vertical
 containers still insert line breaks. Selection groups are part of the native

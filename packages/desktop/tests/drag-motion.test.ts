@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test'
 
-import { createDragMotion, type DragPoint } from '../src/gpuix/hooks/use-drag-motion'
+import {
+  createDragMotion,
+  type DragPoint,
+  windowLostActivation,
+} from '../src/gpuix/hooks/use-drag-motion'
 
 test('rapid pointer movement runs once with the latest position', async () => {
   const positions: DragPoint[] = []
@@ -62,4 +66,13 @@ test('a pending move uses the committed handler without restarting its timer', a
   } finally {
     motion.cancel()
   }
+})
+
+test('a drag ends only when the window turns inactive during it', () => {
+  expect(windowLostActivation(true, false)).toBe(true)
+  // A press that activates the window still sees the stale polled state.
+  expect(windowLostActivation(false, false)).toBe(false)
+  expect(windowLostActivation(undefined, false)).toBe(false)
+  expect(windowLostActivation(false, true)).toBe(false)
+  expect(windowLostActivation(true, true)).toBe(false)
 })

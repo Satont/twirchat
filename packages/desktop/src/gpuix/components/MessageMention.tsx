@@ -150,7 +150,7 @@ export function MessageMention({
       tabIndex={interactive ? 0 : undefined}
       onClick={(event) => {
         if (!interactive) return
-        claimMessageRowClick(event)
+        if (!claimMessageRowClick(event)) return
         if ((event.button ?? 0) !== 0 || event.isRightClick) return
         runUiTask(openCard())
       }}

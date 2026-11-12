@@ -182,7 +182,7 @@ export const MessageTokens = memo(function MessageTokens({
           key={index}
           tabIndex={0}
           onClick={(event) => {
-            claimMessageRowClick(event)
+            if (!claimMessageRowClick(event)) return
             if (
               event.button === 2 ||
               event.isRightClick ||

@@ -1,0 +1,79 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -6053,18 +6053,29 @@
+     previous: &[u64],
+     current: &[u64],
+ ) -> Option<(std::ops::Range<usize>, std::ops::Range<usize>)> {
++    // The shared run need not reach either end: a window can grow at both
++    // ends in one commit, such as a tail window that expands into the full
++    // history while a new row arrives.
++    let shared_run = |old_start: usize, new_start: usize| {
++        let len = previous[old_start..]
++            .iter()
++            .zip(&current[new_start..])
++            .take_while(|(old, new)| old == new)
++            .count();
++        (len > 0).then_some((old_start..old_start + len, new_start..new_start + len))
++    };
+     let first = current.first()?;
+-    if let Some(start) = previous.iter().position(|id| id == first) {
+-        let retained = previous.len() - start;
+-        if start > 0 && retained <= current.len() && previous[start..] == current[..retained] {
+-            return Some((start..previous.len(), 0..retained));
+-        }
++    let overlap = previous
++        .iter()
++        .position(|id| id == first)
++        .filter(|&start| start > 0)
++        .and_then(|start| shared_run(start, 0));
++    if overlap.is_some() {
++        return overlap;
+     }
+     let first = previous.first()?;
+     let start = current.iter().position(|id| id == first)?;
+-    let retained = current.len() - start;
+-    (start > 0 && retained <= previous.len() && current[start..] == previous[..retained])
+-        .then_some((0..retained, start..current.len()))
++    if start > 0 { shared_run(0, start) } else { None }
+ }
+ 
+ fn splice_virtual_list_children(
+@@ -6134,6 +6145,14 @@
+             virtual_list_overlap(&[2, 3, 4], &[0, 1, 2, 3]),
+             Some((0..2, 2..4))
+         );
++        assert_eq!(
++            virtual_list_overlap(&[2, 3], &[0, 1, 2, 3, 4]),
++            Some((0..2, 2..4))
++        );
++        assert_eq!(
++            virtual_list_overlap(&[0, 1, 2, 3, 4], &[2, 3]),
++            Some((2..4, 0..2))
++        );
+         assert_eq!(virtual_list_overlap(&[0, 1, 2], &[3, 4, 5]), None);
+         assert_eq!(virtual_list_overlap(&[0, 1, 2], &[0, 2, 1]), None);
+         assert_eq!(virtual_list_overlap(&[], &[0]), None);
+@@ -6160,6 +6179,23 @@
+     }
+ 
+     #[test]
++    fn a_window_growing_at_both_ends_keeps_the_reader_anchor() {
++        let state =
++            ListState::new(40, ListAlignment::Bottom, px(0.)).with_uniform_item_height(px(20.));
++        state.scroll_to(ListOffset {
++            item_ix: 30,
++            offset_in_item: px(5.),
++        });
++        // A tail window expands into the full history while a new row arrives.
++        let previous: Vec<u64> = (160..200).collect();
++        let current: Vec<u64> = (0..201).collect();
++        splice_virtual_list_children(&state, &previous, &current, &vec![None; 201]);
++        assert_eq!(state.item_count(), 201);
++        let offset = state.logical_scroll_top();
++        assert_eq!((offset.item_ix, offset.offset_in_item), (190, px(5.)));
++    }
++
++    #[test]
+     fn sliding_updates_do_not_stop_following_the_tail() {
+         let state = ListState::new(4, ListAlignment::Top, px(0.));
+         state.set_follow_mode(FollowMode::Tail);

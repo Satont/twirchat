@@ -187,7 +187,7 @@ export function MessageActionsMenu({
   const item = (label: string, run: () => Promise<unknown> | void) => (
     <div
       onClick={(event) => {
-        claimMessageRowClick(event)
+        if (!claimMessageRowClick(event)) return
         runUiTask(action(run))
       }}
       style={{
@@ -211,7 +211,7 @@ export function MessageActionsMenu({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={(event) => {
-          claimMessageRowClick(event)
+          if (!claimMessageRowClick(event)) return
           onMenuButtonClick()
           setOpen((value) => !value)
         }}

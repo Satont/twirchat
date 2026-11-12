@@ -5,6 +5,11 @@ import type { EventPayload } from '@gpuix/react'
  * a click on a link, name or button inside a chat row reaches the row too,
  * child first and in the same native dispatch. Interactive children claim
  * their release so the row's double-click reply leaves it alone.
+ *
+ * `click` also ignores where the press began. A row drag (the moderation rail)
+ * that loses its pointer capture never sees its release, which then lands on
+ * whatever child is under the pointer. Claiming that release ends the drag
+ * instead of activating the child.
  */
 interface ClickIdentity {
   readonly x: number | undefined
@@ -13,9 +18,27 @@ interface ClickIdentity {
 }
 
 let claimed: ClickIdentity | null = null
+let armedDrag: (() => void) | null = null
 
-export function claimMessageRowClick(event: EventPayload): void {
+/** Arms a row drag until the returned disarm runs; a stray release cancels it. */
+export function armMessageRowDrag(cancel: () => void): () => void {
+  armedDrag = cancel
+  return () => {
+    if (armedDrag === cancel) armedDrag = null
+  }
+}
+
+/**
+ * Claims a release for an interactive child. False when the release belongs to
+ * an armed row drag: the drag is cancelled and the child must not act.
+ */
+export function claimMessageRowClick(event: EventPayload): boolean {
   claimed = { x: event.x, y: event.y, clickCount: event.clickCount }
+  const cancelDrag = armedDrag
+  if (!cancelDrag) return true
+  armedDrag = null
+  cancelDrag()
+  return false
 }
 
 /** True for an unclaimed primary double-click; consumes the matching claim either way. */

@@ -1,0 +1,90 @@
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -3716,11 +3716,20 @@
+     }
+ 
+     pub(crate) fn reuse_prepaint(&mut self, range: Range<PrepaintStateIndex>) {
+-        self.next_frame.hitboxes.extend(
+-            self.rendered_frame.hitboxes[range.start.hitboxes_index..range.end.hitboxes_index]
++        let reused_hitboxes =
++            &self.rendered_frame.hitboxes[range.start.hitboxes_index..range.end.hitboxes_index];
++        // Replayed hitboxes skip `insert_hitbox`, which is where a captured
++        // identity is rebound each frame. Without this a cached subtree drops
++        // an active pointer capture in the middle of a drag.
++        if self.captured_hitbox.is_none()
++            && let Some(identity) = self.captured_identity.as_ref()
++            && let Some(hitbox) = reused_hitboxes
+                 .iter()
+-                .cloned(),
+-        );
++                .find(|hitbox| hitbox.identity.as_ref() == Some(identity))
++        {
++            self.captured_hitbox = Some(hitbox.id);
++        }
++        self.next_frame.hitboxes.extend(reused_hitboxes.iter().cloned());
+         self.next_frame.tooltip_requests.extend(
+             self.rendered_frame.tooltip_requests
+                 [range.start.tooltips_index..range.end.tooltips_index]
+--- a/crates/gpui/src/elements/div.rs
++++ b/crates/gpui/src/elements/div.rs
+@@ -5545,4 +5545,60 @@
+             ["down", "other-move", "other-up"]
+         );
+     }
++
++    struct CachedCaptureParent {
++        handle: Entity<PointerCaptureView>,
++        events: Rc<RefCell<Vec<&'static str>>>,
++    }
++
++    impl Render for CachedCaptureParent {
++        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
++            let events = self.events.clone();
++            div()
++                .size_full()
++                .flex()
++                .child(
++                    self.handle
++                        .clone()
++                        .cached(StyleRefinement::default().w(px(80.)).h(px(40.))),
++                )
++                .child(
++                    div()
++                        .id("other")
++                        .w(px(200.))
++                        .h(px(40.))
++                        .on_mouse_up(MouseButton::Left, move |_, _, _| {
++                            events.borrow_mut().push("other-up")
++                        }),
++                )
++        }
++    }
++
++    #[gpui::test]
++    fn pointer_capture_survives_cached_view_replay(cx: &mut TestAppContext) {
++        let events = Rc::new(RefCell::new(Vec::new()));
++        let (parent, cx) = cx.add_window_view({
++            let events = events.clone();
++            move |_, cx| CachedCaptureParent {
++                handle: cx.new(|_| PointerCaptureView {
++                    removed: false,
++                    events: events.clone(),
++                }),
++                events,
++            }
++        });
++        cx.run_until_parked();
++
++        cx.simulate_mouse_down(point(px(10.), px(10.)), MouseButton::Left, Modifiers::none());
++        // A redraw caused elsewhere replays the cached handle instead of rendering it.
++        parent.update(cx, |_, cx| cx.notify());
++        cx.run_until_parked();
++        cx.simulate_mouse_move(point(px(200.), px(10.)), MouseButton::Left, Modifiers::none());
++        cx.simulate_mouse_up(point(px(200.), px(10.)), MouseButton::Left, Modifiers::none());
++
++        assert_eq!(
++            events.borrow().as_slice(),
++            ["down", "handle-move", "handle-up"]
++        );
++    }
+ }
