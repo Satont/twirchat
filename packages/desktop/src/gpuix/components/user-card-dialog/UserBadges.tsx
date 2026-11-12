@@ -1,0 +1,96 @@
+import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
+import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
+import { withAlpha } from '@gpuix/theme'
+import { useTheme } from '@gpuix/theme-context'
+import type { Badge, Platform } from '@twirchat/shared/types'
+
+export interface UserBadgesProps {
+  badges: readonly Badge[]
+  platform: Platform
+  maxBadges?: number
+  size?: number
+  showOverflow?: boolean
+}
+
+export function UserBadges({
+  badges,
+  platform,
+  maxBadges = 4,
+  size = 20,
+  showOverflow = true,
+}: UserBadgesProps) {
+  const theme = useTheme()
+  const headerText = theme.isLight ? theme.text : '#ffffff'
+
+  const displayBadges = badges.slice(0, maxBadges)
+  const overflowCount = badges.length - maxBadges
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 4,
+        minWidth: 0,
+      }}
+    >
+      {displayBadges.map((badge, index) => (
+        <BadgeTooltip key={`${badge.type}:${badge.id}:${index}`} badge={badge} platform={platform}>
+          <div
+            style={{
+              width: size,
+              height: size,
+              borderRadius: 5,
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            {badge.imageUrl ? (
+              <RemoteImage
+                url={badge.imageUrl}
+                objectFit="cover"
+                style={{ width: size - 2, height: size - 2 }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: size - 2,
+                  height: size - 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  backgroundColor: withAlpha('#000000', 0.2),
+                  color: headerText,
+                }}
+              >
+                {badge.text[0]?.toUpperCase() ?? '?'}
+              </div>
+            )}
+          </div>
+        </BadgeTooltip>
+      ))}
+      {showOverflow && overflowCount > 0 && (
+        <div
+          style={{
+            width: size,
+            height: size,
+            borderRadius: 5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            fontWeight: 700,
+            backgroundColor: withAlpha('#000000', 0.2),
+            color: headerText,
+          }}
+        >
+          +{overflowCount}
+        </div>
+      )}
+    </div>
+  )
+}

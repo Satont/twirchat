@@ -1,4 +1,3 @@
-import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
@@ -9,6 +8,7 @@ import { platformColor, withAlpha, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 
 import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
+import { UserBadges } from './UserBadges'
 import { GhostButton, HeaderPill as HeaderPillUI } from './UserCardUI'
 import { formatDisplayUsername, initials, mergeBadges } from './utils'
 
@@ -86,6 +86,7 @@ export function UserCardHeader({
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
   const badges = mergeBadges(target.badges, extraBadges)
+  const userBadges = badges
   const headerText = theme.isLight ? theme.text : '#ffffff'
   const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
   const headerBorder = theme.isLight
@@ -245,61 +246,14 @@ export function UserCardHeader({
               <Text style={{ fontSize: 20, fontWeight: 800, color: headerText }}>
                 {formatDisplayUsername(target.displayName)}
               </Text>
-              {badges.length > 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    marginTop: 8,
-                    gap: 4,
-                    minWidth: 0,
-                  }}
-                >
-                  {badges.map((badge) => (
-                    <BadgeTooltip
-                      key={`${badge.type}:${badge.id}`}
-                      badge={badge}
-                      platform={target.platform}
-                    >
-                      <div
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 5,
-                          overflow: 'hidden',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {badge.imageUrl ? (
-                          <RemoteImage
-                            url={badge.imageUrl}
-                            objectFit="cover"
-                            style={{ width: 18, height: 18 }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 18,
-                              height: 18,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 10,
-                              fontWeight: 700,
-                              backgroundColor: withAlpha('#000000', 0.2),
-                              color: headerText,
-                            }}
-                          >
-                            {badge.text[0]?.toUpperCase() ?? '?'}
-                          </div>
-                        )}
-                      </div>
-                    </BadgeTooltip>
-                  ))}
-                </div>
-              ) : null}
+              {userBadges.length > 0 && (
+                <UserBadges
+                  badges={userBadges}
+                  platform={target.platform}
+                  maxBadges={4}
+                  size={20}
+                />
+              )}
             </div>
             <div
               style={{
@@ -322,9 +276,8 @@ export function UserCardHeader({
               gap: 6,
               minWidth: 0,
             }}
-          >
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 3}}>
+          ></div>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
             <div
               style={{
                 display: 'flex',

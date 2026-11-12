@@ -9,11 +9,13 @@ import { useDesktopWindows } from '@gpuix/state/desktop-windows'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { logger } from '@twirchat/shared/logger'
+import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { getBackendUrl } from '../../runtime-config'
 import { Modal } from './ui/Modal'
 import type { MetadataItem, UserCardTab } from './user-card-dialog'
 import {
@@ -38,6 +40,8 @@ import {
   subAgeText,
   subscriptionDurationText,
 } from './user-card/format'
+
+const log = logger('user-card')
 
 export function UserCardDialog({
   target,
@@ -123,8 +127,45 @@ export function UserCardDialog({
     }
     return collectUserBadges(newestFirst, target.platform, target.platformUserId)
   }, [target.platform, target.platformUserId])
+
+  // Fetch Twitch user badges from backend (global + role badges)
+  const [userBadges, setUserBadges] = useState<Badge[]>([])
+  useEffect(() => {
+    if (target.platform !== 'twitch' || !target.username) return
+    let cancelled = false
+    const url = new URL(`${getBackendUrl()}/api/twitch/user-badges`)
+    url.searchParams.set('broadcasterLogin', target.username)
+    fetch(url.toString())
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) {
+          // Convert badge catalog to Badge array
+          const badges: Badge[] = []
+          for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
+            const [setId, version] = key.split('/')
+            const meta = data.badgeMetadata?.[key]
+            badges.push({
+              id: `twitch:${key}`,
+              type: 'twitch',
+              text: meta?.title ?? setId,
+              ...(meta?.description ? { description: meta.description } : {}),
+              imageUrl: imageUrl as string,
+            })
+          }
+          setUserBadges(badges)
+        }
+      })
+      .catch((err) => {
+        log.warn('Failed to fetch user badges', { error: String(err) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [target.platform, target.username])
+
   const extraBadges = mergeBadges(
     retainedBadges,
+    userBadges,
     profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
     profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
   )
