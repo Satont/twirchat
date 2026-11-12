@@ -12,7 +12,19 @@ interface UseUserCardMetadataOptions {
   moderationPlatform: ModerationPlatform | undefined
 }
 
-export function useUserCardMetadata({ target, moderationPlatform }: UseUserCardMetadataOptions) {
+interface UseUserCardMetadataReturn {
+  supportedByCard: boolean
+  metadata: UserCardMetadataResponse | null
+  metadataLoading: boolean
+  metadataError: string | null
+  reloadMetadata: () => Promise<void>
+  refreshMetadata: () => Promise<void>
+}
+
+export function useUserCardMetadata({
+  target,
+  moderationPlatform,
+}: UseUserCardMetadataOptions): UseUserCardMetadataReturn {
   const backend = useBackend()
   const supportedByCard = moderationPlatform !== undefined
 
@@ -72,11 +84,14 @@ export function useUserCardMetadata({ target, moderationPlatform }: UseUserCardM
     if (supportedByCard) runUiTask(reloadMetadata())
   }, [reloadMetadata, supportedByCard])
 
+  const refreshMetadata = reloadMetadata
+
   return {
     supportedByCard,
     metadata,
     metadataLoading,
     metadataError,
     reloadMetadata,
+    refreshMetadata,
   }
 }

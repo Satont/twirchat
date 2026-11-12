@@ -2,29 +2,48 @@ import { useBackend } from '@gpuix/backend/context'
 import { errorText } from '@gpuix/components/user-card/format'
 import { aliasesStore, showNotice } from '@gpuix/state/app'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 interface UseUserCardAliasOptions {
   target: UserCardTarget
   currentAlias?: string
-  onClose: () => void
+  onClose?: () => void
 }
 
-export function useUserCardAlias({ target, currentAlias, onClose }: UseUserCardAliasOptions) {
+interface UseUserCardAliasReturn {
+  aliasValue: string
+  setAliasValue: (value: string) => void
+  effectiveAlias: string | undefined
+  isSaving: boolean
+  saveError: string | null
+  handleSaveAlias: () => Promise<void>
+  handleRemoveAlias: () => Promise<void>
+  refreshAliases: () => Promise<void>
+}
+
+export function useUserCardAlias({
+  target,
+  currentAlias,
+  onClose,
+}: UseUserCardAliasOptions): UseUserCardAliasReturn {
   const backend = useBackend()
   const effectiveAlias = currentAlias ?? target.currentAlias
   const [aliasValue, setAliasValue] = useState(effectiveAlias ?? '')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     setAliasValue(effectiveAlias ?? '')
-  }, [effectiveAlias, target.platform, target.platformUserId])
+  }, [effectiveAlias])
 
-  async function refreshAliases(): Promise<void> {
+  const refreshAliases = useCallback(async (): Promise<void> => {
     aliasesStore.set(await backend.api.getUserAliases())
-  }
+  }, [backend])
 
-  async function handleSaveAlias(): Promise<void> {
+  const handleSaveAlias = useCallback(async (): Promise<void> => {
     const value = aliasValue.trim()
+    setIsSaving(true)
+    setSaveError(null)
     try {
       if (!value) {
         await backend.api.removeUserAlias({
@@ -39,33 +58,44 @@ export function useUserCardAlias({ target, currentAlias, onClose }: UseUserCardA
         })
       }
       await refreshAliases()
+      onClose?.()
     } catch (cause) {
-      showNotice('error', errorText(cause))
-      return
+      const message = errorText(cause)
+      setSaveError(message)
+      showNotice('error', message)
+    } finally {
+      setIsSaving(false)
     }
-    onClose()
-  }
+  }, [aliasValue, target.platform, target.platformUserId, backend, refreshAliases, onClose])
 
-  async function handleRemoveAlias(): Promise<void> {
+  const handleRemoveAlias = useCallback(async (): Promise<void> => {
+    setIsSaving(true)
+    setSaveError(null)
     try {
       await backend.api.removeUserAlias({
         platform: target.platform,
         platformUserId: target.platformUserId,
       })
       await refreshAliases()
+      setAliasValue('')
+      onClose?.()
     } catch (cause) {
-      showNotice('error', errorText(cause))
-      return
+      const message = errorText(cause)
+      setSaveError(message)
+      showNotice('error', message)
+    } finally {
+      setIsSaving(false)
     }
-    setAliasValue('')
-    onClose()
-  }
+  }, [target.platform, target.platformUserId, backend, refreshAliases, onClose])
 
   return {
     aliasValue,
     setAliasValue,
     effectiveAlias,
+    isSaving,
+    saveError,
     handleSaveAlias,
     handleRemoveAlias,
+    refreshAliases,
   }
 }

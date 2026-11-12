@@ -1,6 +1,9 @@
 import { afterAll, expect, test } from 'bun:test'
 
-import { SEVENTV_COSMETICS_QUERY } from '@twirchat/shared/emote-proxy'
+import {
+  SEVENTV_COSMETICS_INVENTORY_QUERY,
+  SEVENTV_COSMETICS_QUERY,
+} from '@twirchat/shared/emote-proxy'
 
 import { createProviderRelay } from '../src/api/provider-relay'
 import { createProviderProxyRoutes } from '../src/routes/provider-proxy'
@@ -153,6 +156,11 @@ test('catalog, fixed cosmetics and opted-in presence are relayed without upstrea
   expect(cosmetics.status).toBe(200)
   expect(calls.at(-1)?.method).toBe('POST')
   expect(JSON.parse(calls.at(-1)?.body ?? '{}')).toMatchObject({ variables: { platformId: '123' } })
+  const inventory = await relay.metadata('https://7tv.io/v4/gql', {
+    query: SEVENTV_COSMETICS_INVENTORY_QUERY,
+    variables: { platform: 'TWITCH', platformId: '123' },
+  })
+  expect(inventory.status).toBe(200)
   await expect(
     relay.metadata('https://7tv.io/v4/gql', { query: 'arbitrary mutation' }),
   ).rejects.toThrow('Invalid provider request')

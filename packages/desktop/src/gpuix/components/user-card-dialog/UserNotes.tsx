@@ -7,7 +7,6 @@ import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
 
-/** Native Markdown preview: paragraphs, headings, lists, quotes and fenced code. */
 export function UserNotes({ target }: { target: UserCardTarget }) {
   const backend = useBackend()
   const theme = useTheme()

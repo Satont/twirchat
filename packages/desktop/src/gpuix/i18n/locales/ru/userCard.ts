@@ -117,6 +117,7 @@ export const ruUserCard = {
   'userCard.profile.noRole': 'Подтверждённых ролей на канале нет',
   'userCard.profile.loading': 'Загрузка профиля…',
   'userCard.profile.copyAvatar': 'Копировать URL аватара профиля',
+  'userCard.profile.copyColor': 'Копировать цвет профиля',
   'userCard.profile.nameHistory': 'История имён · logs.zonian.dev (наблюдаемые имена)',
   'userCard.profile.paint': '7TV paint: {name}',
   'userCard.profile.openSevenTv': 'Открыть профиль 7TV',

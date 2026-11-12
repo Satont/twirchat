@@ -1,6 +1,7 @@
 import {
   providerImageSource,
   providerMetadataTarget,
+  SEVENTV_COSMETICS_INVENTORY_QUERY,
   SEVENTV_COSMETICS_QUERY,
 } from '@twirchat/shared/emote-proxy'
 import { z } from 'zod'
@@ -38,7 +39,10 @@ interface ProviderRelayOptions {
 }
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)
 const cosmeticsSchema = z.strictObject({
-  query: z.literal(SEVENTV_COSMETICS_QUERY),
+  query: z.union([
+    z.literal(SEVENTV_COSMETICS_QUERY),
+    z.literal(SEVENTV_COSMETICS_INVENTORY_QUERY),
+  ]),
   variables: z.strictObject({
     platform: z.enum(['TWITCH', 'KICK']),
     platformId: identifier,

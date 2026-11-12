@@ -3,6 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import {
+  SEVENTV_COSMETICS_INVENTORY_QUERY,
+  SEVENTV_COSMETICS_QUERY,
+} from '@twirchat/shared/emote-proxy'
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import sharp from 'sharp'
@@ -693,6 +697,25 @@ describe('7TV cosmetics', () => {
     expect(results[0]).toEqual(results[1])
     await service.getUserCosmetics('twitch', '42')
     expect(calls).toBe(1)
+  })
+
+  test('requests the badge inventory only for the user card', async () => {
+    const queries: string[] = []
+    const service = createCosmeticsService(
+      async (_url, init) => {
+        const body: unknown = JSON.parse(String(init?.body))
+        queries.push(
+          typeof body === 'object' && body !== null && 'query' in body ? String(body.query) : '',
+        )
+        return json(cosmeticResponse())
+      },
+      async () => [],
+    )
+
+    await service.getUserCosmetics('twitch', '42')
+    await service.getUserCosmetics('twitch', '42', undefined, { ...prefs(), inventory: true })
+
+    expect(queries).toEqual([SEVENTV_COSMETICS_QUERY, SEVENTV_COSMETICS_INVENTORY_QUERY])
   })
 
   test('honors badge and paint preferences in the resolver and cache key', async () => {

@@ -6,7 +6,7 @@ import type { UserCardTarget } from '../views/main/utils/chatCommands'
 
 export type MentionUser = Pick<
   UserCardTarget,
-  'platformUserId' | 'displayName' | 'username' | 'avatarUrl'
+  'platformUserId' | 'displayName' | 'username' | 'avatarUrl' | 'color' | 'badges'
 >
 
 export interface MentionUserRequest {

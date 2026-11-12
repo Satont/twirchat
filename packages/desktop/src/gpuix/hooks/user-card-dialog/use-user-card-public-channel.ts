@@ -6,27 +6,35 @@ interface UseUserCardPublicChannelOptions {
   channelUrl: string | undefined
 }
 
-export function useUserCardPublicChannel({ channelUrl }: UseUserCardPublicChannelOptions) {
+interface UseUserCardPublicChannelReturn {
+  isOpening: boolean
+  openError: string | null
+  openPublicChannel: () => Promise<void>
+}
+
+export function useUserCardPublicChannel({
+  channelUrl,
+}: UseUserCardPublicChannelOptions): UseUserCardPublicChannelReturn {
   const backend = useBackend()
-  const [openingPublicChannel, setOpeningPublicChannel] = useState(false)
-  const [publicChannelError, setPublicChannelError] = useState<string | null>(null)
+  const [isOpening, setIsOpening] = useState(false)
+  const [openError, setOpenError] = useState<string | null>(null)
 
   const openPublicChannel = useCallback(async (): Promise<void> => {
     if (!channelUrl) return
-    setOpeningPublicChannel(true)
-    setPublicChannelError(null)
+    setIsOpening(true)
+    setOpenError(null)
     try {
       await backend.api.openExternalUrl({ url: channelUrl })
     } catch (cause) {
-      setPublicChannelError(errorText(cause))
+      setOpenError(errorText(cause))
     } finally {
-      setOpeningPublicChannel(false)
+      setIsOpening(false)
     }
   }, [backend, channelUrl])
 
   return {
-    openingPublicChannel,
-    publicChannelError,
+    isOpening,
+    openError,
     openPublicChannel,
   }
 }

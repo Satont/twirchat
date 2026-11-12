@@ -1,23 +1,11 @@
-import { Icon, type IconName } from '@gpuix/components/ui/Icon'
+import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 
-import { InlineButton, MetadataState } from './UserCardUI'
-
-interface MetadataItem {
-  label: string
-  value: string | null
-  icon: IconName
-}
-
-interface UserCardMetadataSectionProps {
-  supportedByCard: boolean
-  metadataLoading: boolean
-  metadataError: string | null
-  metadata: MetadataItem[] | null
-  reloadMetadata: () => void
-}
+import type { UserCardMetadataSectionProps } from './types'
+import { InlineButton, MetadataState, SectionHeader, UserCardPanel } from './UserCardUI'
+import { userCardWellColor } from './utils'
 
 export function UserCardMetadataSection({
   supportedByCard,
@@ -30,30 +18,23 @@ export function UserCardMetadataSection({
   const { t } = useT()
 
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: 12,
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
-            {t('userCard.metadata.title')}
-          </Text>
-          <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.metadata.hint')}</Text>
-        </div>
-
-        {supportedByCard ? (
-          <InlineButton disabled={metadataLoading} onClick={() => reloadMetadata()}>
-            {t('common.refresh')}
-          </InlineButton>
-        ) : null}
-      </div>
+    <UserCardPanel>
+      <SectionHeader
+        icon="calendar"
+        title={t('userCard.metadata.title')}
+        hint={t('userCard.metadata.hint')}
+        action={
+          supportedByCard ? (
+            <InlineButton
+              icon="refresh"
+              disabled={metadataLoading}
+              onClick={() => reloadMetadata()}
+            >
+              {t('common.refresh')}
+            </InlineButton>
+          ) : undefined
+        }
+      />
 
       {!supportedByCard ? (
         <MetadataState>
@@ -83,21 +64,45 @@ export function UserCardMetadataSection({
             <div
               key={item.label}
               style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
                 flexGrow: 1,
                 flexBasis: 150,
                 minWidth: 0,
-                padding: 12,
+                padding: 14,
                 borderWidth: 1,
                 borderColor: theme.hairline,
-                borderRadius: 10,
-                backgroundColor: theme.fill,
+                borderRadius: 12,
+                backgroundColor: userCardWellColor(theme),
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <Icon name={item.icon} size={14} color={theme.text2} />
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 7,
+                }}
+              >
+                <div
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 7,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.accent.tint12,
+                  }}
+                >
+                  <Icon name={item.icon} size={13} color={theme.accent.primary} />
+                </div>
+
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 700,
                     color: theme.text2,
                   }}
@@ -105,13 +110,13 @@ export function UserCardMetadataSection({
                   {item.label.toUpperCase()}
                 </Text>
               </div>
-              <Text style={{ fontSize: 13, color: theme.text, lineHeight: 19 }}>
+              <Text style={{ fontSize: 12, lineHeight: 18, color: theme.text }}>
                 {item.value ?? ''}
               </Text>
             </div>
           ))}
         </div>
       ) : null}
-    </div>
+    </UserCardPanel>
   )
 }

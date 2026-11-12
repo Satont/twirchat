@@ -98,12 +98,21 @@ const known: NormalizedChatMessage = {
     username: 'knownviewer',
     displayName: 'Known Viewer',
     color: '#ff5f57',
-    badges: [],
+    badges: [
+      { id: 'moderator/1', type: 'moderator', text: 'Moderator' },
+      { id: 'subscriber/12', type: 'subscriber', text: 'Subscriber' },
+      { id: 'premium/1', type: 'premium', text: 'Prime Gaming' },
+    ],
   },
 }
 const cosmetics: UserCosmetics = {
   sevenTvUserId: '7tv-known-user',
-  badges: [],
+  badges: [{ id: '7tv:active', type: 'seventv', text: '7TV Active Badge' }],
+  inventoryBadges: Array.from({ length: 6 }, (_, index) => ({
+    id: `7tv:inventory-${index + 1}`,
+    type: 'seventv',
+    text: `7TV Inventory Badge ${index + 1}`,
+  })),
   lookupStatus: 'available',
   paint: {
     id: 'qa-mention-gradient',
@@ -397,6 +406,18 @@ try {
       assert.equal(opened.at(-1)?.channelId, source.channelId)
       assert.equal(opened.at(-1)?.channelSlug, 'source-slug')
       await until(() => current().getPaintedText().includes('Known Viewer'), 'card header painted')
+      assert.equal(opened.at(-1)?.badges?.length, 3, 'target carries all Twitch badges')
+      const badgeIds = new Set(nodes().map((node) => node.testId))
+      for (const badgeId of [
+        'moderator/1',
+        'subscriber/12',
+        'premium/1',
+        '7tv:active',
+        '7tv:inventory-1',
+        '7tv:inventory-6',
+      ])
+        assert(badgeIds.has(`badge-trigger-${badgeId}`), `Missing badge ${badgeId}`)
+      checks.push(`${theme}-${width}: every Twitch and 7TV badge painted in the header`)
       await until(
         () => current().getPaintedText().join('').includes('7TV paint: QA gradient'),
         'user card paint enabled',

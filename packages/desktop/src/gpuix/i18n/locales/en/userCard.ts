@@ -103,7 +103,7 @@ export const userCard = {
   'userCard.notes.empty': 'No notes yet.',
   'userCard.notes.placeholder': 'Write a private note…',
 
-  'userCard.profile.live': 'Live',
+  'userCard.profile.live': 'Stream Live',
   'userCard.profile.offline': 'Offline',
   'userCard.profile.followers': 'Followers',
   'userCard.profile.lastLive': 'Latest archived stream',
@@ -114,7 +114,8 @@ export const userCard = {
   'userCard.profile.noRole': 'No confirmed channel role',
   'userCard.profile.loading': 'Loading profile…',
   'userCard.profile.copyAvatar': 'Copy profile avatar URL',
-  'userCard.profile.nameHistory': 'Name history · logs.zonian.dev (observed names)',
+  'userCard.profile.copyColor': 'Copy color profile',
+  'userCard.profile.nameHistory': 'Name history',
   'userCard.profile.paint': '7TV paint: {name}',
   'userCard.profile.openSevenTv': 'Open 7TV profile',
   'userCard.profile.cosmeticsUnavailable': '7TV cosmetics are unavailable.',
