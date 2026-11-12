@@ -606,10 +606,12 @@ export function useAutocomplete(params: {
   const getEmoteSuggestions = useCallback((): EmoteSuggestion[] => {
     if (!platform || !channelId) return EMPTY_EMOTE_SUGGESTIONS
     const favorites = new Set(emotePreferences.favorites.map(favoriteEmoteKey))
-    const entries = [...(emotes.get(`${platform}:${channelId}`) ?? [])].sort(
-      (a, b) =>
-        Number(favorites.has(favoriteEmoteKey(b))) - Number(favorites.has(favoriteEmoteKey(a))),
-    )
+    const entries = [...(emotes.get(`${platform}:${channelId}`) ?? [])]
+      .filter((entry) => entry.locked !== true)
+      .sort(
+        (a, b) =>
+          Number(favorites.has(favoriteEmoteKey(b))) - Number(favorites.has(favoriteEmoteKey(a))),
+      )
     return entries.map((e) => ({
       type: 'emote',
       label: e.alias,

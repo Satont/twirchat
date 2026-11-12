@@ -54,6 +54,25 @@ export function filterEmoteEntries(
   ).map(({ entry }) => entry)
 }
 
+function accessKey(
+  emote: Pick<EmoteCatalogEntry, 'id' | 'source' | 'provider' | 'imageUrl'>,
+): string {
+  return `${emoteProvider(emote)}:${emote.id}`
+}
+
+/**
+ * Favorite copies are stored without access state, so reflect the live
+ * channel catalog's lock instead of trusting the saved entry.
+ */
+export function applyLiveEmoteLocks(
+  entries: EmoteCatalogEntry[],
+  catalog: readonly EmoteCatalogEntry[],
+): EmoteCatalogEntry[] {
+  const locked = new Set(catalog.filter((entry) => entry.locked).map((entry) => accessKey(entry)))
+  if (!locked.size) return entries
+  return entries.map((entry) => (locked.has(accessKey(entry)) ? { ...entry, locked: true } : entry))
+}
+
 export function groupEmoteCatalog(entries: EmoteCatalogEntry[]): EmoteGroup[] {
   const groups: Record<EmoteSource, EmoteCatalogEntry[]> = {
     channel: [],

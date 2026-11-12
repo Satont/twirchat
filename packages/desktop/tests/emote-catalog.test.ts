@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test'
 
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 
-import { filterEmoteEntries, groupEmoteCatalog } from '../src/views/main/utils/emote-catalog'
+import {
+  applyLiveEmoteLocks,
+  filterEmoteEntries,
+  groupEmoteCatalog,
+} from '../src/views/main/utils/emote-catalog'
 
 function emote(source: EmoteCatalogEntry['source'], alias: string): EmoteCatalogEntry {
   return {
@@ -58,5 +62,15 @@ test('filters tab entries by fuzzy alias without changing the tab order', () => 
     ['7TV', []],
     ['FFZ', [emote('ffz', 'FrankerWave')]],
     ['BTTV', []],
+  ])
+})
+
+test('reflects live channel locks on favorite copies', () => {
+  const favorite = { ...emote('channel', 'SubWave'), alias: 'SavedName' }
+  const unlocked = { ...emote('channel', 'FreeWave') }
+  const catalog = [{ ...emote('channel', 'SubWave'), locked: true }, emote('channel', 'FreeWave')]
+  expect(applyLiveEmoteLocks([favorite, unlocked], catalog)).toEqual([
+    { ...favorite, locked: true },
+    unlocked,
   ])
 })
