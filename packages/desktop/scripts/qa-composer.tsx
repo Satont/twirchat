@@ -453,7 +453,14 @@ try {
   assert.equal(sent.length, beforeEnter + 1, 'native Enter sends exactly once')
   assert.equal(sent.at(-1).text, 'native Enter sends once')
   assert.equal(state().text, '', 'native Enter clears the sent draft')
-  assert(!flatten().some((node) => node.testId === 'send-button'), 'no separate Send button')
+  assert(has('send-button'), 'composer exposes a Send button')
+  await draft('button sends once')
+  const beforeButton = sent.length
+  await Bun.sleep(80)
+  await click('send-button')
+  await until(() => sent.length === beforeButton + 1, 'Send button submits')
+  assert.equal(sent.at(-1).text, 'button sends once')
+  assert.equal(state().text, '', 'Send button clears the sent draft')
 
   configureTranslation('preview')
   await draft('preview draft')
