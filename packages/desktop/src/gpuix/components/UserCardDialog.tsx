@@ -33,7 +33,7 @@ import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
 import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
-import { collectUserBadges, mergeBadges } from './user-card-dialog/utils'
+import { collectUserBadges, mergeBadges, isGlobalBadge } from './user-card-dialog/utils'
 import {
   accountAgeText,
   followAgeText,
@@ -182,8 +182,14 @@ export function UserCardDialog({
     })
   }, [retainedBadges, userBadgeCatalog])
 
+  // Split badges: target.badges are from current channel message, keep all
+  // enrichedRetainedBadges may contain badges from other channels, filter to global only
+  const globalRetainedBadges = enrichedRetainedBadges.filter((badge) => isGlobalBadge(badge))
+
+  // target.badges already has channel-specific badges for current channel
+  // Merge: target.badges (all) + global retained + cosmetics
   const extraBadges = mergeBadges(
-    enrichedRetainedBadges,
+    globalRetainedBadges,
     profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
     profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
   )

@@ -1,16 +1,14 @@
-import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
-import type { Badge, Platform } from '@twirchat/shared/types'
+import type { Badge } from '@twirchat/shared/types'
 
 export interface UserBadgesProps {
   badges: readonly Badge[]
-  platform: Platform
   size?: number
 }
 
-export function UserBadges({ badges, platform, size = 20 }: UserBadgesProps) {
+export function UserBadges({ badges, size = 20 }: UserBadgesProps) {
   const theme = useTheme()
   const headerText = theme.isLight ? theme.text : '#ffffff'
 
@@ -26,41 +24,40 @@ export function UserBadges({ badges, platform, size = 20 }: UserBadgesProps) {
       }}
     >
       {badges.map((badge, index) => (
-        <BadgeTooltip key={`${badge.type}:${badge.id}:${index}`} badge={badge} platform={platform}>
-          <div
-            style={{
-              width: size,
-              height: size,
-              borderRadius: 5,
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            {badge.imageUrl ? (
-              <RemoteImage
-                url={badge.imageUrl}
-                objectFit="cover"
-                style={{ width: size - 2, height: size - 2 }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: size - 2,
-                  height: size - 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  backgroundColor: withAlpha('#000000', 0.2),
-                  color: headerText,
-                }}
-              >
-                {badge.text[0]?.toUpperCase() ?? '?'}
-              </div>
-            )}
-          </div>
-        </BadgeTooltip>
+        <div
+          key={`${badge.type}:${badge.id}:${index}`}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: 5,
+            overflow: 'hidden',
+            flexShrink: 0,
+          }}
+        >
+          {badge.imageUrl ? (
+            <RemoteImage
+              url={badge.imageUrl}
+              objectFit="cover"
+              style={{ width: size - 2, height: size - 2 }}
+            />
+          ) : (
+            <div
+              style={{
+                width: size - 2,
+                height: size - 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700,
+                backgroundColor: withAlpha('#000000', 0.2),
+                color: headerText,
+              }}
+            >
+              {badge.text[0]?.toUpperCase() ?? '?'}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   )

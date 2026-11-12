@@ -85,8 +85,7 @@ export function UserCardHeader({
   const theme = useTheme()
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
-  const badges = mergeBadges(target.badges, extraBadges)
-  const userBadges = badges
+  const userBadges = mergeBadges(target.badges, extraBadges)
   const headerText = theme.isLight ? theme.text : '#ffffff'
   const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
   const headerBorder = theme.isLight
@@ -243,12 +242,18 @@ export function UserCardHeader({
                 minWidth: 0,
               }}
             >
-              <Text style={{ fontSize: 20, fontWeight: 800, color: headerText }}>
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: headerText,
+                  minWidth: 0,
+                  flexShrink: 1,
+                }}
+              >
                 {formatDisplayUsername(target.displayName)}
               </Text>
-              {userBadges.length > 0 && (
-                <UserBadges badges={userBadges} platform={target.platform} size={20} />
-              )}
+              {userBadges.length > 0 && <UserBadges badges={userBadges} size={20} />}
             </div>
             <div
               style={{
