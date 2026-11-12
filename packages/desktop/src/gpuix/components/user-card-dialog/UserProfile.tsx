@@ -270,26 +270,17 @@ export function UserProfileView({
   }
 
   // Render cosmetics section (7TV badges, paints, etc.)
-  const cosmeticsSection = (cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled)) ? (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        marginTop: 16,
-        paddingTop: 14,
-        borderTopWidth: 1,
-        borderColor: theme.hairline,
-      }}
-    >
+  const cosmeticsSection =
+    cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
       <div
         style={{
           display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
+          flexDirection: 'column',
           gap: 10,
+          marginTop: 16,
+          paddingTop: 14,
+          borderTopWidth: 1,
+          borderColor: theme.hairline,
         }}
       >
         <div
@@ -297,47 +288,57 @@ export function UserProfileView({
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
+            justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: 8,
-            minWidth: 0,
+            gap: 10,
           }}
         >
-          {paintsEnabled && paintImage ? (
-            <img
-              src={paintImage.path}
-              style={{ width: paintImage.width, height: paintImage.height }}
-            />
-          ) : null}
-          {badgesEnabled
-            ? cosmeticBadges.map((badge) => (
-                <BadgeTooltip key={`${badge.type}:${badge.id}`} badge={badge}>
-                  {badge.imageUrl ? (
-                    <RemoteImage
-                      url={badge.imageUrl}
-                      style={{ width: 24, height: 24, pointerEvents: 'none' }}
-                    />
-                  ) : (
-                    <Text
-                      style={{
-                        color: theme.text,
-                        fontSize: 12,
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {badge.text}
-                    </Text>
-                  )}
-                </BadgeTooltip>
-              ))
-            : null}
-          <GhostButton icon="externalLink" onClick={() => runUiTask(openSevenTvProfile())}>
-            {t('userCard.profile.openSevenTv')}
-          </GhostButton>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+              minWidth: 0,
+            }}
+          >
+            {paintsEnabled && paintImage ? (
+              <img
+                src={paintImage.path}
+                style={{ width: paintImage.width, height: paintImage.height }}
+              />
+            ) : null}
+            {badgesEnabled
+              ? cosmeticBadges.map((badge) => (
+                  <BadgeTooltip key={`${badge.type}:${badge.id}`} badge={badge}>
+                    {badge.imageUrl ? (
+                      <RemoteImage
+                        url={badge.imageUrl}
+                        style={{ width: 24, height: 24, pointerEvents: 'none' }}
+                      />
+                    ) : (
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontSize: 12,
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {badge.text}
+                      </Text>
+                    )}
+                  </BadgeTooltip>
+                ))
+              : null}
+            <GhostButton icon="externalLink" onClick={() => runUiTask(openSevenTvProfile())}>
+              {t('userCard.profile.openSevenTv')}
+            </GhostButton>
+          </div>
         </div>
       </div>
-    </div>
-  ) : null
+    ) : null
 
   return (
     <UserCardPanel>
@@ -577,7 +578,7 @@ export function UserProfileView({
         </div>
       </div>
 
-      {(profile?.nameHistory?.length ? (
+      {profile?.nameHistory?.length ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 7 }}>
             <Icon name="clock" size={14} color={theme.accent.primary} />
@@ -697,75 +698,9 @@ export function UserProfileView({
             ))}
           </div>
         </div>
-      ) : null)}
+      ) : null}
 
-      {(cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            marginTop: 16,
-            paddingTop: 14,
-            borderTopWidth: 1,
-            borderColor: theme.hairline,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 10,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 8,
-                minWidth: 0,
-              }}
-            >
-              {paintsEnabled && paintImage ? (
-                <img
-                  src={paintImage.path}
-                  style={{ width: paintImage.width, height: paintImage.height }}
-                />
-              ) : null}
-              {badgesEnabled
-                ? cosmeticBadges.map((badge) => (
-                  <BadgeTooltip key={`${badge.type}:${badge.id}`} badge={badge}>
-                    {badge.imageUrl ? (
-                      <RemoteImage
-                        url={badge.imageUrl}
-                        style={{ width: 24, height: 24, pointerEvents: 'none' }}
-                      />
-                    ) : (
-                      <Text
-                        style={{
-                          color: theme.text,
-                          fontSize: 12,
-                          pointerEvents: 'none',
-                          userSelect: 'none',
-                        }}
-                      >
-                        {badge.text}
-                      </Text>
-                    )}
-                  </BadgeTooltip>
-                ))
-                : null}
-              </div>
-              <GhostButton icon="externalLink" onClick={() => runUiTask(openSevenTvProfile())}>
-                {t('userCard.profile.openSevenTv')}
-              </GhostButton>
-          </div>
-        </div>) : null)}
+      {cosmeticsSection}
     </UserCardPanel>
   )
 }
