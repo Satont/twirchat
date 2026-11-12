@@ -742,12 +742,12 @@ function boot(): DesktopBackend {
   })
 
   backendConn.onSystemMessage((msg) => {
-    aggregator.injectMessage(
-      buildSevenTvSystemMessage(msg, {
-        id: `7tv-system-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-      }),
-    )
+    const notice = buildSevenTvSystemMessage(msg, {
+      id: `7tv-system-${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+    })
+    aggregator.injectMessage(notice)
+    watchedChannelManager.injectSevenTvNotice(msg.platform, msg.channelId, notice)
   })
 
   backendConn.connect()
