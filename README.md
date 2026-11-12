@@ -112,6 +112,18 @@ AppImage in a writable directory for updates. If you're switching from the old d
 distribution, back up `~/.twirchat` and install the current package manually once.
 See the [release guide](docs/releasing.md#install-and-update) for package signing and update details.
 
+### Diagnostic logs
+
+Release builds save diagnostic logs locally as `twirchat-*.log` files. TwirChat starts a fresh
+file on launch and rotates at 5 MiB, retaining the five newest files. If an account disconnects,
+the latest log can show whether authorization ended, a refresh failed, or an account was removed.
+
+| Platform | Log directory                                                     |
+| -------- | ----------------------------------------------------------------- |
+| Linux    | `$XDG_STATE_HOME/twirchat/logs` or `~/.local/state/twirchat/logs` |
+| Windows  | `%LOCALAPPDATA%\TwirChat\logs`                                    |
+| macOS    | `~/Library/Logs/TwirChat`                                         |
+
 ## Clipboard image uploads
 
 Open **Settings → Chat → Image Uploader** and sign in with Twir or configure a custom

@@ -320,8 +320,9 @@ function twurpleSender(token: string): TwitchSenderClient {
     isAlwaysMod: true,
     logger: {
       custom: (level, message) => {
-        if (level === LogLevel.ERROR) log.error(`[Twurple] ${message}`)
-        else if (level === LogLevel.WARNING) log.warn(`[Twurple] ${message}`)
+        if (level === LogLevel.ERROR) log.error('[Twurple] Chat send error', { detail: message })
+        else if (level === LogLevel.WARNING)
+          log.warn('[Twurple] Chat send warning', { detail: message })
       },
     },
   })

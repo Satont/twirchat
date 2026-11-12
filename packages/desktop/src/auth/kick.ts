@@ -198,7 +198,7 @@ export async function handleKickCallback(url: URL): Promise<{
     username: user.name,
   })
 
-  log.info(`Logged in as @${user.name}`)
+  log.info('Account signed in', { platform: 'kick' })
 
   return {
     channelSlug: user.name,
@@ -233,12 +233,12 @@ const refreshKickTokenSingleFlight = createKickTokenRefresher({
   persist(accountId, tokens) {
     AccountStore.updateTokens(accountId, tokens.accessToken, tokens.refreshToken, tokens.expiresAt)
   },
-  failed(accountId, error, retryAt, context) {
+  failed(_accountId, error, retryAt) {
     log.warn('Kick authentication refresh failed', {
-      accountId,
-      channel: context.channelSlug,
-      error: error.message,
+      platform: 'kick',
+      reason: error.kind,
       retryAt,
+      status: error.status,
     })
   },
 })

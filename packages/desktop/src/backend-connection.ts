@@ -97,7 +97,7 @@ export class BackendConnection {
 
   private _connect(): void {
     const backendWsUrl = getBackendWsUrl()
-    log.info(`Connecting to ${backendWsUrl}...`)
+    log.info('Connecting to backend')
 
     const ws = new WebSocket(backendWsUrl, {
       headers: {

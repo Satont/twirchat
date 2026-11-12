@@ -84,7 +84,7 @@ function runMigrations(db: Database): void {
     )
   `)
 
-  db.transaction(() => {
+  const legacyTwitchAccountsRemoved = db.transaction(() => {
     const activeAccounts = db
       .query<{ sql: string | null }, []>(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'active_accounts'",
@@ -115,12 +115,17 @@ function runMigrations(db: Database): void {
 
     const migration = db.run(`INSERT OR IGNORE INTO client_identity(key, value)
       VALUES ('migration:twitch-device-auth-v1', '1')`)
-    if (migration.changes) {
-      db.run("DELETE FROM accounts WHERE platform = 'twitch'")
-      db.run(`DELETE FROM client_identity
-        WHERE key = 'secret:twitch-web-session' OR key GLOB 'secret:twitch-web-session:*'`)
-    }
+    if (!migration.changes) return 0
+    const deleted = db.run("DELETE FROM accounts WHERE platform = 'twitch'")
+    db.run(`DELETE FROM client_identity
+      WHERE key = 'secret:twitch-web-session' OR key GLOB 'secret:twitch-web-session:*'`)
+    return deleted.changes
   })()
+  if (legacyTwitchAccountsRemoved)
+    log.info('Device authorization migration removed legacy accounts', {
+      platform: 'twitch',
+      count: legacyTwitchAccountsRemoved,
+    })
 
   db.run(`
     CREATE TABLE IF NOT EXISTS chat_messages (

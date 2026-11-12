@@ -18,6 +18,7 @@ import type { UpdateInfo } from 'velopack'
 
 import { APP_VERSION } from '../../build-info'
 import { getDbPath } from '../../runtime-config'
+import { exitAfterFlushingDiagnosticLogs } from '../../services/diagnostic-logging'
 import { getDb } from '../../store/db'
 import { t } from '../i18n'
 import { prepareLinuxUpdateLocator } from '../linux-update-runtime'
@@ -100,7 +101,7 @@ const defaultRuntime: UpdaterRuntime = {
   },
   getSkippedHash,
   setSkippedHash,
-  scheduleExit: () => setTimeout(() => process.exit(0), 300),
+  scheduleExit: () => setTimeout(exitAfterFlushingDiagnosticLogs, 300),
 }
 
 export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): Updater {
