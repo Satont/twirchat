@@ -287,13 +287,12 @@ test('a sending connection joins once, confirms through USERSTATE and reports NO
   const acquired: string[] = []
   let token = 'bad'
   const pool = createTwitchSenderPool({
-    token: async () => token,
     refreshToken: async () => {
       token = 'fresh'
       return token
     },
-    createClient: (value) => {
-      const client = new FixtureClient(value, (fixture, channel) => {
+    createClient: () => {
+      const client = new FixtureClient(token, (fixture, channel) => {
         const sent = fixture.said.at(-1)
         if (sent?.endsWith('silent')) return
         if (sent?.endsWith('held')) fixture.rejected(`#${channel}`, 'msg_rejected')

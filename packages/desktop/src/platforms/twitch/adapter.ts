@@ -6,18 +6,15 @@ import { logger } from '@twirchat/shared/logger'
  * Connects to Twitch Chat using the official Twurple ChatClient.
  *
  * - Anonymous mode: no auth, read-only
- * - Authenticated: uses stored access token via StaticAuthProvider
- *
- * Token refresh is handled by calling the backend API when needed,
- * keeping client secrets server-side for security.
+ * - Authenticated: reads the account's stored token on every (re)connect and
+ *   refreshes it through the desktop OAuth client when it expires
  */
 import type { Badge, ChatSendReceipt, NormalizedEvent } from '@twirchat/shared/types'
-import { StaticAuthProvider } from '@twurple/auth'
 import { ChatClient, RoomState as TwitchRoomState, UserNotice } from '@twurple/chat'
 import type { ChatMessage, ChatRaidInfo, ChatSubGiftInfo, ChatSubInfo } from '@twurple/chat'
 import { LogLevel } from '@twurple/chat'
 
-import { refreshTwitchToken } from '../../auth/twitch'
+import { createTwitchChatAuthProvider } from '../../auth/twitch-access-token'
 import { t, tPlural } from '../../gpuix/i18n'
 import { getBackendUrl } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
@@ -29,6 +26,9 @@ import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
 import { twitchIrcChannelName } from './send-outcomes'
 import { createDefaultTwitchSenderPool, type TwitchSenderPool } from './sender-pool'
+
+const reconnectDelayMs = 5000
+const tokenRetryDelayMs = 30_000
 
 const log = logger('twitch')
 
@@ -112,7 +112,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private badgeCache = new Map<string, Badge>()
 
   private anonymous = true
-  private accessToken: string | null = null
   private accountId: string | null = null
   private login: string | null = null
   private writerRetained = false
@@ -137,44 +136,17 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     this.anonymous = true
-    this.accessToken = null
     this.accountId = null
     this.login = null
 
-    // Check for stored account
     const account = AccountStore.findByPlatform('twitch')
-    if (account) {
-      const tokens = AccountStore.getTokens(account.id)
-      if (tokens?.accessToken) {
-        this.anonymous = false
-        this.accessToken = tokens.accessToken
-        this.accountId = account.id
-        this.login = account.username
-
-        // Check if token needs refresh before connecting
-        const now = Math.floor(Date.now() / 1000)
-        if (tokens.expiresAt && tokens.expiresAt < now + 300) {
-          log.info('[Twitch] Token expired or expiring soon, refreshing...')
-          try {
-            const token = await refreshTwitchToken(account.id)
-            if (
-              revision !== this.identityRevision ||
-              AccountStore.findByPlatform('twitch')?.id !== account.id
-            )
-              return
-            this.accessToken = token
-            log.info('[Twitch] Token refreshed successfully')
-          } catch (error) {
-            log.error('[Twitch] Failed to refresh token', { error: String(error) })
-            // Continue with existing token, will retry on 401
-          }
-        }
-      }
+    if (account && AccountStore.getTokens(account.id)?.accessToken) {
+      this.anonymous = false
+      this.accountId = account.id
+      this.login = account.username
     }
 
-    if (revision !== this.identityRevision) return
     if (this.anonymous) {
-      this.accessToken = null
       log.info('[Twitch] Connecting anonymously', { channel: this.channelName })
     } else {
       log.info('[Twitch] Connecting with an account', { channel: this.channelName })
@@ -202,7 +174,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.identityRevision++
     this.releaseWriter()
     this.accountId = null
-    this.accessToken = null
     this.anonymous = true
     this.shouldReconnect = false
     this.clearTimers()
@@ -282,21 +253,11 @@ export class TwitchAdapter extends BasePlatformAdapter {
         this.chatClient = null
       }
 
-      let authProvider: StaticAuthProvider | undefined
-
-      if (!this.anonymous && this.accessToken) {
-        // For authenticated mode, we need a client ID
-        // We'll use a placeholder since StaticAuthProvider requires it
-        // The actual validation is done server-side
-        authProvider = new StaticAuthProvider(
-          'twirchat-desktop', // Placeholder client ID - actual validation on backend
-          this.accessToken,
-          ['chat:read'],
-        )
-      }
-
       this.chatClient = new ChatClient({
-        authProvider,
+        authProvider:
+          !this.anonymous && this.accountId
+            ? createTwitchChatAuthProvider(this.accountId)
+            : undefined,
         channels: [this.channelName],
         readOnly: true,
         logger: {
@@ -366,9 +327,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
       log.warn('[Twitch] Disconnected', { manually, detail: reason })
       this.isConnected = false
 
-      // Intentional quit (teardown in connectChatClient / reconnectWithNewToken /
-      // disconnect()) — treating it as a real disconnect stacks reconnect timers
-      // and loops "disconnected" status emissions forever.
+      // Intentional quit (teardown in connectChatClient / disconnect()) — treating it as a
+      // real disconnect stacks reconnect timers and loops "disconnected" status emissions.
       if (manually) {
         return
       }
@@ -376,15 +336,17 @@ export class TwitchAdapter extends BasePlatformAdapter {
       this.handleDisconnect()
     })
 
-    // Authentication failure
+    // Twurple retries rejected logins itself and refreshes through the auth provider.
     client.onAuthenticationFailure((text, retryCount) => {
       if (!current()) return
       log.error('[Twitch] Authentication failure', { retryCount, detail: text })
+    })
 
-      // Try to refresh token on auth failure
-      if (!this.anonymous && retryCount === 0) {
-        runInBackground(this.handleAuthFailure(), 'adapter background operation failed')
-      }
+    // No usable token (e.g. the refresh failed): Twurple quits instead of retrying.
+    client.onTokenFetchFailure((error) => {
+      if (!current()) return
+      log.error('[Twitch] Could not get a chat token', { detail: String(error) })
+      this.handleDisconnect(tokenRetryDelayMs)
     })
 
     // Messages (also handles bits/cheers — msg.bits > 0 means a cheer)
@@ -613,7 +575,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     )
   }
 
-  private handleDisconnect(): void {
+  private handleDisconnect(delayMs = reconnectDelayMs): void {
     this.isConnected = false
 
     this.emit('status', {
@@ -627,7 +589,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       if (this.reconnectTimeout) {
         clearTimeout(this.reconnectTimeout)
       }
-      log.info('[Twitch] Reconnecting in 5s...')
+      log.info(`[Twitch] Reconnecting in ${delayMs / 1000}s...`)
       this.reconnectTimeout = setTimeout(() => {
         this.reconnectTimeout = null
         // Twurple may have reconnected on its own while the timer was pending —
@@ -636,42 +598,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
           return
         }
         runInBackground(this.connectChatClient(), 'adapter background operation failed')
-      }, 5000)
+      }, delayMs)
     }
-  }
-
-  private async handleAuthFailure(): Promise<void> {
-    const accountId = this.accountId
-    if (!accountId) {
-      return
-    }
-
-    try {
-      log.info('[Twitch] Attempting token refresh after auth failure...')
-      const token = await refreshTwitchToken(accountId)
-      if (this.accountId !== accountId || AccountStore.findByPlatform('twitch')?.id !== accountId)
-        return
-      this.accessToken = token
-      log.info('[Twitch] Token refreshed, reconnecting...')
-      await this.reconnectWithNewToken()
-    } catch (error) {
-      log.error('[Twitch] Token refresh failed', { error: String(error) })
-    }
-  }
-
-  private async reconnectWithNewToken(): Promise<void> {
-    if (!this.accessToken) {
-      return
-    }
-
-    // Disconnect current client
-    if (this.chatClient) {
-      this.chatClient.quit()
-      this.chatClient = null
-    }
-
-    // Reconnect with new token
-    await this.connectChatClient()
   }
 
   private async handleChatMessage(msg: ChatMessage, isAction = false): Promise<void> {

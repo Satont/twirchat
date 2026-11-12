@@ -16,7 +16,6 @@ import {
 } from '../src/gpuix/backend/api'
 import { KickAdapter, type KickSocket } from '../src/platforms/kick/adapter'
 import { kickRetryClock } from '../src/platforms/kick/retry'
-import { TwitchAdapter } from '../src/platforms/twitch/adapter'
 import { YouTubeAdapter } from '../src/platforms/youtube/adapter'
 import { createAccountSessions } from '../src/services/account-sessions'
 import { AccountStore } from '../src/store/account-store'
@@ -682,32 +681,29 @@ function kickIdentityAdapter(): KickAdapter {
 }
 
 describe('adapter identity changes', () => {
-  for (const platform of literal(['twitch', 'kick', 'youtube'])) {
+  // Twitch holds no token: its chat clients read the active account's stored token per connect.
+  for (const platform of literal(['kick', 'youtube'])) {
     test(`${platform} ignores an old token refresh after switching accounts`, async () => {
       const old = save(platform, '1', true, 1)
       const selected = save(platform, '2', false)
       const delayed = gate<Response>()
       globalThis.fetch = Object.assign(() => delayed.promise, { preconnect: fetch.preconnect })
       const adapter =
-        platform === 'twitch'
-          ? new TwitchAdapter()
-          : platform === 'kick'
-            ? kickIdentityAdapter()
-            : new YouTubeAdapter({
-                resolveLiveChat: async () => ({
-                  channelId: 'UCfixture',
-                  videoId: 'video',
-                  liveChatId: 'chat',
-                }),
-                createSession: () => ({
-                  start: async () => {},
-                  stop: () => {},
-                  getResumeToken: () => undefined,
-                }),
-              })
+        platform === 'kick'
+          ? kickIdentityAdapter()
+          : new YouTubeAdapter({
+              resolveLiveChat: async () => ({
+                channelId: 'UCfixture',
+                videoId: 'video',
+                liveChatId: 'chat',
+              }),
+              createSession: () => ({
+                start: async () => {},
+                stop: () => {},
+                getResumeToken: () => undefined,
+              }),
+            })
       // Replace transport setup only; real account and refresh code still runs.
-      if (platform === 'twitch')
-        Object.assign(adapter, { fetchBadges: async () => {}, connectChatClient: async () => {} })
       if (platform === 'youtube')
         Object.assign(adapter, {
           resolveChannelId: async () => 'UCfixture',

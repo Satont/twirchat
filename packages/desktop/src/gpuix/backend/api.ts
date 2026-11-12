@@ -66,7 +66,10 @@ import {
 } from '../../auth'
 import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
 import { getDonationOAuthAvailability } from '../../auth/donations'
-import { refreshTwitchToken } from '../../auth/twitch'
+import {
+  currentTwitchAccessToken,
+  twitchAccessTokenIfAvailable,
+} from '../../auth/twitch-access-token'
 import { validateTwitchUserToken } from '../../auth/twitch-user-token'
 import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
@@ -593,16 +596,9 @@ async function prepareTwitchActivitiesRequest(eventSubAccountId?: string) {
       ? AccountStore.findById(eventSubAccountId)
       : AccountStore.findByPlatform('twitch')
   const account = getAccount()
-  const tokens = account ? AccountStore.getTokens(account.id) : null
-  if (account?.platform !== 'twitch' || !tokens?.accessToken)
+  if (account?.platform !== 'twitch' || !AccountStore.getTokens(account.id)?.accessToken)
     throw new Error(t('runtime.api.connectTwitchFirst'))
-  const accessToken =
-    eventSubAccountId &&
-    tokens.refreshToken &&
-    tokens.expiresAt &&
-    tokens.expiresAt < Date.now() / 1000 + 300
-      ? await refreshTwitchToken(eventSubAccountId)
-      : tokens.accessToken
+  const accessToken = await currentTwitchAccessToken(account.id)
   const credentials: TwitchActivitiesCredentials = {
     ...(await twitchUserCredentials(accessToken)),
     platformUserId: account.platformUserId,
@@ -763,7 +759,7 @@ async function backendFailure(action: string, res: Response): Promise<Error> {
   )
 }
 
-function moderationCredentials(
+async function moderationCredentials(
   platform: ModerationPlatform,
   channelSlug: string,
   accountId?: string,
@@ -785,7 +781,8 @@ function moderationCredentials(
   }
   return {
     channelSlug,
-    accessToken: tokens.accessToken,
+    accessToken:
+      platform === 'twitch' ? await currentTwitchAccessToken(account.id) : tokens.accessToken,
     platformUserId: account.platformUserId,
     scopes: account.scopes,
   }
@@ -802,10 +799,9 @@ async function fetchTwitchChatters({
   const account = accountId
     ? platformAccount('twitch', accountId)
     : channelAccount('twitch', channelSlug)
-  const tokens = account ? AccountStore.getTokens(account.id) : null
   const { source, viewers } = await getTwitchViewerList({
     broadcasterLogin: channelSlug,
-    accessToken: tokens?.accessToken,
+    accessToken: account ? await twitchAccessTokenIfAvailable(account.id) : undefined,
   }).catch((error: unknown) => {
     const message =
       error instanceof TwitchChattersError && error.status === 404
@@ -1195,7 +1191,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     executePlatformCommand: async ({ platform, channelSlug, text, accountId }) => {
       if (platform !== 'twitch' && platform !== 'kick')
         throw new Error(t('runtime.api.platformCommandsUnavailable', { platform }))
-      const body = moderationCredentials(platform, channelSlug, accountId)
+      const body = await moderationCredentials(platform, channelSlug, accountId)
       if (platform === 'twitch') {
         const credentials = await twitchUserCredentials(body.accessToken)
         return twitchRequest(t('runtime.api.action.platformCommandFailed'), () =>
@@ -1220,7 +1216,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (current) return current
       if (platform !== 'twitch')
         throw new Error(t('runtime.api.roomSettingsUnavailable', { platform }))
-      const body = moderationCredentials(platform, channelSlug, accountId)
+      const body = await moderationCredentials(platform, channelSlug, accountId)
       const credentials = await twitchUserCredentials(body.accessToken)
       return twitchRequest(t('runtime.api.action.loadChatSettings'), () =>
         twitchChatTools.getRoomState({ ...body, ...credentials }),
@@ -1228,7 +1224,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     getModerationCapabilities: async ({ platform, channelSlug, accountId }) => {
-      const body = moderationCredentials(platform, channelSlug, accountId)
+      const body = await moderationCredentials(platform, channelSlug, accountId)
       if (platform === 'twitch') {
         try {
           const credentials = await twitchUserCredentials(body.accessToken)
@@ -1248,7 +1244,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     moderateMessage: async (params) => {
-      const body = moderationCredentials(params.platform, params.channelSlug, params.accountId)
+      const body = await moderationCredentials(
+        params.platform,
+        params.channelSlug,
+        params.accountId,
+      )
       if (params.platform === 'twitch') {
         const credentials = await twitchUserCredentials(body.accessToken)
         const result = await twitchModeration.execute({ ...body, ...credentials, ...params })
@@ -1300,7 +1300,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (!tokens?.accessToken) throw new Error(t('runtime.api.noAccessToken', { platform }))
 
       if (platform === 'twitch') {
-        const credentials = await twitchUserCredentials(tokens.accessToken)
+        const credentials = await twitchUserCredentials(await currentTwitchAccessToken(account.id))
         return updateTwitchStream({ channelId, title, categoryId }, credentials)
       }
       const body: UpdateStreamRequest = {
@@ -1368,7 +1368,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const { platform, platformUserId, channelSlug } = params
       const request = { platform, platformUserId, channelSlug }
       const account = AccountStore.findByPlatform('twitch')
-      const accessToken = account && AccountStore.getTokens(account.id)?.accessToken
+      const accessToken = account ? await twitchAccessTokenIfAvailable(account.id) : undefined
       const response = await backendFetch('/api/user-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1388,8 +1388,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getUserCardMetadata: async ({ platform, platformUserId, username, channelId, channelSlug }) => {
       const request = { platform, platformUserId, username, channelId, channelSlug }
-      const account = platform === 'twitch' && AccountStore.findByPlatform(platform)
-      const accessToken = account && AccountStore.getTokens(account.id)?.accessToken
+      const account = platform === 'twitch' ? AccountStore.findByPlatform(platform) : null
+      const accessToken = account ? await twitchAccessTokenIfAvailable(account.id) : undefined
       const details = accessToken
         ? loadTwitchUserCardDetails(request, accessToken).catch(() => undefined)
         : undefined
