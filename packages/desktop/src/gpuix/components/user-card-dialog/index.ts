@@ -17,3 +17,4 @@ export { useUserCardAlias } from '@gpuix/hooks/user-card-dialog/use-user-card-al
 export { useUserCardMetadata } from '@gpuix/hooks/user-card-dialog/use-user-card-metadata'
 export { useUserCardProfile } from '@gpuix/hooks/user-card-dialog/use-user-card-profile'
 export { useUserCardPublicChannel } from '@gpuix/hooks/user-card-dialog/use-user-card-public-channel'
+export { userCardHeaderAccent } from './header-accent'
