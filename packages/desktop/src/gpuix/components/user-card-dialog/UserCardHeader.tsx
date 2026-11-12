@@ -247,12 +247,7 @@ export function UserCardHeader({
                 {formatDisplayUsername(target.displayName)}
               </Text>
               {userBadges.length > 0 && (
-                <UserBadges
-                  badges={userBadges}
-                  platform={target.platform}
-                  maxBadges={4}
-                  size={20}
-                />
+                <UserBadges badges={userBadges} platform={target.platform} size={20} />
               )}
             </div>
             <div
