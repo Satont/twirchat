@@ -253,7 +253,6 @@ export function UserCardHeader({
               >
                 {formatDisplayUsername(target.displayName)}
               </Text>
-              {userBadges.length > 0 && <UserBadges badges={userBadges} size={20} />}
             </div>
             <div
               style={{
@@ -311,6 +310,9 @@ export function UserCardHeader({
             ) : null}
           </div>
         </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'row', fle}}>
+        {userBadges.length > 0 && <UserBadges badges={userBadges} size={20} />}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>

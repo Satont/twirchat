@@ -33,7 +33,7 @@ import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
 import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
-import { collectUserBadges, mergeBadges, isGlobalBadge } from './user-card-dialog/utils'
+import { collectUserBadges, mergeBadges } from './user-card-dialog/utils'
 import {
   accountAgeText,
   followAgeText,
@@ -115,18 +115,22 @@ export function UserCardDialog({
    */
   const retainedBadges = useMemo(() => {
     const newestFirst: NormalizedChatMessage[] = []
-    for (const messages of watchedMessagesStore.get().values())
-      for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const message = messages[index]
-        if (message) newestFirst.push(message)
-      }
+    // Collect from current channel's messages (if available) for channel-specific badges
+    const currentChannelMessages = target.channelId
+      ? (watchedMessagesStore.get().get(target.channelId) ?? [])
+      : []
+    for (let index = currentChannelMessages.length - 1; index >= 0; index -= 1) {
+      const message = currentChannelMessages[index]
+      if (message) newestFirst.push(message)
+    }
+    // Also include home messages for global badges
     const home = homeMessagesStore.get()
     for (let index = home.length - 1; index >= 0; index -= 1) {
       const message = home[index]
       if (message) newestFirst.push(message)
     }
     return collectUserBadges(newestFirst, target.platform, target.platformUserId)
-  }, [target.platform, target.platformUserId])
+  }, [target.platform, target.platformUserId, target.channelId])
 
   // Fetch Twitch user badge catalog from backend (global + role badges)
   // Used as a lookup to enrich retainedBadges with imageUrl/description
@@ -182,14 +186,11 @@ export function UserCardDialog({
     })
   }, [retainedBadges, userBadgeCatalog])
 
-  // Split badges: target.badges are from current channel message, keep all
-  // enrichedRetainedBadges may contain badges from other channels, filter to global only
-  const globalRetainedBadges = enrichedRetainedBadges.filter((badge) => isGlobalBadge(badge))
-
-  // target.badges already has channel-specific badges for current channel
-  // Merge: target.badges (all) + global retained + cosmetics
+  // retainedBadges now contains badges from current channel + home (global)
+  // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
   const extraBadges = mergeBadges(
-    globalRetainedBadges,
+    enrichedRetainedBadges,
+    target.badges,
     profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
     profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
   )
