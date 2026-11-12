@@ -18,3 +18,4 @@ export { useUserCardMetadata } from '@gpuix/hooks/user-card-dialog/use-user-card
 export { useUserCardProfile } from '@gpuix/hooks/user-card-dialog/use-user-card-profile'
 export { useUserCardPublicChannel } from '@gpuix/hooks/user-card-dialog/use-user-card-public-channel'
 export { userCardHeaderAccent } from './header-accent'
+export type { UserCardTab, MetadataItem } from './types'
