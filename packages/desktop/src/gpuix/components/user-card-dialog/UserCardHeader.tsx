@@ -8,7 +8,6 @@ import { platformColor, withAlpha, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 
 import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
-import { UserBadges } from './UserBadges'
 import { GhostButton, HeaderPill as HeaderPillUI } from './UserCardUI'
 import { formatDisplayUsername, initials, mergeBadges } from './utils'
 
@@ -253,6 +252,42 @@ export function UserCardHeader({
               >
                 {formatDisplayUsername(target.displayName)}
               </Text>
+              {userBadges.map((badge, index) => (
+                <div
+                  key={`${badge.type}:${badge.id}:${index}`}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 5,
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                  }}
+                >
+                  {badge.imageUrl ? (
+                    <RemoteImage
+                      url={badge.imageUrl}
+                      objectFit="cover"
+                      style={{ width: 18, height: 18 }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 18,
+                        height: 18,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        backgroundColor: withAlpha('#000000', 0.2),
+                        color: headerText,
+                      }}
+                    >
+                      {badge.text[0]?.toUpperCase() ?? '?'}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
             <div
               style={{
@@ -266,16 +301,6 @@ export function UserCardHeader({
               <div>{titleHandle}</div>
             </div>
           </div>
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              minWidth: 0,
-            }}
-          ></div>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
             <div
               style={{
@@ -309,10 +334,55 @@ export function UserCardHeader({
               <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
             ) : null}
           </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'start',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              marginTop: 10,
+              gap: 4,
+              alignItems: 'center',
+            }}
+          >
+            {userBadges.map((badge, index) => (
+              <div
+                key={`${badge.type}:${badge.id}:${index}`}
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 5,
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}
+              >
+                {badge.imageUrl ? (
+                  <RemoteImage
+                    url={badge.imageUrl}
+                    objectFit="cover"
+                    style={{ width: 18, height: 18 }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      backgroundColor: withAlpha('#000000', 0.2),
+                      color: headerText,
+                    }}
+                  >
+                    {badge.text[0]?.toUpperCase() ?? '?'}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'row', fle}}>
-        {userBadges.length > 0 && <UserBadges badges={userBadges} size={20} />}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
