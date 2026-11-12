@@ -1,4 +1,5 @@
 import { logger } from '@twirchat/shared/logger'
+import { sql } from 'bun'
 
 import { handleTwitchBadges } from './api/twitch-badges.ts'
 import { createTwitchHistoryService } from './api/twitch-history.ts'
@@ -109,11 +110,39 @@ log.info('TwirChat backend running', {
 })
 log.info('WebSocket endpoint', { url: `ws://localhost:${server.port}/ws` })
 
-for (const signal of ['SIGINT', 'SIGTERM'] satisfies NodeJS.Signals[]) {
-  process.once(signal, () => {
-    youtubeChatRelay.stop()
-    server
-      .stop(true)
-      .catch((error: unknown) => log.error('Server shutdown failed', { error: String(error) }))
+const SHUTDOWN_TIMEOUT_MS = 5000
+let shuttingDown = false
+
+// A signal handler disables the default exit, and the database pool, 7TV socket and cache
+// timers keep the event loop alive, so shutdown must exit explicitly. Otherwise every
+// restart leaves an orphan process holding its PostgreSQL connections.
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) {
+    log.warn('Forced shutdown', { signal })
+    process.exit(1)
+  }
+  shuttingDown = true
+  log.info('Shutting down', { signal })
+  setTimeout(() => {
+    log.error('Shutdown timed out')
+    process.exit(1)
+  }, SHUTDOWN_TIMEOUT_MS).unref()
+
+  youtubeChatRelay.stop()
+  await server
+    .stop(true)
+    .catch((error: unknown) => log.error('Server shutdown failed', { error: String(error) }))
+  await sql
+    .close({ timeout: 2 })
+    .catch((error: unknown) => log.error('Database shutdown failed', { error: String(error) }))
+  process.exit(0)
+}
+
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] satisfies NodeJS.Signals[]) {
+  process.on(signal, () => {
+    shutdown(signal).catch((error: unknown) => {
+      log.error('Shutdown failed', { error: String(error) })
+      process.exit(1)
+    })
   })
 }
