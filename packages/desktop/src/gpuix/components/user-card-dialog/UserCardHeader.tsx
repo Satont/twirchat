@@ -322,38 +322,41 @@ export function UserCardHeader({
               gap: 6,
               minWidth: 0,
             }}
-          ></div>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 5,
-              maxWidth: 80,
-              minHeight: 22,
-              paddingLeft: 8,
-              paddingRight: 8,
-              borderRadius: 999,
-              backgroundColor: withAlpha(
-                platformColor(target.platform),
-                theme.isLight ? 0.14 : 0.24,
-              ),
-              borderWidth: 1,
-              borderColor: withAlpha(platformColor(target.platform), 0.36),
-            }}
           >
-            <PlatformIcon
-              platform={target.platform}
-              size={12}
-              color={theme.isLight ? theme.text : '#ffffff'}
-            />
-            <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
-              {target.platform.toUpperCase()}
-            </Text>
           </div>
-          {effectiveAlias ? (
-            <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
-          ) : null}
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 3}}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                maxWidth: 80,
+                minHeight: 22,
+                paddingLeft: 8,
+                paddingRight: 8,
+                borderRadius: 999,
+                backgroundColor: withAlpha(
+                  platformColor(target.platform),
+                  theme.isLight ? 0.14 : 0.24,
+                ),
+                borderWidth: 1,
+                borderColor: withAlpha(platformColor(target.platform), 0.36),
+              }}
+            >
+              <PlatformIcon
+                platform={target.platform}
+                size={12}
+                color={theme.isLight ? theme.text : '#ffffff'}
+              />
+              <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
+                {target.platform.toUpperCase()}
+              </Text>
+            </div>
+            {effectiveAlias ? (
+              <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
+            ) : null}
+          </div>
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
