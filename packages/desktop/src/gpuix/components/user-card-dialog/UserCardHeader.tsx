@@ -344,44 +344,7 @@ export function UserCardHeader({
               gap: 4,
               alignItems: 'center',
             }}
-          >
-            {userBadges.map((badge, index) => (
-              <div
-                key={`${badge.type}:${badge.id}:${index}`}
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 5,
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                }}
-              >
-                {badge.imageUrl ? (
-                  <RemoteImage
-                    url={badge.imageUrl}
-                    objectFit="cover"
-                    style={{ width: 18, height: 18 }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 18,
-                      height: 18,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      backgroundColor: withAlpha('#000000', 0.2),
-                      color: headerText,
-                    }}
-                  >
-                    {badge.text[0]?.toUpperCase() ?? '?'}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          ></div>
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
