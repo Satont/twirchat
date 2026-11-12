@@ -431,6 +431,19 @@ export function ChatInput(props: ChatInputProps) {
   const length = messageLength(text.trim())
   const overLimit = lengthLimit !== null && length > lengthLimit
   const showLength = lengthLimit !== null && length > lengthLimit - LENGTH_WARNING_MARGIN
+  const canSend =
+    targetPlatforms.length > 0 &&
+    (!props.replyTarget || targetPlatforms.includes(props.replyTarget.platform)) &&
+    text.trim().length > 0 &&
+    !isDisabled &&
+    !executing &&
+    !overLimit
+  const submit = () => {
+    if (!canSend) return
+    // `send` shows its errors in the composer; catch unexpected rejections.
+    send().catch(() => {})
+    if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
+  }
 
   const commandTargets = props.watchedChannel
     ? [{ platform: props.watchedChannel.platform, channelSlug: props.watchedChannel.channelSlug }]
@@ -1916,6 +1929,62 @@ export function ChatInput(props: ChatInputProps) {
           >
             <Icon name="smile" size={16} color={emotePickerOpen ? theme.link : theme.text2} />
           </div>
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <div
+                testId="send-button"
+                role="button"
+                aria-label={t('composer.send')}
+                tabIndex={canSend ? 0 : undefined}
+                aria-disabled={!canSend}
+                onClick={submit}
+                onKeyDown={(event) => {
+                  if (canSend && (event.key === 'enter' || event.key === 'space')) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    submit()
+                  }
+                }}
+                style={{
+                  flexShrink: 0,
+                  width: 28,
+                  height: 28,
+                  alignSelf: 'flex-end',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: canSend ? 'pointer' : 'default',
+                  backgroundColor: canSend ? theme.accent.primary : theme.fill,
+                  opacity: canSend ? 1 : 0.45,
+                  hover: canSend ? { backgroundColor: theme.accent.deep } : {},
+                  focusVisible: canSend ? { outlineWidth: 1, outlineColor: theme.link } : undefined,
+                }}
+              >
+                <Icon
+                  name="send"
+                  size={15}
+                  color={canSend ? theme.accent.onPrimary : theme.text2}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              sideOffset={6}
+              style={{
+                backgroundColor: theme.popover,
+                borderWidth: 1,
+                borderColor: theme.dialogBorder,
+                borderRadius: 6,
+                paddingTop: 5,
+                paddingBottom: 5,
+                paddingLeft: 8,
+                paddingRight: 8,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: theme.text }}>{t('composer.send')}</Text>
+            </TooltipContent>
+          </Tooltip>
         </div>
         {executing ? (
           <Text style={{ fontSize: 10, color: theme.text2, marginTop: 4 }}>

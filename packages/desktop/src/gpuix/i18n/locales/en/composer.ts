@@ -8,6 +8,7 @@ export const composer = {
   'composer.placeholder.send': 'Send a message…',
   'composer.placeholder.login': 'Log in to send messages…',
   'composer.placeholder.connectAccount': 'Connect an account…',
+  'composer.send': 'Send message',
 
   'composer.history.hint': 'Search sent messages · Enter or Esc keeps the result',
   'composer.history.placeholder': 'Search message history…',

@@ -10,6 +10,7 @@ export const ruComposer = {
   'composer.placeholder.send': 'Отправьте сообщение…',
   'composer.placeholder.login': 'Войдите, чтобы отправлять сообщения…',
   'composer.placeholder.connectAccount': 'Подключите аккаунт…',
+  'composer.send': 'Отправить сообщение',
 
   'composer.history.hint': 'Поиск отправленных сообщений · Enter или Esc оставляет результат',
   'composer.history.placeholder': 'Поиск по истории сообщений…',
