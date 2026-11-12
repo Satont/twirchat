@@ -24,6 +24,7 @@ const { composerStore, EMPTY_COMPOSER, editComposer, updateComposer } =
 const { actionBindingsStore, dispatchCustomHotkey } =
   await import('../src/gpuix/state/action-bindings')
 const { applyTranslationSettings } = await import('../src/gpuix/state/translation')
+const emoteCompletionOnly = process.argv.includes('--emote-completion')
 const sent = []
 const copied = []
 const translations = []
@@ -42,6 +43,7 @@ const backend = {
       credentials: [],
     }),
     getChannelEmotes: async () => [],
+    getPotatCommands: async () => [],
     getImageUploaderSettings: async () => ({ ...imageSettings }),
     saveImageUploaderSettings: async (settings) => {
       imageSettings = { ...settings }
@@ -110,7 +112,20 @@ root.render(
           },
         },
         React.createElement(ChatInput, {
-          accounts: [],
+          accounts: emoteCompletionOnly
+            ? [
+                {
+                  id: 'qa-account',
+                  platform: 'twitch',
+                  platformUserId: 'qa-user',
+                  username: 'qa',
+                  displayName: 'QA',
+                  scopes: [],
+                  createdAt: 0,
+                  updatedAt: 0,
+                },
+              ]
+            : [],
           settings: DEFAULT_SETTINGS,
           statuses: {},
           composerKey: key,
@@ -388,13 +403,54 @@ async function checkImageUpload(clipboardTool) {
   }
 }
 
-try {
-  await (await import('./qa-x11')).focusNativeQaWindow('TwirChat composer QA')
-  await until(
-    () => !!runner && flatten().some((node) => node.testId === 'chat-input'),
-    'composer mount',
+async function checkEmoteCompletion() {
+  const { setEmoteCatalog } = await import('../src/gpuix/state/app')
+  setEmoteCatalog(
+    'twitch',
+    'alpha',
+    [...Array.from({ length: 30 }, (_, index) => `Pa${index}alert`), 'Paa'].map((alias, index) => ({
+      id: alias === 'Paa' ? '01K40MN29C0T969488KVHEY4FA' : `qa-seventv-${index}`,
+      alias,
+      name: alias,
+      zeroWidth: false,
+      aspectRatio: 1,
+      source: 'seventv',
+      provider: 'seventv',
+      imageUrl: 'https://cdn.7tv.app/emote/01K40MN29C0T969488KVHEY4FA/1x.webp',
+      animated: false,
+    })),
   )
+  await draft('')
   await focus()
+  pressNativeKeys('h', 'i', 'space', 'colon', 'P', 'a', 'a')
+  await until(
+    () => state().text === 'hi :Paa' && has('autocomplete-selected'),
+    'colon emote completion opens',
+  )
+  assert(JSON.stringify(find('autocomplete-selected')).includes('Paa'), 'exact alias ranks first')
+  pressNativeKeys('Tab')
+  await until(() => state().text === 'hi Paa ', 'colon Tab replaces token and keeps earlier text')
+  await draft('')
+  pressNativeKeys('h', 'i', 'space', 'p', 'a', 'a')
+  await until(() => state().text === 'hi paa', 'native bare query typed')
+  assert(!has('autocomplete-popup'), 'bare typing does not open a popup')
+  pressNativeKeys('Tab')
+  await until(() => state().text === 'hi Paa ', 'bare Tab restores alias casing')
+  await draft('Paa')
+  const before = sent.length
+  pressNativeKeys('Return')
+  await until(() => sent.length === before + 1, 'bare Enter sends without completing')
+  assert.equal(sent.at(-1).text, 'Paa')
+  await draft('zzzzNoEmoteMatch')
+  await focus()
+  pressNativeKeys('Tab')
+  await Bun.sleep(100)
+  assert.equal(state().text, 'zzzzNoEmoteMatch', 'unmatched Tab leaves text intact')
+  assert(!has('autocomplete-popup'))
+  console.log(JSON.stringify({ result: 'pass', emoteCompletion: true, compact }))
+}
+
+async function checkComposer() {
   await fire('previousMessage')
   assert.equal(state().text, 'HELLO two')
   await fire('nextMessage')
@@ -730,6 +786,17 @@ try {
       focusedRouting: true,
     }),
   )
+}
+
+try {
+  await (await import('./qa-x11')).focusNativeQaWindow('TwirChat composer QA')
+  await until(
+    () => !!runner && flatten().some((node) => node.testId === 'chat-input'),
+    'composer mount',
+  )
+  await focus()
+  if (emoteCompletionOnly) await checkEmoteCompletion()
+  else await checkComposer()
 } finally {
   root.unmount()
   loop.stop()
