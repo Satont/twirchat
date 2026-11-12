@@ -431,7 +431,13 @@ export function ChatInput(props: ChatInputProps) {
   const length = messageLength(text.trim())
   const overLimit = lengthLimit !== null && length > lengthLimit
   const showLength = lengthLimit !== null && length > lengthLimit - LENGTH_WARNING_MARGIN
-  const canSend = text.trim().length > 0 && !isDisabled && !executing && !overLimit
+  const canSend =
+    targetPlatforms.length > 0 &&
+    (!props.replyTarget || targetPlatforms.includes(props.replyTarget.platform)) &&
+    text.trim().length > 0 &&
+    !isDisabled &&
+    !executing &&
+    !overLimit
   const submit = () => {
     if (!canSend) return
     // `send` shows its errors in the composer; catch unexpected rejections.
@@ -1927,6 +1933,8 @@ export function ChatInput(props: ChatInputProps) {
             <TooltipTrigger asChild>
               <div
                 testId="send-button"
+                role="button"
+                aria-label={t('composer.send')}
                 tabIndex={canSend ? 0 : undefined}
                 aria-disabled={!canSend}
                 onClick={submit}

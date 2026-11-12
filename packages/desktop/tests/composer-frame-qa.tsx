@@ -6,7 +6,12 @@ await import('../src/gpuix/native-bootstrap')
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 
-import type { Account, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import type {
+  Account,
+  NormalizedChatMessage,
+  Platform,
+  PlatformStatusInfo,
+} from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import type { DesktopBackend } from '../src/gpuix/backend/server'
@@ -66,6 +71,16 @@ const statuses: Partial<Record<Platform, PlatformStatusInfo>> = Object.fromEntri
   ]),
 )
 const submissions: Parameters<ChatInputProps['onSend']>[0][] = []
+const kickReplyTarget: NormalizedChatMessage = {
+  id: 'qa:kick-reply',
+  platform: 'kick',
+  channelId: 'qa_kick',
+  author: { id: 'qa:reply-user', displayName: 'QA User', badges: [] },
+  text: 'kick reply',
+  emotes: [],
+  timestamp: new Date(0),
+  type: 'message',
+}
 const props: ChatInputProps = {
   accounts,
   statuses,
@@ -401,12 +416,39 @@ try {
     { text: 'yt', channelId: 'youtube:qa-channel', replyToMessageId: undefined },
   ])
   const watched = checkFrame(150)
+
+  updateComposer('qa:compact-frame', (state) => ({
+    ...state,
+    text: 'reply mismatch',
+    activePlatform: 'twitch',
+  }))
+  renderComposer({ ...props, replyTarget: kickReplyTarget })
+  await until(
+    () => nodes().some((node) => node.testId === 'composer-target-twitch'),
+    'home composer',
+  )
+  await until(() => painted('QA User'), 'incompatible reply target visible')
+  await Bun.sleep(100)
+  const beforeMismatch = submissions.length
+  await click('send-button')
+  await Bun.sleep(150)
+  assert.equal(
+    submissions.length,
+    beforeMismatch,
+    'Send button does not send to an incompatible reply target',
+  )
+  assert(
+    !painted(t('composer.error.noPlatform')),
+    'Send button stays disabled for an incompatible reply target',
+  )
+
   const result = {
     result: 'pass',
     wide,
     compact,
     watched,
     enterExactlyOnce: true,
+    replyTargetMismatchDisabled: true,
     targetRouting: true,
     targetRoutingAfterRemount: true,
     kickReconnect: { kickErrorScreenshot, kickConnectingScreenshot, kickRecoveredScreenshot },
