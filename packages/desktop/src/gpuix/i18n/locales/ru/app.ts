@@ -195,4 +195,6 @@ export const ruApp = {
   'app.search.preparing': 'Подготовка результатов…',
   'app.search.noMatches': 'Нет сообщений, подходящих под этот запрос.',
   'app.settings.optionals': 'Опции',
+  'app.settings.chat.settings': 'Окртыть настройки',
+  'app.settings.chat.chatters': 'Открыть список зрителей',
 } satisfies Record<keyof typeof app, string>

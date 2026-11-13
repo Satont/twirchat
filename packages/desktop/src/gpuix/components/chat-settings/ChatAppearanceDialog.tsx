@@ -1,6 +1,6 @@
 import { useGpuixRequired, useWindowSize } from '@gpuix/react'
 import type { AppSettings } from '@twirchat/shared/types'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 import { useBackend } from '../../backend/context'
 import { useT } from '../../i18n'
@@ -14,12 +14,16 @@ import { Switch } from '../ui/Switch'
 import { Text } from '../ui/Text'
 import { ChatAppearancePreview } from './ChatAppearancePreview'
 
-export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
+export function ChatAppearanceDialog({
+  settings,
+  onClose,
+}: {
+  settings: AppSettings
+  onClose?: () => void
+}) {
   const theme = useTheme()
   const backend = useBackend()
   const { t } = useT()
-  const [open, setOpen] = useState(false)
-  const [hovered, setHovered] = useState(false)
   const renderer = useGpuixRequired()
   const windowSize = useWindowSize()
   const narrow = windowSize.width < 820
@@ -27,8 +31,8 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
   // Clicking the trigger doesn't blur a focused text editor, which would
   // block the window-level ESC handler — drop that focus on open.
   useEffect(() => {
-    if (open) renderer.blur?.()
-  }, [open, renderer])
+    renderer.blur?.()
+  }, [renderer])
 
   const patch = (partial: Partial<AppSettings>) => {
     const next = { ...settings, ...partial }
@@ -49,238 +53,209 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
   ]
 
   return (
-    <div style={{ position: 'relative' }}>
+    <Modal width={780} onClose={() => onClose?.()}>
       <div
-        testId="appearance-button"
-        onClick={() => setOpen(true)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          paddingTop: 4,
-          paddingBottom: 4,
-          paddingLeft: 6,
-          paddingRight: 6,
-          borderRadius: 6,
-          cursor: 'pointer',
-          display: 'flex',
-          backgroundColor: hovered ? theme.fillHover : undefined,
-        }}
+        testId="appearance-dialog"
+        style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
-        <Icon name="settings" size={16} color={hovered ? theme.text : theme.text2} />
-      </div>
-
-      {open ? (
-        <Modal width={780} onClose={() => setOpen(false)}>
+        <div
+          style={{
+            flexShrink: 0,
+            paddingTop: 18,
+            paddingBottom: 18,
+            paddingLeft: 20,
+            paddingRight: 20,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Text style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>
+              {t('chat.appearance.title')}
+            </Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {t('chat.appearance.subtitle')}
+            </Text>
+          </div>
           <div
-            testId="appearance-dialog"
-            style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+            testId="appearance-close"
+            role="button"
+            aria-label={t('chat.appearance.closeLabel')}
+            tabIndex={0}
+            onClick={() => onClose?.()}
+            onKeyDown={(event) => {
+              if (event.key === 'enter' || event.key === 'space') {
+                event.preventDefault()
+                onClose?.()
+              }
+            }}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 7,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              hover: { backgroundColor: theme.fillHover },
+            }}
+          >
+            <Icon name="close" size={18} color={theme.text2} />
+          </div>
+        </div>
+
+        <div
+          style={{
+            flexGrow: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            padding: 20,
+            display: 'flex',
+            flexDirection: narrow ? 'column' : 'row',
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              flexGrow: 1,
+              minWidth: 0,
+              backgroundColor: theme.surface,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 12,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
           >
             <div
               style={{
-                flexShrink: 0,
-                paddingTop: 18,
-                paddingBottom: 18,
-                paddingLeft: 20,
-                paddingRight: 20,
-                borderBottomWidth: 1,
-                borderColor: theme.border,
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 12,
               }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Text style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>
-                  {t('chat.appearance.title')}
-                </Text>
-                <Text style={{ fontSize: 11, color: theme.text2 }}>
-                  {t('chat.appearance.subtitle')}
-                </Text>
-              </div>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text2 }}>
+                {t('chat.appearance.preview').toUpperCase()}
+              </Text>
+              <Text style={{ fontSize: 10, color: theme.text2 }}>{t('chat.appearance.live')}</Text>
+            </div>
+            <ChatAppearancePreview settings={settings} height={narrow ? 240 : 360} />
+            <Text style={{ fontSize: 10, color: theme.text2 }}>
+              {t('chat.appearance.sampleHint')}
+            </Text>
+          </div>
+
+          <div
+            style={{
+              width: narrow ? '100%' : 300,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Font size */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
               <div
-                testId="appearance-close"
-                role="button"
-                aria-label={t('chat.appearance.closeLabel')}
-                tabIndex={0}
-                onClick={() => setOpen(false)}
-                onKeyDown={(event) => {
-                  if (event.key === 'enter' || event.key === 'space') {
-                    event.preventDefault()
-                    setOpen(false)
-                  }
-                }}
                 style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 7,
                   display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  hover: { backgroundColor: theme.fillHover },
+                  marginBottom: 10,
                 }}
               >
-                <Icon name="close" size={18} color={theme.text2} />
+                <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2 }}>
+                  {t('chat.appearance.fontSize').toUpperCase()}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
+                  {`${settings.fontSize}px`}
+                </Text>
               </div>
+              <Slider
+                value={settings.fontSize}
+                min={CHAT_FONT_SIZE_MIN}
+                max={CHAT_FONT_SIZE_MAX}
+                width={narrow ? 208 : 260}
+                onChange={(fontSize) => patch({ fontSize })}
+              />
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  marginTop: 4,
+                }}
+              >
+                <Text style={{ fontSize: 10, color: theme.text2 }}>{CHAT_FONT_SIZE_MIN}</Text>
+                <Text style={{ fontSize: 10, color: theme.text2 }}>{CHAT_FONT_SIZE_MAX}</Text>
+              </div>
+              <Text style={{ fontSize: 10, color: theme.text2, marginTop: 4 }}>
+                {t('chat.appearance.fontSizeHint')}
+              </Text>
             </div>
 
-            <div
-              style={{
-                flexGrow: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                padding: 20,
-                display: 'flex',
-                flexDirection: narrow ? 'column' : 'row',
-                gap: 16,
-              }}
-            >
-              <div
-                style={{
-                  flexGrow: 1,
-                  minWidth: 0,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  borderRadius: 12,
-                  padding: 16,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                }}
-              >
+            {/* Display toggles */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}>
+                {t('chat.appearance.display').toUpperCase()}
+              </Text>
+              {toggles.map((toggle, index) => (
                 <div
+                  key={toggle.key}
                   style={{
                     display: 'flex',
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    paddingTop: index === 0 ? 0 : 7,
+                    paddingBottom: 7,
+                    borderBottomWidth: index === toggles.length - 1 ? 0 : 1,
+                    borderColor: theme.divider,
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text2 }}>
-                    {t('chat.appearance.preview').toUpperCase()}
-                  </Text>
-                  <Text style={{ fontSize: 10, color: theme.text2 }}>
-                    {t('chat.appearance.live')}
-                  </Text>
-                </div>
-                <ChatAppearancePreview settings={settings} height={narrow ? 240 : 360} />
-                <Text style={{ fontSize: 10, color: theme.text2 }}>
-                  {t('chat.appearance.sampleHint')}
-                </Text>
-              </div>
-
-              <div
-                style={{
-                  width: narrow ? '100%' : 300,
-                  flexShrink: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {/* Font size */}
-                <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: 10,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2 }}>
-                      {t('chat.appearance.fontSize').toUpperCase()}
-                    </Text>
-                    <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
-                      {`${settings.fontSize}px`}
-                    </Text>
-                  </div>
-                  <Slider
-                    value={settings.fontSize}
-                    min={CHAT_FONT_SIZE_MIN}
-                    max={CHAT_FONT_SIZE_MAX}
-                    width={narrow ? 208 : 260}
-                    onChange={(fontSize) => patch({ fontSize })}
+                  <Text style={{ fontSize: 13, color: theme.text }}>{toggle.label}</Text>
+                  <Switch
+                    small
+                    checked={Boolean(settings[toggle.key])}
+                    onChange={(value) => patch({ [toggle.key]: value })}
                   />
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      marginTop: 4,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, color: theme.text2 }}>{CHAT_FONT_SIZE_MIN}</Text>
-                    <Text style={{ fontSize: 10, color: theme.text2 }}>{CHAT_FONT_SIZE_MAX}</Text>
-                  </div>
-                  <Text style={{ fontSize: 10, color: theme.text2, marginTop: 4 }}>
-                    {t('chat.appearance.fontSizeHint')}
-                  </Text>
                 </div>
+              ))}
+            </div>
 
-                {/* Display toggles */}
-                <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
-                  <Text
-                    style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}
-                  >
-                    {t('chat.appearance.display').toUpperCase()}
-                  </Text>
-                  {toggles.map((toggle, index) => (
-                    <div
-                      key={toggle.key}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingTop: index === 0 ? 0 : 7,
-                        paddingBottom: 7,
-                        borderBottomWidth: index === toggles.length - 1 ? 0 : 1,
-                        borderColor: theme.divider,
-                      }}
-                    >
-                      <Text style={{ fontSize: 13, color: theme.text }}>{toggle.label}</Text>
-                      <Switch
-                        small
-                        checked={Boolean(settings[toggle.key])}
-                        onChange={(value) => patch({ [toggle.key]: value })}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Theme cards */}
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <Text
-                    style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}
-                  >
-                    {t('chat.appearance.layout').toUpperCase()}
-                  </Text>
-                  <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
-                    <ThemeCard
-                      label={t('chat.appearance.modern')}
-                      active={settings.chatTheme === 'modern'}
-                      onClick={() => patch({ chatTheme: 'modern' })}
-                      preview="modern"
-                    />
-                    <ThemeCard
-                      label={t('chat.appearance.compact')}
-                      active={settings.chatTheme === 'compact'}
-                      onClick={() => patch({ chatTheme: 'compact' })}
-                      preview="compact"
-                    />
-                  </div>
-                </div>
+            {/* Theme cards */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}>
+                {t('chat.appearance.layout').toUpperCase()}
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
+                <ThemeCard
+                  label={t('chat.appearance.modern')}
+                  active={settings.chatTheme === 'modern'}
+                  onClick={() => patch({ chatTheme: 'modern' })}
+                  preview="modern"
+                />
+                <ThemeCard
+                  label={t('chat.appearance.compact')}
+                  active={settings.chatTheme === 'compact'}
+                  onClick={() => patch({ chatTheme: 'compact' })}
+                  preview="compact"
+                />
               </div>
             </div>
           </div>
-        </Modal>
-      ) : null}
-    </div>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

@@ -8,7 +8,7 @@
  * because parent `hover` styles do not reach children.
  */
 
-import type { EventPayload } from '@gpuix/react'
+import { Tooltip, TooltipContent, TooltipTrigger, type EventPayload } from '@gpuix/react'
 import type {
   Account,
   NormalizedChatMessage,
@@ -349,15 +349,6 @@ function ReplyPreview({
   )
 }
 
-// ── Action buttons (reply / copy) ───────────────────────────────────────────
-// Hover-reveal via COLOR toggling — the only pattern that survives GPUI's
-// hit-test quirks (all verified with automation): buttons are always mounted
-// and absolutely positioned (no mounts → no spurious-leave cascade), their
-// own enter/leave works, and hidden buttons are painted fully transparent.
-// A hidden button keeps its hitbox (positioned boxes always take hits), so it
-// reveals on approach before any click lands; the trade-off is that the thin
-// button strip is not text-selectable.
-
 function ActionButton({
   visible,
   onHoverChange,
@@ -366,6 +357,7 @@ function ActionButton({
   icon,
   color,
   bg,
+  title,
 }: {
   visible: boolean
   onHoverChange: (hovered: boolean) => void
@@ -374,9 +366,10 @@ function ActionButton({
   icon: string
   color: string
   bg?: string
+  title?: string
 }) {
   const theme = useTheme()
-  return (
+  const button = (
     <div
       testId={testId}
       onMouseEnter={() => onHoverChange(true)}
@@ -405,6 +398,19 @@ function ActionButton({
       />
     </div>
   )
+  return title ? (
+    <Tooltip delayDuration={250}>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        style={{ backgroundColor: theme.popover, color: theme.text, padding: 7, borderRadius: 5 }}
+      >
+        <Text style={{ fontSize: 12, color: theme.text }}>{title}</Text>
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    button
+  )
 }
 
 function HoverActions({
@@ -419,6 +425,7 @@ function HoverActions({
   menuRequest,
   menuPosition,
   onMenuButtonClick,
+  moreTitle,
 }: {
   rowHovered: boolean
   onReply: () => void
@@ -431,14 +438,18 @@ function HoverActions({
   menuRequest: number
   menuPosition?: { x: number; y: number } | null
   onMenuButtonClick: () => void
+  moreTitle?: string
 }) {
   const theme = useTheme()
   const [replyHover, setReplyHover] = useState(false)
   const [copyHover, setCopyHover] = useState(false)
-  const visible = rowHovered || replyHover || copyHover
+  const [containerHovered, setContainerHovered] = useState(false)
+  const visible = rowHovered || containerHovered || replyHover || copyHover
 
   return (
     <div
+      onMouseEnter={() => setContainerHovered(true)}
+      onMouseLeave={() => setContainerHovered(false)}
       style={{
         position: 'absolute',
         right: 8,
@@ -458,16 +469,20 @@ function HoverActions({
         testId="msg-reply"
         icon={icons.reply}
         color={theme.text2}
+        title={t('chatMessages.actions.reply')}
       />
+
       <ActionButton
         visible={visible}
         onHoverChange={setCopyHover}
         onClick={onCopy}
         testId="msg-copy"
+        title={t('chatMessages.actions.copyMessage')}
         icon={copySuccess ? icons.check : icons.copy}
         color={copySuccess ? semantic.successSoft : theme.text2}
         bg={copySuccess ? 'rgba(74, 222, 128, 0.2)' : undefined}
       />
+
       <MessageActionsMenu
         message={message}
         channelSlug={channelSlug}
@@ -478,6 +493,8 @@ function HoverActions({
         request={menuRequest}
         position={menuPosition}
         onMenuButtonClick={onMenuButtonClick}
+        title={moreTitle}
+        onHoverChange={setContainerHovered}
       />
     </div>
   )
@@ -1000,6 +1017,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               onReply={() => props.onReply?.(message)}
               onCopy={copyMessage}
               copySuccess={copySuccess}
+              moreTitle={t('chatMessages.actions.moreActions')}
             />
           ) : null}
         </div>
@@ -1149,6 +1167,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               onReply={() => props.onReply?.(message)}
               onCopy={copyMessage}
               copySuccess={copySuccess}
+              moreTitle={t('chatMessages.actions.moreActions')}
             />
           ) : null}
         </div>

@@ -191,4 +191,6 @@ export const app = {
   'app.search.preparing': 'Preparing results…',
   'app.search.noMatches': 'No messages match this search.',
   'app.settings.optionals': 'Optionals',
+  'app.settings.chat.settings': 'Open chat settings',
+  'app.settings.chat.chatters': 'Open list chatters',
 } satisfies Record<string, string>

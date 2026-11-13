@@ -1000,6 +1000,7 @@ export function ChatView({
   )
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
+  const [chatSettingsOpen, setChatSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   // The trigger click that dismissed the menu (mousedown closes, click toggles) must not reopen it.
   const menuDismissedAt = useRef(0)
@@ -1787,7 +1788,7 @@ export function ChatView({
 
             {chattersTargets.length > 0 ? (
               <HeaderButton
-                // title={t('app.settings.chat.settings')}
+                title={t('app.settings.chat.chatters')}
                 testId="chatters-button"
                 onClick={() => setChattersOpen(true)}
               >
@@ -1795,7 +1796,20 @@ export function ChatView({
               </HeaderButton>
             ) : null}
 
-            {settings ? <ChatAppearanceDialog settings={settings} /> : null}
+            <HeaderButton
+              title={t('app.settings.chat.settings')}
+              testId="settings-button"
+              onClick={() => setChatSettingsOpen(true)}
+            >
+              <Icon name="settings" size={14} color={theme.text2} />
+            </HeaderButton>
+
+            {settings && chatSettingsOpen ? (
+              <ChatAppearanceDialog
+                settings={settings}
+                onClose={() => setChatSettingsOpen(false)}
+              />
+            ) : null}
 
             {onSplitRight || onClosePanel || onEditFeed || windows ? (
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
@@ -2643,9 +2657,6 @@ function HeaderButton({
         backgroundColor: hovered ? theme.fillHover : undefined,
       }}
     >
-      {/* re-tint the icon on hover by cloning with a different color is the
-          caller's concern; icons here read text2 which is close enough to
-          the Vue hover target (theme.text) */}
       {children}
     </div>
   )
