@@ -78,7 +78,13 @@ import { stepChatFontSize } from '../state/chat-font-size'
 import { chatPauseStore } from '../state/chat-pause'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
-import { composerStore, updateComposer } from '../state/composer'
+import {
+  appendComposerMention,
+  composerStore,
+  editComposer,
+  updateComposer,
+} from '../state/composer'
+import { focusComposerByKey } from '../state/composer-focus'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import {
@@ -994,6 +1000,20 @@ export function ChatView({
       setReply({ message, sourceId: source?.id })
     },
     [feedChannels, getFeedSource],
+  )
+  const mentionAuthor = useCallback(
+    (message: NormalizedChatMessage) => {
+      const username = sanitizeDisplayText(
+        message.author.username || message.author.displayName,
+      ).trim()
+      if (!username) return
+      updateComposer(paneKey, (current) => {
+        const text = appendComposerMention(current.text, username)
+        return text === current.text ? current : editComposer(current, text)
+      })
+      focusComposerByKey(paneKey, scope)
+    },
+    [paneKey, scope],
   )
   const pickFeedChannel = useCallback(
     (id: string) => {
@@ -2354,6 +2374,7 @@ export function ChatView({
                     moderationOutcome={outcome}
                     onOpenUserCard={setUserCardTarget}
                     onReply={replyFromRow}
+                    onMentionAuthor={mentionAuthor}
                     replyOnDoubleClick={settings?.replyOnDoubleClick}
                     onOpenThread={showThread}
                     onSearch={openSearch}
@@ -2460,6 +2481,7 @@ export function ChatView({
                 aliases={aliasMap}
                 onClose={closeThread}
                 onReply={canReplyFromThread ? replyFromThread : undefined}
+                onMentionAuthor={mentionAuthor}
                 onOpenUserCard={setUserCardTarget}
               />
             </PaneAccountContext.Provider>

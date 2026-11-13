@@ -32,7 +32,11 @@ import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
 import { t, tPlural, useLanguage } from '../i18n'
 import { icons } from '../icons'
-import { claimMessageRowClick, isMessageRowDoubleClick } from '../message-row-click'
+import {
+  claimMessageRowClick,
+  isMessageRowContextMenu,
+  isMessageRowDoubleClick,
+} from '../message-row-click'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
@@ -512,6 +516,8 @@ export interface ChatMessageProps {
   renderModerationRail?: (rowHovered: boolean) => import('react').ReactNode
   onOpenUserCard?: (target: UserCardTarget) => void
   onReply?: (message: NormalizedChatMessage) => void
+  /** A secondary press on the author name types the author's mention into the composer. */
+  onMentionAuthor?: (message: NormalizedChatMessage) => void
   /** A primary double-click on the row calls `onReply`. */
   replyOnDoubleClick?: boolean
   onOpenThread?: (message: NormalizedChatMessage) => void
@@ -685,6 +691,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           if (isMessageRowDoubleClick(event)) onReply(message)
         }
       : undefined
+  const onMentionAuthor = props.onMentionAuthor
+  const mentionAuthor = onMentionAuthor ? () => onMentionAuthor(message) : undefined
 
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
@@ -859,7 +867,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     const content = (
       <div
         onMouseDown={(event) => {
-          if (event.button === 2) {
+          if (event.button === 2 && isMessageRowContextMenu(event)) {
             setMenuRequest((value) => value + 1)
             setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
           }
@@ -948,6 +956,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             fontSize={fontSize}
             color={authorColor}
             onClick={openUserCard}
+            onMention={mentionAuthor}
+            testId={`chat-author-${message.platform}-${message.id}`}
           />
           {isFirstMessage ? (
             <BadgeComponent
@@ -1027,7 +1037,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const content = (
     <div
       onMouseDown={(event) => {
-        if (event.button === 2) {
+        if (event.button === 2 && isMessageRowContextMenu(event)) {
           setMenuRequest((value) => value + 1)
           setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
         }
@@ -1110,6 +1120,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             fontSize={fontSize}
             color={authorColor}
             onClick={openUserCard}
+            onMention={mentionAuthor}
+            testId={`chat-author-${message.platform}-${message.id}`}
           />
           {isFirstMessage ? (
             <BadgeComponent

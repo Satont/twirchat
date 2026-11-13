@@ -3,7 +3,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import type { CosmeticPaint, UserCosmetics } from '../../services/cosmetics'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
 import { t } from '../i18n'
-import { claimMessageRowClick } from '../message-row-click'
+import { claimMessageRowClick, claimMessageRowContextMenu } from '../message-row-click'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
 import { useFont } from '../theme-context'
@@ -32,12 +32,17 @@ export function CosmeticAuthorName({
   fontSize,
   color,
   onClick,
+  onMention,
+  testId,
 }: {
   name: string
   paint?: CosmeticPaint
   fontSize: number
   color: string
   onClick: () => void
+  /** A secondary press types the author's mention into the pane composer. */
+  onMention?: () => void
+  testId?: string
 }) {
   const font = useFont()
   const enabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
@@ -47,6 +52,12 @@ export function CosmeticAuthorName({
       role="button"
       aria-label={t('misc.userCard.openFor', { name })}
       tabIndex={0}
+      testId={testId}
+      onMouseDown={(event) => {
+        if (event.button !== 2 || !onMention) return
+        claimMessageRowContextMenu(event)
+        onMention()
+      }}
       onClick={(event) => {
         if (!claimMessageRowClick(event)) return
         onClick()

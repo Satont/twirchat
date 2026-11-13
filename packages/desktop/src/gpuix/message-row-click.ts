@@ -18,6 +18,7 @@ interface ClickIdentity {
 }
 
 let claimed: ClickIdentity | null = null
+let claimedContextMenu: Pick<ClickIdentity, 'x' | 'y'> | null = null
 let armedDrag: (() => void) | null = null
 
 /** Arms a row drag until the returned disarm runs; a stray release cancels it. */
@@ -54,4 +55,16 @@ export function isMessageRowDoubleClick(event: EventPayload): boolean {
     return false
   }
   return (event.button ?? 0) === 0 && event.isRightClick !== true && event.clickCount === 2
+}
+
+/** Claims a secondary press for an interactive child, so the row keeps its menu closed. */
+export function claimMessageRowContextMenu(event: EventPayload): void {
+  claimedContextMenu = { x: event.x, y: event.y }
+}
+
+/** True when no child claimed this secondary press; consumes the claim either way. */
+export function isMessageRowContextMenu(event: EventPayload): boolean {
+  const claim = claimedContextMenu
+  claimedContextMenu = null
+  return !claim || claim.x !== event.x || claim.y !== event.y
 }

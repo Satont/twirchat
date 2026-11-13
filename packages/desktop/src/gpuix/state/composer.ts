@@ -48,6 +48,14 @@ export function editComposer(state: ComposerState, text: string): ComposerState 
   return { ...state, text, historyIndex: null }
 }
 
+/** Appends a mention after the draft, keeping one separating space and room to keep typing. */
+export function appendComposerMention(text: string, username: string): string {
+  const name = username.trim().replace(/^@/u, '')
+  if (!name) return text
+  const separator = text.length > 0 && !/\s$/u.test(text) ? ' ' : ''
+  return `${text}${separator}@${name} `
+}
+
 export function rememberComposerMessage(state: ComposerState, text: string): ComposerState {
   const trimmed = text.trim()
   const history =

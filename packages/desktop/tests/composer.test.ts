@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  appendComposerMention,
   browseComposerHistory,
   completeComposerSend,
   composerTranslationMode,
@@ -15,6 +16,17 @@ import {
   updateComposer,
 } from '../src/gpuix/state/composer'
 import { literal } from './fixture-values'
+
+describe('composer mentions', () => {
+  test('appends a platform mention after the draft with one separating space', () => {
+    expect(appendComposerMention('', 'viewer')).toBe('@viewer ')
+    expect(appendComposerMention('hello', 'viewer')).toBe('hello @viewer ')
+    expect(appendComposerMention('hello ', 'viewer')).toBe('hello @viewer ')
+    expect(appendComposerMention('hello\n', 'viewer')).toBe('hello\n@viewer ')
+    expect(appendComposerMention('hello', '@Viewer')).toBe('hello @Viewer ')
+    expect(appendComposerMention('hello', '  ')).toBe('hello')
+  })
+})
 
 describe('composer history', () => {
   test('walks newest to oldest and restores the original unsent draft', () => {
