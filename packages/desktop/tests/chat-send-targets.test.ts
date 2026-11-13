@@ -5,8 +5,16 @@ import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import {
   createChatMessageTargets,
   ownChatSendTargets,
+  singleLineChatText,
 } from '../src/views/main/utils/chat-send-targets'
 import { literal } from './fixture-values'
+
+test('turns manual line breaks into a single space so chat words stay separated', () => {
+  expect(singleLineChatText('first line\nsecond line')).toBe('first line second line')
+  expect(singleLineChatText('first\r\nsecond\rthird')).toBe('first second third')
+  expect(singleLineChatText('first\n\nsecond')).toBe('first second')
+  expect(singleLineChatText('single line')).toBe('single line')
+})
 
 const homeTargets = [
   { channelLogin: 'justovich221337', platform: literal('twitch') },

@@ -40,6 +40,7 @@ import {
   messageLength,
   messageLengthLimit,
   ownChatSendTargets,
+  singleLineChatText,
 } from '../../views/main/utils/chat-send-targets'
 import { resolveUserCardCommand, type UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
@@ -791,7 +792,10 @@ export function ChatInput(props: ChatInputProps) {
       keepInput: sendIntent.current?.input === input && sendIntent.current.keepInput,
     })
     const timer = setTimeout(() => {
-      void prepareNormalOutput(input.trim(), { kind: 'channel', languages })
+      void prepareNormalOutput(singleLineChatText(input.trim()), {
+        kind: 'channel',
+        languages,
+      })
         .then((action) => {
           if (previewRevision.value !== token || !mounted.current) return
           const items = action.previewItems ?? []
@@ -883,9 +887,13 @@ export function ChatInput(props: ChatInputProps) {
   }
 
   async function prepareOutput(
-    output: string,
+    rawOutput: string,
     languages: ReadonlyMap<string, string>,
   ): Promise<PreparedAction> {
+    // Platforms accept one line per message. Flatten manual soft wraps to a
+    // space before command parsing and translation so both the sent text and
+    // its preview match what the platform actually delivers.
+    const output = singleLineChatText(rawOutput)
     const privateCommand = normalizePrivateCommand(output, lastWhisperRecipientStore.get())
     if (privateCommand) return privateAction(privateCommand)
     const autoTranslation = parseAutoTranslationCommand(output)

@@ -118,6 +118,8 @@ latest" pill tracks `onVisibleRange` and jumps via
   Up recalls history from an empty composer; Alt+Up/Down browses from any draft.
   Down past the newest entry restores the unsent draft. Ctrl+Tab and Ctrl+K work
   while composing; dialogs and the shortcut recorder retain keyboard priority.
+- A manual line break in the composer is delivered as one space: chat platforms
+  accept one line per message and otherwise drop the newline between the words.
 - Local commands: `/clearmessages`, `/copy`, `/pause`, `/resume`, `/mentions`,
   `/search <query>`. Clearing only hides the current pane's retained messages;
   copying exports its displayed messages. `/clear` remains a platform command.

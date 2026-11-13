@@ -269,6 +269,37 @@ try {
   await until(() => submissions.length === 2, 'Send button submits')
   assert.deepEqual(submissions[1]?.map((target) => target.platform).toSorted(), ['kick', 'twitch'])
   assert.equal(composerStore.get().get('qa:compact-frame')?.text, '')
+
+  // A manual soft wrap is one message with a space where the line broke, not
+  // two words glued together by the platform's newline handling.
+  const softWrapStart = submissions.length
+  await focus()
+  renderer.simulateKeystrokes('f i r s t space l i n e')
+  await until(
+    () => composerStore.get().get('qa:compact-frame')?.text === 'first line',
+    'soft-wrap first line',
+  )
+  renderer.simulateKeystrokes('shift-enter')
+  await until(
+    () => composerStore.get().get('qa:compact-frame')?.text === 'first line\n',
+    'manual line break',
+  )
+  renderer.simulateKeystrokes('s e c o n d space l i n e')
+  await until(
+    () => composerStore.get().get('qa:compact-frame')?.text === 'first line\nsecond line',
+    'soft-wrap second line',
+  )
+  renderer.simulateKeystrokes('enter')
+  await until(() => submissions.length === softWrapStart + 1, 'soft-wrapped message sends once')
+  assert.equal(
+    submissions[softWrapStart]?.[0]?.text,
+    'first line second line',
+    'manual line breaks become spaces',
+  )
+  await until(
+    () => composerStore.get().get('qa:compact-frame')?.text === '',
+    'soft-wrapped draft clears',
+  )
   assert.equal(
     renderer.getFocusedElementId(),
     find('chat-input').id,
@@ -287,12 +318,17 @@ try {
   assert.deepEqual(bounds('composer-target-kick'), kickWide)
   const kickErrorScreenshot = await captureGuiQaDisplay('composer-kick-error')
   const preferences = composerStore.get().get('qa:compact-frame')
+  const beforeUnavailableKick = submissions.length
   renderer.simulateKeystrokes('enter')
   await click('composer-target-kick')
   const afterClick = composerStore.get().get('qa:compact-frame')
   assert.equal(afterClick?.activePlatform, preferences?.activePlatform)
   assert.equal(afterClick?.disabledPlatforms, preferences?.disabledPlatforms)
-  assert.equal(submissions.length, 2, 'an unavailable Kick control cannot activate')
+  assert.equal(
+    submissions.length,
+    beforeUnavailableKick,
+    'an unavailable Kick control cannot activate',
+  )
   await sendHome('o u t a g e', ['twitch'])
 
   await nativeWindow(renderer).setWindowBounds({ width: 320, height: 240 })
