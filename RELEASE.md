@@ -91,9 +91,10 @@ The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
 
 ### Desktop OAuth
 
-- **Twitch** uses Device Code Grant. Register a Twitch app with the **Public** client type and
-  set `TWIRCHAT_TWITCH_CLIENT_ID` for source runs and release builds. The backend uses a separate
-  **Confidential** Twitch app for its public Helix requests.
+- **Twitch** signs in with the authorization code flow and PKCE through the backend, which
+  keeps the **Confidential** app's secret and also refreshes tokens. Register
+  `http://localhost:45821/auth/twitch/callback` for production and port 55821 for development
+  with the backend's `TWITCH_CLIENT_ID` app.
 - **YouTube** uses a Google **Desktop app** OAuth client with the YouTube Data API enabled.
   Set `TWIRCHAT_YOUTUBE_CLIENT_ID` and `TWIRCHAT_YOUTUBE_CLIENT_SECRET` for source runs and
   release builds. These installed-app credentials are distributed with the desktop. Google

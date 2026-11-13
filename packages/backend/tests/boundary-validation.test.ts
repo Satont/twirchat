@@ -12,12 +12,15 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
-test('only Kick account authorization is exposed by the backend', () => {
+test('the backend exposes only Kick and Twitch account authorization', () => {
   expect(Object.keys(authRoutes).sort()).toEqual([
     '/api/auth/kick/exchange',
     '/api/auth/kick/legacy-start',
     '/api/auth/kick/refresh',
     '/api/auth/kick/start',
+    '/api/auth/twitch/exchange',
+    '/api/auth/twitch/refresh',
+    '/api/auth/twitch/start',
     '/auth/kick/callback',
   ])
   expect(
@@ -38,7 +41,10 @@ test('OAuth request boundaries reject malformed JSON and wrong field types befor
     },
     { preconnect: originalFetch.preconnect },
   )
-  for (const route of [authRoutes['/api/auth/kick/exchange']]) {
+  for (const route of [
+    authRoutes['/api/auth/kick/exchange'],
+    authRoutes['/api/auth/twitch/exchange'],
+  ]) {
     for (const body of ['{', 'null', '{"code":42,"codeVerifier":"v","redirectUri":"r"}']) {
       const response = await route.POST(
         new Request('http://local/exchange', { method: 'POST', body }),

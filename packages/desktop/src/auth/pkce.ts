@@ -34,13 +34,8 @@ interface PkceSession {
 export function createPkceSessions() {
   const sessions = new Map<string, PkceSession>()
   return {
-    authorize(
-      endpoint: string,
-      clientId: string,
-      redirectUri: string,
-      scopes: string[],
-      extra: Record<string, string> = {},
-    ): string {
+    /** Starts a session and returns the PKCE values an external party puts into the URL. */
+    begin(): { state: string; codeChallenge: string } {
       const now = Date.now()
       for (const [state, session] of sessions) {
         if (session.expiresAt <= now) sessions.delete(state)
@@ -52,10 +47,21 @@ export function createPkceSessions() {
       const state = generateState()
       const codeVerifier = generateCodeVerifier()
       sessions.set(state, { codeVerifier, expiresAt: now + SESSION_TTL_MS })
+      return { state, codeChallenge: generateCodeChallenge(codeVerifier) }
+    },
+
+    authorize(
+      endpoint: string,
+      clientId: string,
+      redirectUri: string,
+      scopes: string[],
+      extra: Record<string, string> = {},
+    ): string {
+      const { state, codeChallenge } = this.begin()
       const params = new URLSearchParams({
         ...extra,
         client_id: clientId,
-        code_challenge: generateCodeChallenge(codeVerifier),
+        code_challenge: codeChallenge,
         code_challenge_method: 'S256',
         redirect_uri: redirectUri,
         response_type: 'code',

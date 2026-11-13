@@ -67,7 +67,6 @@ import { SearchAllChatsDialog } from './SearchAllChatsDialog'
 import { SettingsPanel } from './SettingsPanel'
 import { TabSelectorModal, type TabItem } from './TabSelectorModal'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
-import { TwitchDeviceDialog } from './TwitchDeviceDialog'
 import { ActionButton } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { Modal } from './ui/Modal'
@@ -678,7 +677,6 @@ export function App() {
               <SavedAccounts />
             </Modal>
           ) : null}
-          <TwitchDeviceDialog />
           {showFollowing ? (
             <TwitchActivitiesPanel
               channelSlug={

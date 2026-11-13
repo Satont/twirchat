@@ -5,10 +5,7 @@ export const runtime = {
   'runtime.auth.youtubeClientRequired':
     'YouTube sign-in requires OAuth credentials for a Google Desktop app.',
   'runtime.auth.startTwitchFailed': 'Could not start Twitch sign-in (HTTP {status}).',
-  'runtime.auth.twitchDeclined': 'Twitch authorization was declined.',
   'runtime.auth.twitchFailed': 'Twitch sign-in failed (HTTP {status}).',
-  'runtime.auth.twitchExpired': 'The Twitch code expired. Start sign-in again.',
-  'runtime.auth.twitchClientMismatch': 'Twitch returned a token for a different OAuth application.',
   'runtime.auth.twitchSignInFailed': 'Twitch sign-in failed.',
   'runtime.auth.twitchReconnect': 'Sign in again to reconnect @{username}.',
   'runtime.auth.refreshFailed':

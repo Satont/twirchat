@@ -146,8 +146,19 @@ export async function handleYouTubeCallback(url: URL) {
   }
 }
 
-export const refreshYouTubeToken = createOAuthRefresher(
-  'YouTube',
-  YOUTUBE_TOKEN_URL,
-  getYouTubeDesktopCredentials,
-)
+export const refreshYouTubeToken = createOAuthRefresher('YouTube', {
+  request: (refreshToken) =>
+    postOAuthForm(YOUTUBE_TOKEN_URL, {
+      ...getYouTubeDesktopCredentials(),
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  parse(payload) {
+    const tokens = oauthTokenSchema.parse(payload)
+    return {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresIn: tokens.expires_in,
+    }
+  },
+})

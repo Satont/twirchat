@@ -7,6 +7,7 @@ import type { WebviewSender } from '../shared/rpc'
 import { AccountStore } from '../store/account-store'
 import { ChannelStore } from '../store/channel-store'
 import { handleKickCallback } from './kick'
+import { handleTwitchCallback } from './twitch'
 import { handleVkPlayToken, vkPlayCallbackPage } from './vkplay'
 import { handleYouTubeCallback } from './youtube'
 
@@ -51,6 +52,11 @@ export function startAuthServer(): void {
       const url = new URL(req.url)
 
       try {
+        if (req.method === 'GET' && url.pathname === '/auth/twitch/callback') {
+          const result = await handleTwitchCallback(url)
+          await finishDesktopSignIn('twitch', { ...result.user, channelSlug: result.channelSlug })
+          return result.response
+        }
         if (req.method === 'GET' && url.pathname === '/auth/youtube/callback') {
           const result = await handleYouTubeCallback(url)
           await finishDesktopSignIn('youtube', { ...result.user, channelSlug: result.channelSlug })

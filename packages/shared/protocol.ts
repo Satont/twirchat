@@ -159,6 +159,49 @@ export interface AuthStartResponse {
 }
 
 /**
+ * POST /api/auth/twitch/start
+ * Desktop sends its PKCE challenge, state and redirect URI; the backend builds the Twitch URL.
+ */
+export interface TwitchBuildUrlRequest {
+  codeChallenge: string
+  state: string
+  redirectUri: string
+}
+
+export interface TwitchBuildUrlResponse {
+  url: string
+}
+
+/** POST /api/auth/twitch/exchange — the backend exchanges the callback code with its secret. */
+export interface TwitchExchangeRequest {
+  code: string
+  codeVerifier: string
+  redirectUri: string
+}
+
+export interface TwitchExchangeResponse {
+  accessToken: string
+  refreshToken?: string
+  expiresIn?: number
+  scope?: string[]
+}
+
+/**
+ * POST /api/auth/twitch/refresh
+ * When Twitch rejects the refresh token the backend answers with Twitch's status and
+ * `{ error, message }`, so the desktop can tell a revoked token from an outage.
+ */
+export interface TwitchRefreshRequest {
+  refreshToken: string
+}
+
+export interface TwitchRefreshResponse {
+  accessToken: string
+  refreshToken?: string
+  expiresIn?: number
+}
+
+/**
  * POST /api/auth/kick/start
  * Desktop отправляет PKCE codeChallenge + state, backend формирует authUrl
  */

@@ -15,6 +15,7 @@ export const DEV_SERVER_PORT = parseInt(
 
 // Auth callbacks
 export const AUTH_CALLBACK_BASE = `http://localhost:${AUTH_SERVER_PORT}`
+export const TWITCH_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/twitch/callback`
 export const YOUTUBE_REDIRECT_URI = `http://127.0.0.1:${AUTH_SERVER_PORT}/auth/youtube/callback`
 export const KICK_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/kick/callback`
 export const VKPLAY_REDIRECT_URI = `http://127.0.0.1:${AUTH_SERVER_PORT}/auth/vkplay/callback`
@@ -29,6 +30,7 @@ export const KICK_API_BASE = 'https://api.kick.com/public/v1'
 export const KICK_AUTH_URL = 'https://id.kick.com/oauth/authorize'
 export const KICK_TOKEN_URL = 'https://id.kick.com/oauth/token'
 
+export const TWITCH_AUTH_URL = 'https://id.twitch.tv/oauth2/authorize'
 export const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
 
 export const YOUTUBE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'

@@ -8,7 +8,6 @@ import { useT } from '../i18n'
 import { accountsStore } from '../state/app'
 import { useStore } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
-import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { ActionButton, FormError } from './ui/Form'
 import { Icon } from './ui/Icon'
@@ -27,7 +26,6 @@ export function SavedAccounts() {
   const backend = useBackend()
   const theme = useTheme()
   const { t } = useT()
-  const windowScope = useWindowScope()
   const active = useStore(accountsStore)
   const [saved, setSaved] = useState<Account[]>([])
   const [busy, setBusy] = useState<Platform | null>(null)
@@ -151,13 +149,13 @@ export function SavedAccounts() {
                 disabled={!!busy}
                 onOpen={() => {
                   setCopied(null)
-                  runUiTask(run(platform, () => backend.api.authStart({ platform, windowScope })))
+                  runUiTask(run(platform, () => backend.api.authStart({ platform })))
                 }}
                 onCopyLink={() => {
                   setCopied(null)
                   runUiTask(
                     run(platform, async () => {
-                      const { url } = await backend.api.authLink({ platform, windowScope })
+                      const { url } = await backend.api.authLink({ platform })
                       await backend.api.copyText({ text: url })
                       if (lifetime.mounted) setCopied(platform)
                     }),
@@ -167,9 +165,7 @@ export function SavedAccounts() {
             </div>
             {copied === platform ? (
               <Text style={{ fontSize: 12, color: theme.text2 }}>
-                {platform === 'twitch'
-                  ? t('app.accounts.twitchLinkCopied')
-                  : t('app.accounts.linkCopied', { platform: platformName(platform) })}
+                {t('app.accounts.linkCopied', { platform: platformName(platform) })}
               </Text>
             ) : null}
             {accounts.map((account) => (

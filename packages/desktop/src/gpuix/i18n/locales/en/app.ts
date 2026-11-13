@@ -73,19 +73,12 @@ export const app = {
   'app.platforms.connect': 'Connect account',
   'app.platforms.connectedAs': 'Connected as {name}',
 
-  'app.platforms.twitchDevice.title': 'Connect Twitch',
-  'app.platforms.twitchDevice.description':
-    'Confirm the code on Twitch and authorize TwirChat in your browser.',
-  'app.platforms.twitchDevice.open': 'Open Twitch',
-  'app.platforms.twitchDevice.copyCode': 'Copy code',
-
   'app.accounts.title': 'Saved accounts',
   'app.accounts.description':
     'Choose one active identity per platform. Switching keeps watched channels, messages and tab layouts. Anonymous mode keeps saved credentials for later.',
   'app.accounts.loading': 'Loading saved accounts…',
   'app.accounts.anonymous': 'Anonymous',
   'app.accounts.useAnonymously': 'Use anonymously',
-  'app.accounts.twitchLinkCopied': 'Twitch sign-in link copied.',
   'app.accounts.linkCopied':
     '{platform} sign-in link copied. Open it in another browser or a private window on this computer within 10 minutes.',
   'app.accounts.active': 'Active',

@@ -1,6 +1,6 @@
 # @twirchat/backend
 
-The backend serves public platform metadata, provider relays, Twitch history, and the anonymous YouTube gRPC relay. It also handles Kick OAuth and legacy Kick account and webhook routes. Twitch and YouTube user authorization runs in the desktop app.
+The backend serves public platform metadata, provider relays, Twitch history, and the anonymous YouTube gRPC relay. It also handles Twitch and Kick OAuth (code exchange and token refresh with the app secrets) and legacy Kick account and webhook routes. YouTube user authorization runs in the desktop app.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ Migrations run automatically on first startup — no manual setup needed.
 | `KICK_REDIRECT_URI`    | `http://localhost:3000/auth/kick/callback` | Must match the URI registered in your Kick app                                                                  |
 | `KICK_WEBHOOK_URL`     | —                                          | Public HTTPS URL that Kick POSTs events to (`/webhook/kick`)                                                    |
 | `KICK_WEBHOOK_SECRET`  | —                                          | HMAC secret for verifying Kick payloads — generate with `openssl rand -hex 32`                                  |
-| `TWITCH_CLIENT_ID`     | —                                          | Confidential Twitch app ID for public Helix requests                                                            |
+| `TWITCH_CLIENT_ID`     | —                                          | Confidential Twitch app ID for public Helix requests and desktop sign-in                                        |
 | `TWITCH_CLIENT_SECRET` | —                                          | Confidential Twitch app secret                                                                                  |
 | `YOUTUBE_API_KEY`      | —                                          | Optional key for YouTube channel resolution and the anonymous gRPC relay                                        |
 

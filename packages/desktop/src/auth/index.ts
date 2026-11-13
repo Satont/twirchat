@@ -8,4 +8,4 @@ export {
 export { getKickAuthUrl, prepareKickAuth } from './kick'
 export { getVkPlayAuthUrl } from './vkplay'
 export { getYouTubeAuthUrl } from './youtube'
-export { connectTwitchDevice, requestTwitchDeviceCode } from './twitch'
+export { getTwitchAuthUrl } from './twitch'

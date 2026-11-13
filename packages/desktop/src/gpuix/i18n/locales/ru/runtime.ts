@@ -8,10 +8,7 @@ export const ruRuntime = {
   'runtime.auth.youtubeClientRequired':
     'Для входа в YouTube нужны OAuth-данные приложения Google Desktop.',
   'runtime.auth.startTwitchFailed': 'Не удалось начать вход в Twitch (HTTP {status}).',
-  'runtime.auth.twitchDeclined': 'Доступ к аккаунту Twitch отклонён.',
   'runtime.auth.twitchFailed': 'Не удалось войти в Twitch (HTTP {status}).',
-  'runtime.auth.twitchExpired': 'Срок действия кода Twitch истёк. Войдите снова.',
-  'runtime.auth.twitchClientMismatch': 'Twitch вернул токен для другого OAuth-приложения.',
   'runtime.auth.twitchSignInFailed': 'Не удалось войти в Twitch.',
   'runtime.auth.twitchReconnect': 'Войдите снова, чтобы подключить @{username}.',
   'runtime.auth.refreshFailed':

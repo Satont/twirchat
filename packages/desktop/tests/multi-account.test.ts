@@ -17,6 +17,7 @@ import {
 import { KickAdapter, type KickSocket } from '../src/platforms/kick/adapter'
 import { kickRetryClock } from '../src/platforms/kick/retry'
 import { YouTubeAdapter } from '../src/platforms/youtube/adapter'
+import { getBackendUrl } from '../src/runtime-config'
 import { createAccountSessions } from '../src/services/account-sessions'
 import { AccountStore } from '../src/store/account-store'
 import { getClientSecret } from '../src/store/client-secret'
@@ -76,10 +77,14 @@ function gate<T>() {
   return { promise, resolve }
 }
 
+const twitchRefreshUrl = `${getBackendUrl()}/api/auth/twitch/refresh`
+
+/** Twitch validation goes to Twitch; refreshes go through the backend, reported as `/refresh`. */
 function mockTwitchOAuth(handler: (pathname: string, headers: Headers) => Promise<Response>) {
   globalThis.fetch = Object.assign(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : input)
+      if (url.href === twitchRefreshUrl) return handler('/refresh', new Headers(init?.headers))
       expect(url.origin).toBe('https://id.twitch.tv')
       return handler(url.pathname, new Headers(init?.headers))
     },
@@ -114,12 +119,8 @@ describe('saved Twitch session validation', () => {
     expect(AccountStore.getTokens(account.id)).toEqual(originalTokens)
 
     mockTwitchOAuth(async (pathname, headers) => {
-      if (pathname === '/oauth2/token')
-        return Response.json({
-          access_token: 'renewed',
-          refresh_token: 'rotated',
-          expires_in: 3600,
-        })
+      if (pathname === '/refresh')
+        return Response.json({ accessToken: 'renewed', refreshToken: 'rotated', expiresIn: 3600 })
       expect(pathname).toBe('/oauth2/validate')
       return headers.get('Authorization') === 'OAuth renewed'
         ? validTwitchAccessToken()
@@ -157,7 +158,7 @@ describe('saved Twitch session validation', () => {
     let refreshes = 0
     mockTwitchOAuth(async (pathname) => {
       if (pathname === '/oauth2/validate') return invalidTwitchAccessToken()
-      expect(pathname).toBe('/oauth2/token')
+      expect(pathname).toBe('/refresh')
       if (++refreshes === 1) throw new TypeError('Connection lost during refresh')
       return Response.json({ message: ' Invalid refresh token ' }, { status: 400 })
     })
@@ -189,7 +190,7 @@ describe('saved Twitch session validation', () => {
     const rejectedRefresh = gate<Response>()
     const validating = gate<void>()
     mockTwitchOAuth(async (pathname) => {
-      if (pathname === '/oauth2/token') {
+      if (pathname === '/refresh') {
         started.resolve()
         return rejectedRefresh.promise
       }
@@ -585,14 +586,12 @@ describe('account-scoped Twitch web sessions', () => {
       async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(input instanceof Request ? input.url : input)
         const headers = new Headers(init?.headers)
+        if (url.href === twitchRefreshUrl) {
+          refreshCount++
+          expect(init?.body).toBe(JSON.stringify({ refreshToken: 'refresh-2' }))
+          return delayedRefresh.promise
+        }
         if (url.origin === 'https://id.twitch.tv') {
-          if (url.pathname === '/oauth2/token') {
-            refreshCount++
-            expect(init?.body?.toString()).toBe(
-              'client_id=public-client&grant_type=refresh_token&refresh_token=refresh-2',
-            )
-            return delayedRefresh.promise
-          }
           expect(url.pathname).toBe('/oauth2/validate')
           expect(headers.get('Authorization')).toBe('OAuth fresh-activity')
           return Response.json({
@@ -620,7 +619,7 @@ describe('account-scoped Twitch web sessions', () => {
     ])
     expect(refreshCount).toBe(1)
     delayedRefresh.resolve(
-      Response.json({ access_token: 'fresh-activity', refresh_token: 'rotated', expires_in: 3600 }),
+      Response.json({ accessToken: 'fresh-activity', refreshToken: 'rotated', expiresIn: 3600 }),
     )
     const [subscriptionResult, accessToken] = await pending
     expect(accessToken).toBe('fresh-activity')

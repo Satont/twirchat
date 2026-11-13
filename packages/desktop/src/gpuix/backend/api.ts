@@ -56,13 +56,11 @@ import type {
 import { z } from 'zod'
 
 import {
-  connectTwitchDevice,
-  finishDesktopSignIn,
   getKickAuthUrl,
+  getTwitchAuthUrl,
   getVkPlayAuthUrl,
   getYouTubeAuthUrl,
   prepareKickAuth,
-  requestTwitchDeviceCode,
 } from '../../auth'
 import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
 import { getDonationOAuthAvailability } from '../../auth/donations'
@@ -267,7 +265,6 @@ export type ChannelChatters = ChannelChattersBase &
 
 interface AuthRequest {
   platform: Platform
-  windowScope: string
 }
 
 export interface DesktopApi {
@@ -387,7 +384,6 @@ export interface DesktopApi {
   authStart(params: AuthRequest): Promise<void>
   /** Prepares a sign-in like `authStart` and returns its link instead of opening a browser. */
   authLink(params: AuthRequest): Promise<{ url: string }>
-  cancelTwitchAuth(params: { userCode: string; windowScope: string }): Promise<void>
   authLogout(params: { platform: Platform }): Promise<void>
   joinChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
   leaveChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
@@ -886,6 +882,16 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
   return { platform: 'kick', channelId: String(broadcasterId), channelSlug, total, groups }
 }
 
+function createAuthUrl({ platform }: AuthRequest): Promise<string> {
+  if (platform === 'kick') {
+    const { codeChallenge, state } = prepareKickAuth()
+    return getKickAuthUrl(codeChallenge, state)
+  }
+  if (platform === 'vkplay') return Promise.resolve(getVkPlayAuthUrl())
+  if (platform === 'youtube') return Promise.resolve(getYouTubeAuthUrl())
+  return getTwitchAuthUrl()
+}
+
 // ── API factory ─────────────────────────────────────────────────────────────
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
@@ -894,56 +900,6 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   function donations(): DonationService {
     if (!ctx.donations) throw new Error('Donation integrations are unavailable.')
     return ctx.donations
-  }
-
-  let twitchAuth:
-    | { controller: AbortController; windowScope: string; userCode?: string }
-    | undefined
-
-  async function createAuthUrl({ platform, windowScope }: AuthRequest): Promise<string> {
-    if (platform === 'kick') {
-      const { codeChallenge, state } = prepareKickAuth()
-      return getKickAuthUrl(codeChallenge, state)
-    }
-    if (platform === 'vkplay') return getVkPlayAuthUrl()
-    if (platform === 'youtube') return getYouTubeAuthUrl()
-
-    twitchAuth?.controller.abort()
-    const controller = new AbortController()
-    const current: NonNullable<typeof twitchAuth> = { controller, windowScope }
-    twitchAuth = current
-    ctx.events.emit('twitch_device_code', null)
-
-    const clear = () => {
-      if (twitchAuth !== current) return
-      twitchAuth = undefined
-      ctx.events.emit('twitch_device_code', null)
-    }
-
-    try {
-      const attempt = await requestTwitchDeviceCode(controller.signal)
-      controller.signal.throwIfAborted()
-      const { user_code: userCode, verification_uri: url } = attempt.code
-      current.userCode = userCode
-      ctx.events.emit('twitch_device_code', { userCode, url, windowScope })
-      void connectTwitchDevice(attempt, controller.signal)
-        .then((account) => {
-          clear()
-          return finishDesktopSignIn('twitch', account)
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return
-          ctx.events.emit('auth_error', {
-            platform: 'twitch',
-            error: error instanceof Error ? error.message : t('runtime.auth.twitchSignInFailed'),
-          })
-        })
-        .finally(clear)
-      return url
-    } catch (error) {
-      clear()
-      throw error
-    }
   }
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
@@ -1131,13 +1087,6 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     authLink: async (params) => ({ url: await createAuthUrl(params) }),
-
-    cancelTwitchAuth: async ({ userCode, windowScope }) => {
-      if (twitchAuth?.windowScope !== windowScope || twitchAuth.userCode !== userCode) return
-      twitchAuth.controller.abort()
-      twitchAuth = undefined
-      ctx.events.emit('twitch_device_code', null)
-    },
 
     authLogout: async ({ platform }) => {
       if (!ctx.accountSessions) throw new Error(t('runtime.api.accountSwitchingUnavailable'))

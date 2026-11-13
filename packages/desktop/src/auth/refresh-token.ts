@@ -2,8 +2,7 @@ import { logger } from '@twirchat/shared/logger'
 
 import { t } from '../gpuix/i18n'
 import { AccountStore } from '../store/account-store'
-import { postOAuthForm } from './oauth-form'
-import { expiresAt, hasOAuthErrorMessage, oauthTokenSchema } from './response-schemas'
+import { expiresAt, hasOAuthErrorMessage } from './response-schemas'
 
 const log = logger('oauth')
 
@@ -18,10 +17,21 @@ export class OAuthRefreshError extends Error {
   }
 }
 
+export interface RefreshedTokens {
+  accessToken: string
+  refreshToken?: string
+  expiresIn?: number
+}
+
+export interface OAuthRefreshTransport {
+  /** Sends the refresh request; a refusal must keep the provider's status and `message`. */
+  request(refreshToken: string): Promise<Response>
+  parse(payload: unknown): RefreshedTokens
+}
+
 export function createOAuthRefresher(
   platform: 'Twitch' | 'YouTube',
-  tokenUrl: string,
-  credentials: () => Record<string, string>,
+  transport: OAuthRefreshTransport,
 ) {
   const inFlight = new Map<string, Promise<string>>()
 
@@ -36,11 +46,7 @@ export function createOAuthRefresher(
         : 'runtime.auth.removedDuringRefresh'
       throw new Error(t(message, { platform }))
     }
-    const res = await postOAuthForm(tokenUrl, {
-      ...credentials(),
-      grant_type: 'refresh_token',
-      refresh_token: stored.refreshToken,
-    })
+    const res = await transport.request(stored.refreshToken)
     if (!res.ok) {
       const invalidRefreshToken =
         platform === 'Twitch' &&
@@ -61,21 +67,17 @@ export function createOAuthRefresher(
       })
       throw new OAuthRefreshError(platform, res.status, invalidRefreshToken)
     }
-    const response: unknown = await res.json()
-    const data =
-      platform === 'Twitch'
-        ? oauthTokenSchema.required({ refresh_token: true }).parse(response)
-        : oauthTokenSchema.parse(response)
+    const data = transport.parse(await res.json())
     const current = currentTokens()
     if (current.accessToken !== stored.accessToken || current.refreshToken !== stored.refreshToken)
       return current.accessToken
     AccountStore.updateTokens(
       accountId,
-      data.access_token,
-      data.refresh_token ?? stored.refreshToken,
-      expiresAt(data.expires_in),
+      data.accessToken,
+      data.refreshToken ?? stored.refreshToken,
+      expiresAt(data.expiresIn),
     )
-    return data.access_token
+    return data.accessToken
   }
 
   return (accountId: string): Promise<string> => {

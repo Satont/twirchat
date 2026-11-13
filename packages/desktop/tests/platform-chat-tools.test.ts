@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { TWITCH_SCOPES } from '../src/auth/twitch'
+import { TWITCH_SCOPES } from '@twirchat/shared/twitch-scopes'
+
 import { createChatToolsService, type ChatToolsInput } from '../src/services/chat-tools'
 import { textBody } from './fixture-values'
 import { literal, required } from './fixture-values'

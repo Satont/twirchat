@@ -4,25 +4,22 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
-  TWITCH_TOKEN_URL,
+  TWITCH_REDIRECT_URI,
   YOUTUBE_REDIRECT_URI,
   YOUTUBE_TOKEN_URL,
 } from '@twirchat/shared/constants'
+import { z } from 'zod'
 
-import {
-  connectTwitchDevice,
-  refreshTwitchToken,
-  requestTwitchDeviceCode,
-  waitForTwitchDeviceToken,
-} from '../src/auth/twitch'
+import { OAuthRefreshError } from '../src/auth/refresh-token'
+import { getTwitchAuthUrl, handleTwitchCallback, refreshTwitchToken } from '../src/auth/twitch'
 import { createTwitchChatAuthProvider } from '../src/auth/twitch-access-token'
 import { getYouTubeAuthUrl, handleYouTubeCallback, refreshYouTubeToken } from '../src/auth/youtube'
+import { getBackendUrl } from '../src/runtime-config'
 import { AccountStore } from '../src/store/account-store'
 import { getDb, initDb } from '../src/store/db'
 
 const originalFetch = globalThis.fetch
 const oauthEnvironment = {
-  TWIRCHAT_TWITCH_CLIENT_ID: 'public-client',
   TWIRCHAT_YOUTUBE_CLIENT_ID: 'installed-client',
   TWIRCHAT_YOUTUBE_CLIENT_SECRET: 'installed-secret',
 }
@@ -60,91 +57,17 @@ function readForm(init?: RequestInit): URLSearchParams {
   return init.body
 }
 
-const code = {
-  device_code: 'private-device-code',
-  expires_in: 30,
-  interval: 1,
-  user_code: 'ABCD1234',
-  verification_uri: 'https://www.twitch.tv/activate?public=true&device-code=ABCD1234',
+const backendJsonSchema = z.record(z.string(), z.string())
+
+function readBackendJson(init?: RequestInit): Record<string, string> {
+  expect(init?.method).toBe('POST')
+  if (typeof init?.body !== 'string') throw new Error('Expected a JSON body.')
+  return backendJsonSchema.parse(JSON.parse(init.body))
 }
 
-test('Twitch device authorization polls Twitch and stores the validated user locally', async () => {
-  let polls = 0
-  let grantedScopes: string[] = []
-  mockFetch(async (url, init) => {
-    if (url === 'https://id.twitch.tv/oauth2/device') {
-      const form = readForm(init)
-      expect(form.get('client_id')).toBe('public-client')
-      expect(form.has('client_secret')).toBe(false)
-      expect(form.has('scope')).toBe(false)
-      grantedScopes = form.get('scopes')?.split(' ') ?? []
-      expect(grantedScopes).toContain('moderator:manage:chat_messages')
-      expect(grantedScopes).toContain('moderator:manage:banned_users')
-      return Response.json(code)
-    }
-    if (url === TWITCH_TOKEN_URL) {
-      const form = readForm(init)
-      expect(form.get('client_id')).toBe('public-client')
-      expect(form.has('client_secret')).toBe(false)
-      expect(form.get('device_code')).toBe(code.device_code)
-      expect(form.get('grant_type')).toBe('urn:ietf:params:oauth:grant-type:device_code')
-      expect(form.get('scopes')).toBe(grantedScopes.join(' '))
-      if (++polls === 1) return Response.json({ message: 'authorization_pending' }, { status: 400 })
-      return Response.json({ access_token: 'twitch-access', refresh_token: 'twitch-refresh' })
-    }
-    if (url === 'https://id.twitch.tv/oauth2/validate') {
-      expect(new Headers(init?.headers).get('Authorization')).toBe('OAuth twitch-access')
-      return Response.json({
-        client_id: 'public-client',
-        user_id: '42',
-        login: 'twitchlogin',
-        expires_in: 3600,
-        scopes: grantedScopes,
-      })
-    }
-    if (url === 'https://api.twitch.tv/helix/users?id=42') {
-      const headers = new Headers(init?.headers)
-      expect(headers.get('Client-Id')).toBe('public-client')
-      expect(headers.get('Authorization')).toBe('Bearer twitch-access')
-      return Response.json({ data: [{ display_name: 'Twitch Login' }] })
-    }
-    throw new Error(`Unexpected URL ${url}`)
-  })
+const backend = (path: string) => `${getBackendUrl()}${path}`
 
-  const { signal } = new AbortController()
-  const attempt = await requestTwitchDeviceCode(signal)
-  expect(attempt.code.user_code).toBe(code.user_code)
-  expect(attempt.code.verification_uri).toBe(code.verification_uri)
-  await expect(connectTwitchDevice(attempt, signal)).resolves.toEqual({
-    username: 'twitchlogin',
-    displayName: 'Twitch Login',
-    channelSlug: 'twitchlogin',
-  })
-  expect(polls).toBe(2)
-  expect(AccountStore.findByPlatform('twitch')?.id).toBe('twitch:42')
-  expect(AccountStore.getTokens('twitch:42')?.refreshToken).toBe('twitch-refresh')
-})
-
-test('Twitch rejects foreign verification links and cancels a poll before sending it', async () => {
-  const controller = new AbortController()
-  mockFetch(async () =>
-    Response.json({ ...code, verification_uri: 'https://www.twitch.tv.example.invalid/activate' }),
-  )
-  await expect(requestTwitchDeviceCode(controller.signal)).rejects.toThrow()
-
-  let requests = 0
-  mockFetch(async () => {
-    requests++
-    return Response.json(code)
-  })
-  const attempt = await requestTwitchDeviceCode(controller.signal)
-  const polling = waitForTwitchDeviceToken(attempt, controller.signal)
-  controller.abort()
-  await expect(polling).rejects.toThrow()
-  expect(requests).toBe(1)
-})
-
-test('Twitch refresh is serialized and persists the rotated public-client token', async () => {
+function saveTwitchAccount(refreshToken: string) {
   AccountStore.upsert({
     id: 'twitch:42',
     platform: 'twitch',
@@ -152,26 +75,110 @@ test('Twitch refresh is serialized and persists the rotated public-client token'
     username: 'twitchlogin',
     displayName: 'Twitch Login',
     accessToken: 'expired',
-    refreshToken: 'refresh+encoded%',
+    refreshToken,
   })
+}
+
+test('Twitch sign-in uses one-time PKCE and exchanges the code through the backend', async () => {
+  let challenge = ''
+  let state = ''
+  let requests = 0
+  mockFetch(async (url, init) => {
+    requests++
+    if (url === backend('/api/auth/twitch/start')) {
+      const body = readBackendJson(init)
+      expect(body.redirectUri).toBe(TWITCH_REDIRECT_URI)
+      expect(body).not.toHaveProperty('codeVerifier')
+      challenge = body.codeChallenge ?? ''
+      state = body.state ?? ''
+      return Response.json({ url: `https://id.twitch.tv/oauth2/authorize?state=${state}` })
+    }
+    if (url === backend('/api/auth/twitch/exchange')) {
+      const body = readBackendJson(init)
+      expect(body.code).toBe('twitch-code')
+      expect(body.redirectUri).toBe(TWITCH_REDIRECT_URI)
+      const verifier = body.codeVerifier ?? ''
+      expect(new Bun.CryptoHasher('sha256').update(verifier).digest('base64url')).toBe(challenge)
+      return Response.json({ accessToken: 'twitch-access', refreshToken: 'twitch-refresh' })
+    }
+    if (url === 'https://id.twitch.tv/oauth2/validate') {
+      expect(new Headers(init?.headers).get('Authorization')).toBe('OAuth twitch-access')
+      return Response.json({
+        client_id: 'backend-client',
+        user_id: '42',
+        login: 'twitchlogin',
+        expires_in: 3600,
+        scopes: ['chat:read'],
+      })
+    }
+    if (url === 'https://api.twitch.tv/helix/users?id=42') {
+      const headers = new Headers(init?.headers)
+      expect(headers.get('Client-Id')).toBe('backend-client')
+      expect(headers.get('Authorization')).toBe('Bearer twitch-access')
+      return Response.json({ data: [{ display_name: 'Twitch Login' }] })
+    }
+    throw new Error(`Unexpected URL ${url}`)
+  })
+
+  expect(new URL(await getTwitchAuthUrl()).origin).toBe('https://id.twitch.tv')
+  const callback = new URL(TWITCH_REDIRECT_URI)
+  callback.searchParams.set('code', 'twitch-code')
+  callback.searchParams.set('state', 'forged')
+  await expect(handleTwitchCallback(callback)).rejects.toThrow('session expired')
+  expect(requests).toBe(1)
+
+  callback.searchParams.set('state', state)
+  const result = await handleTwitchCallback(callback)
+  expect(result.user).toEqual({ username: 'twitchlogin', displayName: 'Twitch Login' })
+  expect(result.channelSlug).toBe('twitchlogin')
+  expect(AccountStore.findByPlatform('twitch')?.id).toBe('twitch:42')
+  expect(AccountStore.getTokens('twitch:42')?.refreshToken).toBe('twitch-refresh')
+  await expect(handleTwitchCallback(callback)).rejects.toThrow('session expired')
+})
+
+test('Twitch sign-in refuses an authorize URL outside Twitch', async () => {
+  mockFetch(async () => Response.json({ url: 'https://id.twitch.tv.example.invalid/authorize' }))
+  await expect(getTwitchAuthUrl()).rejects.toThrow()
+})
+
+test('Twitch refresh goes through the backend once and persists the rotated token', async () => {
+  saveTwitchAccount('refresh+encoded%')
   let requests = 0
   const { promise, resolve } = Promise.withResolvers<Response>()
   mockFetch(async (url, init) => {
     requests++
-    expect(url).toBe(TWITCH_TOKEN_URL)
-    const form = readForm(init)
-    expect(form.get('client_id')).toBe('public-client')
-    expect(form.has('client_secret')).toBe(false)
-    expect(form.get('grant_type')).toBe('refresh_token')
-    expect(form.get('refresh_token')).toBe('refresh+encoded%')
+    expect(url).toBe(backend('/api/auth/twitch/refresh'))
+    expect(readBackendJson(init)).toEqual({ refreshToken: 'refresh+encoded%' })
     return promise
   })
   const first = refreshTwitchToken('twitch:42')
   expect(refreshTwitchToken('twitch:42')).toBe(first)
-  resolve(Response.json({ access_token: 'renewed', refresh_token: 'rotated', expires_in: 3600 }))
+  resolve(Response.json({ accessToken: 'renewed', refreshToken: 'rotated', expiresIn: 3600 }))
   await expect(first).resolves.toBe('renewed')
   expect(requests).toBe(1)
   expect(AccountStore.getTokens('twitch:42')?.refreshToken).toBe('rotated')
+})
+
+test('Twitch refresh only reports a revoked token when Twitch says so', async () => {
+  saveTwitchAccount('revoked')
+  const refusal = async (response: Response) => {
+    mockFetch(async () => response)
+    const error = await refreshTwitchToken('twitch:42').catch((caught: unknown) => caught)
+    if (!(error instanceof OAuthRefreshError)) throw new Error('Expected a refresh refusal.')
+    return error
+  }
+
+  const revoked = await refusal(
+    Response.json({ error: 'twitch_rejected', message: 'Invalid refresh token' }, { status: 400 }),
+  )
+  expect(revoked.invalidRefreshToken).toBe(true)
+  const outage = await refusal(Response.json({ error: 'Twitch is unavailable' }, { status: 502 }))
+  expect(outage.invalidRefreshToken).toBe(false)
+  const misconfigured = await refusal(
+    Response.json({ error: 'twitch_rejected', message: 'missing client secret' }, { status: 400 }),
+  )
+  expect(misconfigured.invalidRefreshToken).toBe(false)
+  expect(AccountStore.getTokens('twitch:42')?.refreshToken).toBe('revoked')
 })
 
 test('Twitch chat connections take the stored token on every connect and refresh it once', async () => {
@@ -189,14 +196,13 @@ test('Twitch chat connections take the stored token on every connect and refresh
   })
   const refreshedWith: (string | null)[] = []
   mockFetch(async (url, init) => {
-    expect(url).toBe(TWITCH_TOKEN_URL)
-    const form = readForm(init)
-    refreshedWith.push(form.get('refresh_token'))
+    expect(url).toBe(backend('/api/auth/twitch/refresh'))
+    refreshedWith.push(readBackendJson(init).refreshToken ?? null)
     const n = refreshedWith.length + 1
     return Response.json({
-      access_token: `access-${n}`,
-      refresh_token: `refresh-${n}`,
-      expires_in: 14_000,
+      accessToken: `access-${n}`,
+      refreshToken: `refresh-${n}`,
+      expiresIn: 14_000,
     })
   })
   const provider = createTwitchChatAuthProvider('twitch:42')

@@ -25,7 +25,6 @@ import { ChatNotice, UpdateToast } from './App'
 import { SavedAccounts } from './SavedAccounts'
 import { SearchAllChatsDialog } from './SearchAllChatsDialog'
 import { SettingsPanel } from './SettingsPanel'
-import { TwitchDeviceDialog } from './TwitchDeviceDialog'
 import { ActionButton } from './ui/Form'
 import { Modal } from './ui/Modal'
 import { UserCardDialog } from './UserCardDialog'
@@ -165,7 +164,6 @@ export function ChatWindow({
               <SavedAccounts />
             </Modal>
           ) : null}
-          <TwitchDeviceDialog />
           <ChatNotice />
           <UpdateToast />
         </div>

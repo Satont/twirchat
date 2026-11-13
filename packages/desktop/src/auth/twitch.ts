@@ -1,171 +1,92 @@
-import { setTimeout as wait } from 'node:timers/promises'
-
+/**
+ * Twitch sign-in through the TwirChat backend (authorization code + PKCE).
+ *
+ * The desktop keeps the PKCE verifier and the tokens. The backend holds the client
+ * secret: it builds the authorize URL, exchanges the callback code and refreshes tokens.
+ * Twitch redirects to the local auth server (`TWITCH_REDIRECT_URI`).
+ */
+import type {
+  TwitchBuildUrlRequest,
+  TwitchExchangeRequest,
+  TwitchRefreshRequest,
+} from '@twirchat/shared'
 import { logger } from '@twirchat/shared'
-import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
+import { TWITCH_REDIRECT_URI } from '@twirchat/shared/constants'
 import { z } from 'zod'
 
 import { t } from '../gpuix/i18n'
+import { backendFetch } from '../runtime-config'
 import { AccountStore } from '../store/account-store'
-import { getTwitchDesktopClientId } from './client-config'
-import { postOAuthForm } from './oauth-form'
+import { createPkceSessions } from './pkce'
 import { createOAuthRefresher, OAuthRefreshError } from './refresh-token'
-import { expiresAt, oauthTokenSchema } from './response-schemas'
+import {
+  authUrlSchema,
+  exchangedTokenSchema,
+  expiresAt,
+  refreshedTokenSchema,
+} from './response-schemas'
+import { successPage } from './server'
 import { TwitchTokenValidationError, validateTwitchUserToken } from './twitch-user-token'
 
 const log = logger('auth-twitch')
-
-export const TWITCH_SCOPES: readonly string[] = [
-  'chat:read',
-  'chat:edit',
-  'user:read:chat',
-  'user:write:chat',
-  'user:read:emotes',
-  'channel:read:subscriptions',
-  'channel:read:redemptions',
-  'moderator:read:followers',
-  'moderator:read:moderators',
-  'moderator:read:vips',
-  'moderator:read:unban_requests',
-  'moderator:read:chatters',
-  'moderator:manage:chat_messages',
-  'moderator:manage:banned_users',
-  'moderator:manage:chat_settings',
-  'moderator:manage:announcements',
-  'moderator:manage:shoutouts',
-  'channel:manage:moderators',
-  'channel:manage:vips',
-  'channel:read:vips',
-  'moderation:read',
-  'user:manage:chat_color',
-  'channel:edit:commercial',
-  'channel:manage:raids',
-  'user:manage:blocked_users',
-  'user:manage:whispers',
-  'user:read:moderated_channels',
-  'user:read:follows',
-  'channel:read:polls',
-  'channel:manage:polls',
-  'channel:read:predictions',
-  'channel:manage:predictions',
-  'channel:manage:redemptions',
-  'moderator:read:chat_messages',
-  'bits:read',
-  'channel:manage:broadcast',
-  'channel:read:editors',
-  'clips:edit',
-  'moderator:manage:automod',
-  'moderator:manage:blocked_terms',
-  'moderator:manage:shield_mode',
-  'moderator:manage:suspicious_users',
-  'moderator:manage:warnings',
-  'moderator:read:blocked_terms',
-]
-
-const scopes = TWITCH_SCOPES.join(' ')
-const deviceGrant = 'urn:ietf:params:oauth:grant-type:device_code'
-
-const deviceCodeSchema = z.object({
-  device_code: z.string().min(1),
-  expires_in: z.number().int().positive().max(7200),
-  interval: z.number().int().positive().max(120),
-  user_code: z.string().regex(/^[A-Za-z0-9-]{1,32}$/u),
-  verification_uri: z.url().refine((value) => {
-    const url = new URL(value)
-    return url.origin === 'https://www.twitch.tv' || url.origin === 'https://twitch.tv'
-  }),
-})
-const deviceErrorSchema = z.object({
-  error: z.string().optional(),
-  message: z.string().optional(),
+const sessions = createPkceSessions()
+const profileSchema = z.object({
+  data: z.array(
+    z.object({
+      display_name: z.string().optional(),
+      profile_image_url: z.string().nullish(),
+    }),
+  ),
 })
 
-export async function requestTwitchDeviceCode(signal: AbortSignal, fetcher: typeof fetch = fetch) {
-  const clientId = getTwitchDesktopClientId()
-  const res = await postOAuthForm(
-    'https://id.twitch.tv/oauth2/device',
-    { client_id: clientId, scopes },
-    signal,
-    fetcher,
-  )
+function postToBackend(path: string, body: unknown): Promise<Response> {
+  return backendFetch(path, {
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    redirect: 'error',
+    signal: AbortSignal.timeout(15_000),
+  })
+}
+
+export async function getTwitchAuthUrl(): Promise<string> {
+  const { state, codeChallenge } = sessions.begin()
+  const res = await postToBackend('/api/auth/twitch/start', {
+    codeChallenge,
+    state,
+    redirectUri: TWITCH_REDIRECT_URI,
+  } satisfies TwitchBuildUrlRequest)
   if (!res.ok) throw new Error(t('runtime.auth.startTwitchFailed', { status: res.status }))
-  const code = deviceCodeSchema.parse(await res.json())
-  return {
-    clientId,
+  const { url } = authUrlSchema.parse(await res.json())
+  if (new URL(url).origin !== 'https://id.twitch.tv')
+    throw new Error(t('runtime.auth.twitchSignInFailed'))
+  return url
+}
+
+export async function handleTwitchCallback(url: URL) {
+  const { code, codeVerifier } = sessions.consume(url)
+  const res = await postToBackend('/api/auth/twitch/exchange', {
     code,
-    deadline: Date.now() + code.expires_in * 1000,
-  }
-}
+    codeVerifier,
+    redirectUri: TWITCH_REDIRECT_URI,
+  } satisfies TwitchExchangeRequest)
+  if (!res.ok) throw new Error(t('runtime.auth.twitchFailed', { status: res.status }))
+  const tokens = exchangedTokenSchema.parse(await res.json())
+  const validation = await validateTwitchUserToken(tokens.accessToken)
 
-export async function waitForTwitchDeviceToken(
-  { clientId, code, deadline }: Awaited<ReturnType<typeof requestTwitchDeviceCode>>,
-  signal: AbortSignal,
-  fetcher: typeof fetch = fetch,
-) {
-  let interval = code.interval * 1000
-  const body = {
-    client_id: clientId,
-    scopes,
-    device_code: code.device_code,
-    grant_type: deviceGrant,
-  }
-  while (Date.now() < deadline) {
-    // Twitch requires sequential polling with at least the advertised interval.
-    // eslint-disable-next-line no-await-in-loop
-    await wait(Math.min(interval, deadline - Date.now()), undefined, { signal })
-    if (Date.now() >= deadline) break
-    // eslint-disable-next-line no-await-in-loop
-    const res = await postOAuthForm(TWITCH_TOKEN_URL, body, signal, fetcher)
-    // eslint-disable-next-line no-await-in-loop
-    const payload: unknown = await res.json().catch(() => null)
-    if (res.ok) return oauthTokenSchema.required({ refresh_token: true }).parse(payload)
-    const parsed = deviceErrorSchema.safeParse(payload)
-    const reason = parsed.success ? (parsed.data.message ?? parsed.data.error) : undefined
-    if (reason === 'authorization_pending') continue
-    if (reason === 'slow_down' || res.status === 429) {
-      interval += 5000
-      continue
-    }
-    if (reason === 'access_denied') throw new Error(t('runtime.auth.twitchDeclined'))
-    if (reason === 'expired_token' || reason === 'invalid device code') break
-    throw new Error(t('runtime.auth.twitchFailed', { status: res.status }))
-  }
-  throw new Error(t('runtime.auth.twitchExpired'))
-}
-
-export async function connectTwitchDevice(
-  attempt: Awaited<ReturnType<typeof requestTwitchDeviceCode>>,
-  signal: AbortSignal,
-) {
-  const tokens = await waitForTwitchDeviceToken(attempt, signal)
-  const validation = await validateTwitchUserToken(tokens.access_token)
-  if (validation.clientId !== attempt.clientId)
-    throw new Error(t('runtime.auth.twitchClientMismatch'))
-
-  const res = await fetch(
+  const profileRes = await fetch(
     `https://api.twitch.tv/helix/users?id=${encodeURIComponent(validation.userId)}`,
     {
       headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${tokens.accessToken}`,
         'Client-Id': validation.clientId,
       },
       redirect: 'error',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
+      signal: AbortSignal.timeout(15_000),
     },
   )
-  const profile = res.ok
-    ? z
-        .object({
-          data: z.array(
-            z.object({
-              display_name: z.string().optional(),
-              profile_image_url: z.string().nullish(),
-            }),
-          ),
-        })
-        .parse(await res.json()).data[0]
-    : undefined
+  const profile = profileRes.ok ? profileSchema.parse(await profileRes.json()).data[0] : undefined
 
-  signal.throwIfAborted()
   const displayName = profile?.display_name ?? validation.login
   AccountStore.upsert({
     id: `twitch:${validation.userId}`,
@@ -174,18 +95,26 @@ export async function connectTwitchDevice(
     username: validation.login,
     displayName,
     avatarUrl: profile?.profile_image_url ?? undefined,
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
     expiresAt: expiresAt(validation.expiresIn),
     scopes: validation.scopes,
   })
   log.info('Account signed in', { platform: 'twitch' })
-  return { channelSlug: validation.login, username: validation.login, displayName }
+  return {
+    channelSlug: validation.login,
+    response: new Response(successPage('Twitch'), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    }),
+    user: { username: validation.login, displayName },
+  }
 }
 
-export const refreshTwitchToken = createOAuthRefresher('Twitch', TWITCH_TOKEN_URL, () => ({
-  client_id: getTwitchDesktopClientId(),
-}))
+export const refreshTwitchToken = createOAuthRefresher('Twitch', {
+  request: (refreshToken) =>
+    postToBackend('/api/auth/twitch/refresh', { refreshToken } satisfies TwitchRefreshRequest),
+  parse: (payload) => refreshedTokenSchema.required({ refreshToken: true }).parse(payload),
+})
 
 export async function checkTwitchSession(
   accountId: string,
