@@ -521,7 +521,14 @@ function ChannelTabs({
           </div>
         )
       })}
-      {toolbar('tab-add', '', onAddChannel)}
+      <div>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>{toolbar('tab-add', '', onAddChannel)}</TooltipTrigger>
+          <TooltipContent side="right" style={{ padding: 6, borderRadius: 6 }}>
+            <Text style={{ fontSize: 12, color: theme.text }}>{t('app.addChannel.title')}</Text>
+          </TooltipContent>
+        </Tooltip>
+      </div>
       {state.error ? (
         <Text
           onClick={() => {
