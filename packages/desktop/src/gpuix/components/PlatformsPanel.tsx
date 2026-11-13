@@ -367,7 +367,7 @@ export function PlatformsPanel() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {platforms.keys().map((platform) => (
+        {Array.from(platforms.keys()).map((platform) => (
           <PlatformCard
             key={platform}
             platform={platform}
