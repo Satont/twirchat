@@ -24,7 +24,7 @@ import {
   TwitchOAuthRejection,
 } from '../auth/twitch.ts'
 import { ClientStore } from '../db/index.ts'
-import { json } from './utils.ts'
+import { json, requireClient } from './utils.ts'
 
 const log = logger('auth')
 const buildUrlSchema = z.object({
@@ -50,7 +50,67 @@ function twitchFailure(route: string, error: unknown): Response {
   return json({ error: 'Twitch is unavailable' }, 502)
 }
 
+/**
+ * Twitch OAuth: the desktop keeps PKCE and tokens, the backend holds the secret. These are
+ * desktop API calls, not provider callbacks, so they require the client secret header.
+ */
+export function createTwitchAuthRoutes(authenticate = requireClient) {
+  return {
+    '/api/auth/twitch/start': {
+      async POST(req: Request) {
+        const auth = await authenticate(req)
+        if (auth instanceof Response) return auth
+        const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
+        if (!parsed.success) {
+          return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
+        }
+        const { codeChallenge, state, redirectUri } = parsed.data
+        return json(
+          buildTwitchAuthUrl(codeChallenge, state, redirectUri) satisfies TwitchBuildUrlResponse,
+        )
+      },
+    },
+
+    '/api/auth/twitch/exchange': {
+      async POST(req: Request) {
+        const auth = await authenticate(req)
+        if (auth instanceof Response) return auth
+        const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
+        if (!parsed.success) {
+          return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
+        }
+        const body = parsed.data
+        try {
+          const tokens = await exchangeTwitchCode(body.code, body.codeVerifier, body.redirectUri)
+          return json(tokens satisfies TwitchExchangeResponse)
+        } catch (error) {
+          return twitchFailure('twitch/exchange', error)
+        }
+      },
+    },
+
+    '/api/auth/twitch/refresh': {
+      async POST(req: Request) {
+        const auth = await authenticate(req)
+        if (auth instanceof Response) return auth
+        const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
+        if (!parsed.success) {
+          return json({ error: 'refreshToken is required' }, 400)
+        }
+        try {
+          const tokens = await refreshTwitchToken(parsed.data.refreshToken)
+          return json(tokens satisfies TwitchRefreshResponse)
+        } catch (error) {
+          return twitchFailure('twitch/refresh', error)
+        }
+      },
+    },
+  }
+}
+
 export const authRoutes = {
+  ...createTwitchAuthRoutes(),
+
   // ============================================================
   // Kick OAuth — HTTP-based flow (new)
   // ============================================================
@@ -102,58 +162,6 @@ export const authRoutes = {
       } catch (error) {
         log.error('kick/refresh failed', { err: String(error) })
         return json({ error: String(error) }, 500)
-      }
-    },
-  },
-
-  // ============================================================
-  // Twitch OAuth — the desktop keeps PKCE and tokens, the backend holds the secret
-  // ============================================================
-
-  '/api/auth/twitch/start': {
-    async POST(req: Request) {
-      const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
-      }
-      const body = parsed.data
-      return json(
-        buildTwitchAuthUrl(
-          body.codeChallenge,
-          body.state,
-          body.redirectUri,
-        ) satisfies TwitchBuildUrlResponse,
-      )
-    },
-  },
-
-  '/api/auth/twitch/exchange': {
-    async POST(req: Request) {
-      const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const tokens = await exchangeTwitchCode(body.code, body.codeVerifier, body.redirectUri)
-        return json(tokens satisfies TwitchExchangeResponse)
-      } catch (error) {
-        return twitchFailure('twitch/exchange', error)
-      }
-    },
-  },
-
-  '/api/auth/twitch/refresh': {
-    async POST(req: Request) {
-      const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'refreshToken is required' }, 400)
-      }
-      try {
-        const tokens = await refreshTwitchToken(parsed.data.refreshToken)
-        return json(tokens satisfies TwitchRefreshResponse)
-      } catch (error) {
-        return twitchFailure('twitch/refresh', error)
       }
     },
   },

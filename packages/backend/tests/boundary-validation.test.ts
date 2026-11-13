@@ -41,10 +41,7 @@ test('OAuth request boundaries reject malformed JSON and wrong field types befor
     },
     { preconnect: originalFetch.preconnect },
   )
-  for (const route of [
-    authRoutes['/api/auth/kick/exchange'],
-    authRoutes['/api/auth/twitch/exchange'],
-  ]) {
+  for (const route of [authRoutes['/api/auth/kick/exchange']]) {
     for (const body of ['{', 'null', '{"code":42,"codeVerifier":"v","redirectUri":"r"}']) {
       const response = await route.POST(
         new Request('http://local/exchange', { method: 'POST', body }),

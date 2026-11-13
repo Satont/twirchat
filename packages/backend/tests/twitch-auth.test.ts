@@ -4,7 +4,8 @@ import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
 import { TWITCH_SCOPES } from '@twirchat/shared/twitch-scopes'
 
 import { buildTwitchAuthUrl } from '../src/auth/twitch.ts'
-import { authRoutes } from '../src/routes/auth.ts'
+import { createTwitchAuthRoutes } from '../src/routes/auth.ts'
+import { json } from '../src/routes/utils.ts'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
@@ -22,10 +23,17 @@ function mockTwitchToken(handler: (form: URLSearchParams) => Response) {
   )
 }
 
-function refresh(refreshToken: string) {
-  return authRoutes['/api/auth/twitch/refresh'].POST(
+const routes = createTwitchAuthRoutes(async (req) =>
+  req.headers.get('X-Client-Secret') === 'desktop-test'
+    ? { clientSecret: 'desktop-test' }
+    : json({ error: 'Missing X-Client-Secret header' }, 401),
+)
+
+function refresh(refreshToken: string, clientSecret = 'desktop-test') {
+  return routes['/api/auth/twitch/refresh'].POST(
     new Request('http://backend.test/api/auth/twitch/refresh', {
       method: 'POST',
+      headers: { 'X-Client-Secret': clientSecret },
       body: JSON.stringify({ refreshToken }),
     }),
   )
@@ -78,4 +86,40 @@ test('Twitch refresh passes a refusal through and reports outages separately', a
   mockTwitchToken(() => new Response('upstream down', { status: 503 }))
   const outage = await refresh('refresh-1')
   expect(outage.status).toBe(502)
+})
+
+test('Twitch OAuth routes reject callers without the desktop client secret', async () => {
+  let calls = 0
+  mockTwitchToken(() => {
+    calls++
+    return Response.json({ access_token: 'unexpected' })
+  })
+  expect((await refresh('refresh-1', '')).status).toBe(401)
+  const anonymous = (path: string) => new Request(`http://backend.test${path}`, { method: 'POST' })
+  const start = await routes['/api/auth/twitch/start'].POST(anonymous('/api/auth/twitch/start'))
+  expect(start.status).toBe(401)
+  const exchange = await routes['/api/auth/twitch/exchange'].POST(
+    anonymous('/api/auth/twitch/exchange'),
+  )
+  expect(exchange.status).toBe(401)
+  expect(calls).toBe(0)
+})
+
+test('Twitch code exchange rejects malformed bodies before calling Twitch', async () => {
+  let calls = 0
+  mockTwitchToken(() => {
+    calls++
+    return Response.json({ access_token: 'unexpected' })
+  })
+  for (const body of ['{', 'null', '{"code":42,"codeVerifier":"v","redirectUri":"r"}']) {
+    const response = await routes['/api/auth/twitch/exchange'].POST(
+      new Request('http://backend.test/api/auth/twitch/exchange', {
+        method: 'POST',
+        headers: { 'X-Client-Secret': 'desktop-test' },
+        body,
+      }),
+    )
+    expect(response.status).toBe(400)
+  }
+  expect(calls).toBe(0)
 })
