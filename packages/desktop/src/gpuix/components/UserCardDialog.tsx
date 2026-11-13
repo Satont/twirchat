@@ -107,6 +107,18 @@ export function UserCardDialog({
   }, [hideAvatar])
 
   const [openingWindow, setOpeningWindow] = useState(false)
+  const openInWindow = async () => {
+    if (!windows) return
+    setOpeningWindow(true)
+    try {
+      await windows.openUser(target)
+      onClose()
+    } catch (e) {
+      console.log(e)
+    } finally {
+      setOpeningWindow(false)
+    }
+  }
 
   const effectiveAlias = currentAlias ?? target.currentAlias
   /**
@@ -265,6 +277,7 @@ export function UserCardDialog({
       windows={windows}
       standalone={standalone}
       openingWindow={openingWindow}
+      openWindow={() => runUiTask(openInWindow())}
       hideAvatar={hideAvatar}
       channelUrl={channelUrl}
       openingPublicChannel={publicChannel.isOpening}

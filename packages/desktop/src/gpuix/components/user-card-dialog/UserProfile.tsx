@@ -612,8 +612,11 @@ export function UserProfileView({
                     display: 'flex',
                     flexDirection: 'row',
                     alignItems: 'center',
+                    flexWrap: 'wrap',
                     justifyContent: 'space-between',
                     gap: 8,
+                    borderBottomWidth: 1,
+                    borderColor: theme.border,
                   }}
                 >
                   <div
@@ -623,13 +626,24 @@ export function UserProfileView({
                       fontSize: 18,
                       fontWeight: 600,
                       color: theme.text,
+                      paddingBottom: 4,
                     }}
                   >
-                    {entry.login}
+                    {entry.login}:
                   </div>
-                  <Text style={{ fontSize: 18, color: theme.text2 }}>
-                    {`${firstSeen} – ${lastSeen}`}
-                  </Text>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'row', gap: 4, flexWrap: 'wrap'}}>
+                    <div style={{ display: 'flex', fontSize: 18, color: theme.text2 }}>
+                      {firstSeen}
+                    </div>
+                    <div style={{ fontSize: 18, color: theme.text2 }}>
+                      -
+                    </div>
+                    <div style={{ display: 'flex', fontSize: 18, color: theme.text2 }}>
+                      {lastSeen}
+                    </div>
+                  </div>
+                  
                 </div>
               )
             })}
