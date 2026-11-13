@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 
+import { z } from 'zod'
+
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 
 assertGuiQaEnvironment()
@@ -14,6 +16,19 @@ const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 import type { DesktopWindowDescriptor } from '../src/services/window-session'
 
 type UserDescriptor = Extract<DesktopWindowDescriptor, { kind: 'user' }>
+
+interface AutomationNode {
+  id: number
+  text?: string
+  children: AutomationNode[]
+}
+const automationSchema: z.ZodType<AutomationNode> = z.lazy(() =>
+  z.object({
+    id: z.number(),
+    text: z.string().optional(),
+    children: z.array(automationSchema).default([]),
+  }),
+)
 
 const backend = getDesktopBackend()
 const target = {
@@ -66,12 +81,21 @@ const manager = new DesktopWindowManager(
   () => {},
 )
 
-function nodes(node = JSON.parse(mainRenderer!.getAutomationTree())): Array<{
-  id: number
-  text?: string
-  children?: unknown[]
-}> {
-  return [node, ...((node.children ?? []) as never[]).flatMap((child) => nodes(child as never))]
+function currentRenderer(): import('@gpuix/native').GpuixRenderer {
+  const renderer = mainRenderer
+  assert(renderer, 'main renderer not ready')
+  return renderer
+}
+
+function nodes(): AutomationNode[] {
+  const root = automationSchema.parse(JSON.parse(currentRenderer().getAutomationTree()))
+  const out: AutomationNode[] = []
+  function walk(node: AutomationNode): void {
+    out.push(node)
+    for (const child of node.children) walk(child)
+  }
+  walk(root)
+  return out
 }
 
 async function until(check: () => unknown, label: string): Promise<void> {
@@ -84,13 +108,14 @@ async function until(check: () => unknown, label: string): Promise<void> {
 
 try {
   await manager.start()
-  await until(() => mainRenderer, 'main renderer')
+  await until(() => mainRenderer !== undefined, 'main renderer')
   const button = nodes().find((node) => node.text === 'Open in window')
   assert.ok(button, 'Open in window button')
-  const bounds = mainRenderer!.getElementBounds(button.id)
+  const renderer = currentRenderer()
+  const bounds = renderer.getElementBounds(button.id)
   assert.ok(bounds && bounds.width > 0 && bounds.height > 0, 'button bounds')
   console.log('[qa] clicking Open in window at', bounds)
-  mainRenderer!.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
+  renderer.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
   await until(() => userWindowId !== undefined, 'user window descriptor')
   await Bun.sleep(500)
   console.log('[qa] user window opened without crash')
