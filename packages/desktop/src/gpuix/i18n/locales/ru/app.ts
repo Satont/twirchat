@@ -104,7 +104,7 @@ export const ruApp = {
   'app.accounts.copyLink': 'Скопировать ссылку для входа',
   'app.accounts.copyLinkDetail': 'Для другого браузера или приватного окна на этом компьютере',
 
-  'app.addChannel.title': 'Смотреть канал',
+  'app.addChannel.title': 'Добавить канал',
   'app.addChannel.subtitle': 'Откроет чат канала в новой вкладке',
   'app.addChannel.selectPlatform': 'Выберите доступную платформу',
   'app.addChannel.pluginPlaceholder': 'Идентификатор канала {name}',
@@ -194,4 +194,5 @@ export const ruApp = {
     'Результаты не меняются до нажатия «Обновить». Поиск выполняется по сохранённым сообщениям в открытых панелях и «Моих каналах».',
   'app.search.preparing': 'Подготовка результатов…',
   'app.search.noMatches': 'Нет сообщений, подходящих под этот запрос.',
+  'app.settings.optionals': 'Опции',
 } satisfies Record<keyof typeof app, string>
