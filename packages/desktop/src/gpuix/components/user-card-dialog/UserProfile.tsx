@@ -1,3 +1,4 @@
+import { useMediaQuery } from '@desktop/gpuix/hooks/use-media'
 import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
@@ -269,7 +270,7 @@ export function UserProfileView({
     }
   }
 
-  // Render cosmetics section (7TV badges, paints, etc.)
+  const isWideScreen = useMediaQuery('(min-width: 480px)')
   const cosmeticsSection =
     cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
       <div
@@ -288,7 +289,7 @@ export function UserProfileView({
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: isWideScreen ? 'space-between' : 'center',
             flexWrap: 'wrap',
             gap: 10,
           }}

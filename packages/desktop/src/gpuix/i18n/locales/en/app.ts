@@ -100,7 +100,7 @@ export const app = {
   'app.accounts.copyLink': 'Copy sign-in link',
   'app.accounts.copyLinkDetail': 'For another browser or a private window on this computer',
 
-  'app.addChannel.title': 'Watch a channel',
+  'app.addChannel.title': 'Add new channel',
   'app.addChannel.subtitle': "Opens the channel's chat in a new tab",
   'app.addChannel.selectPlatform': 'Select an available platform',
   'app.addChannel.pluginPlaceholder': '{name} channel identifier',
@@ -190,4 +190,5 @@ export const app = {
     'Results stay frozen until Refresh. Search retained messages in open panes and My channels.',
   'app.search.preparing': 'Preparing results…',
   'app.search.noMatches': 'No messages match this search.',
+  'app.settings.optionals': 'Optionals',
 } satisfies Record<string, string>

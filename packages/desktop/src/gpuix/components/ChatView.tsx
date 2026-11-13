@@ -1786,7 +1786,11 @@ export function ChatView({
             </HeaderButton>
 
             {chattersTargets.length > 0 ? (
-              <HeaderButton testId="chatters-button" onClick={() => setChattersOpen(true)}>
+              <HeaderButton
+                // title={t('app.settings.chat.settings')}
+                testId="chatters-button"
+                onClick={() => setChattersOpen(true)}
+              >
                 <Icon name="users" size={14} color={theme.text2} />
               </HeaderButton>
             ) : null}
@@ -1795,10 +1799,16 @@ export function ChatView({
 
             {onSplitRight || onClosePanel || onEditFeed || windows ? (
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
-                <HeaderButton testId="split-right" onClick={() => onSplitRight?.()}>
+                <HeaderButton
+                  title={t('app.addChannel.title')}
+                  testId="split-right"
+                  onClick={() => onSplitRight?.()}
+                >
                   <Icon name="plus" size={14} color={theme.text2} />
                 </HeaderButton>
+
                 <HeaderButton
+                  title={t('app.settings.optionals')}
                   testId="panel-menu"
                   onClick={() => {
                     if (Date.now() - menuDismissedAt.current < 250) return
