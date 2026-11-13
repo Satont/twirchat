@@ -15,6 +15,11 @@ export const userCard = {
   'userCard.tab.notes': 'Notes',
   'userCard.tab.history': 'History',
 
+  'userCard.badges.title': 'Twitch badge collection',
+  'userCard.badges.loading': 'Loading Twitch badges…',
+  'userCard.badges.empty': 'No earned Twitch badges found.',
+  'userCard.badges.unavailable': 'Could not load the Twitch badge collection.',
+
   'userCard.metadata.title': 'Account metadata',
   'userCard.metadata.hint': 'Fetched through the backend for this platform.',
   'userCard.metadata.unsupported': 'Metadata is not supported for this platform yet.',

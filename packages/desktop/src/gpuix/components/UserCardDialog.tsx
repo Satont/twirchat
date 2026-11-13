@@ -2,7 +2,7 @@ import type { ModerationPlatform } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
-import { useGpuixRequired, motion, type PublicInstance } from '@gpuix/react'
+import { useGpuixRequired, useWindowSize, motion, type PublicInstance } from '@gpuix/react'
 import { showNotice, homeMessagesStore, watchedMessagesStore } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
@@ -58,6 +58,7 @@ export function UserCardDialog({
   const { t } = useT()
   const windows = useDesktopWindows()
   const renderer = useGpuixRequired()
+  const scrollHeader = useWindowSize().height < 500
   const streamer = useStore(streamerModeStore)
   const hideAvatar = streamer.effectiveEnabled && streamer.settings.hideUsercardAvatars
   const avatarKey = `${target.platform}:${target.platformUserId}`
@@ -250,6 +251,30 @@ export function UserCardDialog({
       : null,
   })
 
+  const header = (
+    <UserCardHeader
+      target={{
+        platform: target.platform,
+        platformUserId: target.platformUserId,
+        displayName: target.displayName,
+        username: target.username,
+        avatarUrl,
+        badges: target.badges,
+      }}
+      extraBadges={extraBadges}
+      windows={windows}
+      standalone={standalone}
+      openingWindow={openingWindow}
+      hideAvatar={hideAvatar}
+      channelUrl={channelUrl}
+      openingPublicChannel={publicChannel.isOpening}
+      openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
+      onAvatarClick={openPicture}
+      effectiveAlias={effectiveAlias}
+      accent={headerAccent}
+    />
+  )
+
   return (
     <Modal
       hotkeyContextId={popupContextId}
@@ -266,28 +291,7 @@ export function UserCardDialog({
           minHeight: 0,
         }}
       >
-        {/* Keep the header out of the scroll area so long tab content never hides it. */}
-        <UserCardHeader
-          target={{
-            platform: target.platform,
-            platformUserId: target.platformUserId,
-            displayName: target.displayName,
-            username: target.username,
-            avatarUrl,
-            badges: target.badges,
-          }}
-          extraBadges={extraBadges}
-          windows={windows}
-          standalone={standalone}
-          openingWindow={openingWindow}
-          hideAvatar={hideAvatar}
-          channelUrl={channelUrl}
-          openingPublicChannel={publicChannel.isOpening}
-          openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
-          onAvatarClick={openPicture}
-          effectiveAlias={effectiveAlias}
-          accent={headerAccent}
-        />
+        {scrollHeader ? null : header}
 
         <div
           tabIndex={-1}
@@ -301,6 +305,7 @@ export function UserCardDialog({
             scrollbarWidth: 4,
           }}
         >
+          {scrollHeader ? header : null}
           <div
             style={{
               paddingLeft: 16,
