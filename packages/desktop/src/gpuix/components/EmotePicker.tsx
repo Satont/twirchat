@@ -7,7 +7,11 @@ import type { Platform } from '@twirchat/shared/types'
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { filterEmoteEntries, groupEmoteCatalog } from '../../views/main/utils/emote-catalog'
+import {
+  filterEmoteEntries,
+  groupEmoteCatalog,
+  applyLiveEmoteLocks,
+} from '../../views/main/utils/emote-catalog'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import {
@@ -18,7 +22,7 @@ import {
 } from '../hooks/use-popup-hotkeys'
 import { useT } from '../i18n'
 import { nativeWindow } from '../native-window'
-import { emoteStore, loadEmotes } from '../state/app'
+import { emoteStore, loadEmotes, showNotice } from '../state/app'
 import { useStore } from '../state/create-store'
 import { emotePreferencesStore, loadEmotePreferences } from '../state/emote-preferences'
 import { useTextInputFocusTracking } from '../state/focus'
@@ -109,7 +113,7 @@ export function EmotePicker({
   const groups = useMemo(() => {
     const grouped: Array<{ source: PickerSource; label: string; entries: EmoteCatalogEntry[] }> =
       groupEmoteCatalog(allEmotes)
-    const favorites = preferences.value.favorites
+    const favorites = applyLiveEmoteLocks(preferences.value.favorites, allEmotes)
     if (favorites.length) grouped.unshift({ source: 'favorites', label: '', entries: favorites })
     return grouped
   }, [allEmotes, preferences.value.favorites])
@@ -316,47 +320,85 @@ export function EmotePicker({
                     gap: GRID_GAP,
                   }}
                 >
-                  {row.entries.map((emote) => (
-                    <div
-                      key={`${emote.source}:${emote.id}:${emote.alias}`}
-                      style={{
-                        width: CELL_WIDTH,
-                        height: CELL_WIDTH,
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        borderRadius: 6,
-                        hover: { backgroundColor: 'rgba(255, 255, 255, 0.09)' },
-                      }}
-                    >
-                      <EmoteTooltip
-                        theme={theme}
-                        emote={emote}
-                        alias={emote.alias}
-                        catalog={allEmotes}
+                  {row.entries.map((emote) => {
+                    const locked = emote.locked === true
+                    return (
+                      <div
+                        key={`${emote.source}:${emote.id}:${emote.alias}`}
+                        style={{
+                          width: CELL_WIDTH,
+                          height: CELL_WIDTH,
+                          flexShrink: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: locked ? 'default' : 'pointer',
+                          borderRadius: 6,
+                          ...(locked
+                            ? {}
+                            : { hover: { backgroundColor: 'rgba(255, 255, 255, 0.09)' } }),
+                        }}
                       >
-                        <div
-                          testId={`emote-popup-item-${emote.alias}`}
-                          onClick={() => onSelect(emote.alias)}
-                          style={{
-                            width: CELL_WIDTH,
-                            height: CELL_WIDTH,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
+                        <EmoteTooltip
+                          theme={theme}
+                          emote={emote}
+                          alias={emote.alias}
+                          catalog={allEmotes}
                         >
-                          <RemoteImage
-                            url={emote.imageUrl}
-                            objectFit="contain"
-                            style={{ width: 32, height: 32, pointerEvents: 'none' }}
-                          />
-                        </div>
-                      </EmoteTooltip>
-                    </div>
-                  ))}
+                          <div
+                            testId={`emote-popup-item-${emote.alias}`}
+                            onClick={() => {
+                              if (locked) {
+                                showNotice('info', t('composer.emotes.locked'), 4000)
+                                return
+                              }
+                              onSelect(emote.alias)
+                            }}
+                            style={{
+                              position: 'relative',
+                              width: CELL_WIDTH,
+                              height: CELL_WIDTH,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <RemoteImage
+                              url={emote.imageUrl}
+                              objectFit="contain"
+                              style={{
+                                width: 32,
+                                height: 32,
+                                pointerEvents: 'none',
+                                opacity: locked ? 0.45 : 1,
+                              }}
+                            />
+                            {locked ? (
+                              <div
+                                testId={`emote-popup-locked-${emote.alias}`}
+                                style={{
+                                  position: 'absolute',
+                                  right: -1,
+                                  bottom: -1,
+                                  width: 14,
+                                  height: 14,
+                                  borderRadius: 7,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  backgroundColor: theme.surface2,
+                                  borderWidth: 1,
+                                  borderColor: theme.border,
+                                }}
+                              >
+                                <Icon name="lock" size={8} color={theme.text2} />
+                              </div>
+                            ) : null}
+                          </div>
+                        </EmoteTooltip>
+                      </div>
+                    )
+                  })}
                 </div>
               ),
             )}

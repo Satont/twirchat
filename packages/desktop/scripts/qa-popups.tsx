@@ -26,6 +26,7 @@ const { AddChannelModal } = await import('../src/gpuix/components/AddChannelModa
 const { ChattersDialog } = await import('../src/gpuix/components/ChattersDialog')
 const { SearchAllChatsDialog } = await import('../src/gpuix/components/SearchAllChatsDialog')
 const { EmotePicker } = await import('../src/gpuix/components/EmotePicker')
+const { ChatNotice } = await import('../src/gpuix/components/App')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { DEFAULT_EMOTE_PREFERENCES } = await import('../src/services/provider-emotes')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
@@ -41,6 +42,28 @@ const sharp = (await import('sharp')).default
 const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: '#8b5cf6' } })
   .png()
   .toBuffer()
+const emoteColors = [
+  '#8b5cf6',
+  '#ec4899',
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#ef4444',
+  '#14b8a6',
+  '#f97316',
+]
+const emotePngs = await Promise.all(
+  emoteColors.map((background) =>
+    sharp({ create: { width: 32, height: 32, channels: 4, background } })
+      .png()
+      .toBuffer(),
+  ),
+)
+function emoteImage(alias: string): string {
+  let hash = 0
+  for (const character of alias) hash = (hash * 31 + character.charCodeAt(0)) >>> 0
+  return `data:image/png;base64,${Buffer.from(emotePngs[hash % emotePngs.length] ?? png).toString('base64')}`
+}
 function emote(
   alias: string,
   source: EmoteCatalogEntry['source'],
@@ -52,14 +75,19 @@ function emote(
     name: alias,
     source,
     provider,
-    imageUrl: `data:image/png;base64,${png.toString('base64')}`,
+    imageUrl: emoteImage(alias),
     animated: false,
     zeroWidth: false,
     aspectRatio: 1,
   }
 }
 globalThis.fetch = async (input) => {
-  requests.push(String(input))
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  requests.push(url)
+  if (url.startsWith('data:image/')) {
+    const bytes = Buffer.from(url.slice(url.indexOf(',') + 1), 'base64')
+    return new Response(bytes, { headers: { 'content-type': 'image/png' } })
+  }
   return new Response(png, { headers: { 'content-type': 'image/png' } })
 }
 const moderation = structuredClone(DEFAULT_MODERATION_SETTINGS)
@@ -224,6 +252,14 @@ const stopNativePlan = observeNativeHotkeyPlan('main', (plan) =>
 const root = createRoot(renderer, { onKeyDown: (event) => handleGlobalKeyDown(event) })
 const loop = startFrameLoop(renderer)
 const e = React.createElement
+function EmotePickerFixture(props) {
+  return e(
+    React.Fragment,
+    null,
+    e('div', { style: { height: 24, width: 300 } }, e(EmotePicker, props)),
+    e(ChatNotice),
+  )
+}
 async function mount(component, props = {}, anchored = false) {
   root.render(
     e(
@@ -474,6 +510,11 @@ try {
           emote('FrankerGlobal', 'global', 'ffz'),
           emote('SevenChannel', 'seventv'),
           emote('TwitchChannel', 'channel'),
+          { ...emote('LockedChannel', 'channel'), locked: true },
+          ...Array.from({ length: 7 }, (_, index) => ({
+            ...emote(`LockedChannel${index + 2}`, 'channel'),
+            locked: true,
+          })),
           emote('Collectible', 'collectibles'),
           emote('PersonalWave', 'personal'),
         ],
@@ -482,19 +523,15 @@ try {
   )
   closed = 0
   const selected = []
-  await mount(
-    EmotePicker,
-    {
-      platform: 'twitch',
-      channelId: 'mock',
-      useSessionCache: true,
-      onSelect: (alias) => selected.push(alias),
-      onClose: () => {
-        closed++
-      },
+  await mount(EmotePickerFixture, {
+    platform: 'twitch',
+    channelId: 'mock',
+    useSessionCache: true,
+    onSelect: (alias) => selected.push(alias),
+    onClose: () => {
+      closed++
     },
-    true,
-  )
+  })
   const tabs = [
     'favorites',
     'channel',
@@ -513,6 +550,19 @@ try {
       tabs.map((source) => `emote-popup-tab-${source}`),
     )
   assertTabOrder()
+  await click('emote-popup-tab-channel')
+  assert.ok(find('emote-popup-locked-LockedChannel'))
+  await captureGuiQaDisplay('popup-emotes-locked')
+  await click('emote-popup-item-LockedChannel')
+  assert.deepEqual(selected, [])
+  assert.match(app.noticeStore.get()?.text ?? '', /Subscribe to this channel/)
+  renderer.simulateMouseMove(10, 10)
+  await Bun.sleep(350)
+  await captureGuiQaDisplay('popup-emotes-locked-notice')
+  await click('emote-popup-item-TwitchChannel')
+  assert.deepEqual(selected, ['TwitchChannel'])
+  selected.length = 0
+  await click('emote-popup-tab-global')
   await type('emote-popup-search', 'frankerglobal')
   assert.ok(find('emote-popup-item-FrankerGlobal'))
   await press('ctrl-right')

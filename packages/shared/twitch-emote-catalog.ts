@@ -27,6 +27,11 @@ export function parseTwitchEmoteCatalog(
   value: unknown,
   source: EmoteCatalogEntry['source'],
   channelId?: string,
+  /**
+   * Emote IDs the signed-in user can use. When provided, restricted channel
+   * emotes outside the set are marked locked; omit while access is unknown.
+   */
+  availableEmoteIds?: ReadonlySet<string>,
 ): EmoteCatalogEntry[] {
   const body = row(value),
     template = string(body.template)
@@ -39,6 +44,11 @@ export function parseTwitchEmoteCatalog(
       scales = list(emote.scale),
       themes = list(emote.theme_mode)
     const animated = formats.includes('animated')
+    const locked =
+      source === 'channel' &&
+      string(emote.emote_type) === 'subscriptions' &&
+      availableEmoteIds !== undefined &&
+      !availableEmoteIds.has(id)
     const replacements: Record<string, string> = {
       id,
       format: animated ? 'animated' : 'static',
@@ -68,6 +78,7 @@ export function parseTwitchEmoteCatalog(
         animated,
         zeroWidth: false,
         aspectRatio: 1,
+        ...(locked ? { locked: true } : {}),
       },
     ]
   })
@@ -145,15 +156,21 @@ export function createTwitchEmoteCatalog() {
         }
         throw new EmoteCatalogError('Twitch emote pagination did not finish.', 502)
       }
-      const [globals, local, user] = await Promise.all([
-        request('chat/emotes/global').then((body) => parseTwitchEmoteCatalog(body, 'global')),
+      const [globalBody, localBody, user] = await Promise.all([
+        request('chat/emotes/global'),
         channelId
-          ? request('chat/emotes', { broadcaster_id: channelId }).then((body) =>
-              parseTwitchEmoteCatalog(body, 'channel'),
-            )
-          : Promise.resolve([]),
+          ? request('chat/emotes', { broadcaster_id: channelId })
+          : Promise.resolve(undefined),
         userEmotes(),
       ])
+      const availableEmoteIds =
+        source.kind === 'user' && source.userId !== channelId
+          ? new Set(user.map((emote) => emote.id))
+          : undefined
+      const local = localBody
+        ? parseTwitchEmoteCatalog(localBody, 'channel', channelId, availableEmoteIds)
+        : []
+      const globals = parseTwitchEmoteCatalog(globalBody, 'global')
       const aliases = new Map<string, EmoteCatalogEntry>()
       for (const emote of [...user, ...local, ...globals])
         if (!aliases.has(emote.alias)) aliases.set(emote.alias, emote)

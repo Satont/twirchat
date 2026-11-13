@@ -93,6 +93,7 @@ export const composer = {
   'composer.emotes.noMatches': 'No matches here. Check other tabs.',
   'composer.emotes.notFound': 'No emotes found',
   'composer.emotes.emptyTab': 'No emotes in this tab yet',
+  'composer.emotes.locked': 'Subscribe to this channel to use this emote',
 
   'composer.image.preparing': 'Preparing image…',
   'composer.image.confirm.one': 'Upload this image?',

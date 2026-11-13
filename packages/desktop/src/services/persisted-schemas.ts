@@ -569,6 +569,7 @@ export const emoteCatalogEntrySchema = z.toZod<EmoteCatalogEntry>()(
       .union([z.literal('twitch'), z.literal('seventv'), z.literal('bttv'), z.literal('ffz')])
       .optional(),
     modifier: z.boolean().optional(),
+    locked: z.boolean().optional(),
   }),
 )
 

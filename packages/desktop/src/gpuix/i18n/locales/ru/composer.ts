@@ -98,6 +98,7 @@ export const ruComposer = {
   'composer.emotes.noMatches': 'Здесь ничего не найдено. Проверьте другие вкладки.',
   'composer.emotes.notFound': 'Эмоуты не найдены',
   'composer.emotes.emptyTab': 'На этой вкладке пока нет эмоутов',
+  'composer.emotes.locked': 'Подпишитесь на канал, чтобы использовать этот эмоут',
 
   'composer.image.preparing': 'Подготовка изображения…',
   'composer.image.confirm.one': 'Загрузить {count} изображение?',
