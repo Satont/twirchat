@@ -23,7 +23,7 @@ const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const { composerStore } = await import('../src/gpuix/state/composer')
-const { focusNativeQaWindow } = await import('./qa-x11')
+const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const channel = { id: 'qa', platform: 'kick', channelSlug: 'qa', displayName: 'QA', createdAt: 0 }
 const layout = {
@@ -182,12 +182,26 @@ async function rightClickAuthor(messageId: string, label: string): Promise<void>
   assert.ok(author, `${label} author name`)
   const box = renderer.getElementBounds(author.id)
   assert.ok(box, `${label} author name bounds`)
-  renderer.simulateMouseDown(box.x + 2, box.y + 2, 2)
-  renderer.simulateMouseUp(box.x + 2, box.y + 2, 2)
+  const window = getNativeQaWindowGeometry('TwirChat')
+  const click = Bun.spawnSync(
+    [
+      '/usr/bin/xdotool',
+      'mousemove',
+      '--sync',
+      String(Math.round(window.x + box.x + box.width / 2)),
+      String(Math.round(window.y + box.y + box.height / 2)),
+      'click',
+      '3',
+    ],
+    { env: process.env, timeout: 5000 },
+  )
+  assert.equal(click.exitCode, 0, click.stderr.toString())
   await until(
     () => composerStore.get().get('qa-tab:pane:qa')?.text === '@viewer ',
     `${label} author mention appended to the composer`,
   )
+  // A secondary release could surface a late click-driven dialog on the next frame.
+  await Bun.sleep(150)
   const input = nodes().find((node) => node.testId === 'chat-input')
   assert.ok(input, 'composer input')
   assert.equal(renderer.getFocusedElementId(), input.id, `${label} mention focuses the composer`)
@@ -195,6 +209,11 @@ async function rightClickAuthor(messageId: string, label: string): Promise<void>
     nodes().some((node) => node.testId === 'message-actions-menu'),
     false,
     `${label} author right click keeps the row menu closed`,
+  )
+  assert.equal(
+    nodes().some((node) => node.testId === 'user-card-avatar'),
+    false,
+    `${label} author right click keeps the user card closed`,
   )
   composerStore.modify((current) => {
     const next = new Map(current)

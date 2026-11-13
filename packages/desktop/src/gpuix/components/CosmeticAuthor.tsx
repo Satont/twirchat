@@ -59,6 +59,7 @@ export function CosmeticAuthorName({
         onMention()
       }}
       onClick={(event) => {
+        if ((event.button ?? 0) !== 0 || event.isRightClick) return
         if (!claimMessageRowClick(event)) return
         onClick()
       }}
