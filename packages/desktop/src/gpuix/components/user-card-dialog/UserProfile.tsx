@@ -631,19 +631,16 @@ export function UserProfileView({
                   >
                     {entry.login}:
                   </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'row', gap: 4, flexWrap: 'wrap'}}>
+
+                  <div style={{ display: 'flex', flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', fontSize: 18, color: theme.text2 }}>
                       {firstSeen}
                     </div>
-                    <div style={{ fontSize: 18, color: theme.text2 }}>
-                      -
-                    </div>
+                    <div style={{ fontSize: 18, color: theme.text2 }}>-</div>
                     <div style={{ display: 'flex', fontSize: 18, color: theme.text2 }}>
                       {lastSeen}
                     </div>
                   </div>
-                  
                 </div>
               )
             })}
