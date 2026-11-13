@@ -16,13 +16,15 @@ import { PlatformIcon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
-const platforms: Platform[] = ['twitch', 'youtube', 'kick', 'vkplay']
+const platforms = new Map<Platform, string>([
+  ['twitch', 'Twitch'],
+  ['youtube', 'YouTube'],
+  ['vkplay', 'Vkplay'],
+  ['kick', 'Kick'],
+])
 
 function platformName(platform: Platform): string {
-  if (platform === 'twitch') return 'Twitch'
-  if (platform === 'youtube') return 'YouTube'
-  if (platform === 'vkplay') return 'VK Play Live'
-  return 'Kick'
+  return platforms.get(platform)!
 }
 
 function statusLabel(s: PlatformStatusInfo | undefined, t: (key: MessageKey) => string): string {
@@ -365,7 +367,7 @@ export function PlatformsPanel() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {platforms.map((platform) => (
+        {platforms.keys().map((platform) => (
           <PlatformCard
             key={platform}
             platform={platform}
