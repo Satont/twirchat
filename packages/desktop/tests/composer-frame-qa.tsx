@@ -417,6 +417,47 @@ try {
   ])
   const watched = checkFrame(150)
 
+  // A multi-line draft grows the frame: the send control must stay on the
+  // bottom row next to the emoji control, not float up with the first line.
+  renderComposer(props)
+  await until(
+    () => nodes().some((node) => node.testId === 'composer-target-twitch'),
+    'home composer for multiline evidence',
+  )
+  const multilineKey = 'qa:compact-frame'
+  updateComposer(multilineKey, (state) => ({
+    ...state,
+    text: 'first line\nsecond line\nthird line',
+  }))
+  await until(
+    () => composerStore.get().get(multilineKey)?.text.split('\n').length === 3,
+    'multiline draft',
+  )
+  await until(() => bounds('composer-frame').height > watched.height + 10, 'multiline frame grows')
+  await Bun.sleep(60)
+  const multilineEmoji = bounds('emote-button')
+  const multilineSend = bounds('send-button')
+  assert(
+    Math.abs(multilineEmoji.y + multilineEmoji.height - (multilineSend.y + multilineSend.height)) <=
+      1,
+    'multi-line send control shares the bottom row with the emoji control',
+  )
+  const multilineCompactScreenshot = await captureGuiQaDisplay('composer-multiline-compact')
+  await nativeWindow(renderer).setWindowBounds({ width: 640, height: 320 })
+  await Bun.sleep(160)
+  const wideMultilineEmoji = bounds('emote-button')
+  const wideMultilineSend = bounds('send-button')
+  assert(
+    Math.abs(
+      wideMultilineEmoji.y +
+        wideMultilineEmoji.height -
+        (wideMultilineSend.y + wideMultilineSend.height),
+    ) <= 1,
+    'multi-line send control stays on the bottom row in a wide composer',
+  )
+  const multilineScreenshot = await captureGuiQaDisplay('composer-multiline')
+  updateComposer(multilineKey, (state) => ({ ...state, text: '' }))
+
   updateComposer('qa:compact-frame', (state) => ({
     ...state,
     text: 'reply mismatch',
@@ -453,6 +494,8 @@ try {
     targetRoutingAfterRemount: true,
     kickReconnect: { kickErrorScreenshot, kickConnectingScreenshot, kickRecoveredScreenshot },
     emoji: true,
+    multilineScreenshot,
+    multilineCompactScreenshot,
     screenshot,
   }
   await Bun.write(join(session, 'composer-frame-result.json'), JSON.stringify(result, null, 2))
