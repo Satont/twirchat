@@ -18,6 +18,11 @@ export const ruUserCard = {
   'userCard.tab.notes': 'Заметки',
   'userCard.tab.history': 'История',
 
+  'userCard.badges.title': 'Коллекция бейджей Twitch',
+  'userCard.badges.loading': 'Загрузка бейджей Twitch…',
+  'userCard.badges.empty': 'Заработанных бейджей Twitch нет.',
+  'userCard.badges.unavailable': 'Не удалось загрузить коллекцию бейджей Twitch.',
+
   'userCard.metadata.title': 'Данные аккаунта',
   'userCard.metadata.hint': 'Загружается через бэкенд для этой платформы.',
   'userCard.metadata.unsupported': 'Для этой платформы данные аккаунта пока не поддерживаются.',

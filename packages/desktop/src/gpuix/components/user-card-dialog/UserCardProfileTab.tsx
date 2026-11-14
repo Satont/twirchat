@@ -1,6 +1,7 @@
 import type { UserCardProfileState } from '@gpuix/hooks/user-card-dialog/use-user-card-profile'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 
+import { TwitchBadgeCollection } from './TwitchBadgeCollection'
 import type { MetadataItem } from './types'
 import { UserCardMetadataSection } from './UserCardMetadataSection'
 import { UserProfileView } from './UserProfile'
@@ -26,9 +27,22 @@ export function UserCardProfileTab({
   metadata,
   reloadMetadata,
 }: UserCardProfileTabProps) {
+  const { platform, platformUserId, channelId, channelSlug } = target
+  const username =
+    target.username ||
+    (profileState.profile?.id === platformUserId ? profileState.profile.login : undefined)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <UserProfileView target={target} hideAvatar={hideAvatar} state={profileState} />
+      {platform === 'twitch' && username ? (
+        <TwitchBadgeCollection
+          key={JSON.stringify([username, channelSlug, channelId])}
+          username={username}
+          channelId={channelId}
+          channelSlug={channelSlug}
+        />
+      ) : null}
       <UserCardMetadataSection
         supportedByCard={supportedByCard}
         metadataLoading={metadataLoading}

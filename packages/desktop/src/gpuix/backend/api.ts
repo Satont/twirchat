@@ -38,6 +38,7 @@ import type {
 } from '@twirchat/shared/twitch-activities'
 import type {
   Account,
+  Badge,
   ChatSendReceipt,
   AppSettings,
   LayoutNode,
@@ -143,6 +144,10 @@ import {
 import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchChattersError } from '../../services/twitch-chatters'
 import type { TwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
+import {
+  getTwitchUserBadges,
+  type TwitchUserBadgesRequest,
+} from '../../services/twitch-user-badges'
 import { loadTwitchUserCardDetails } from '../../services/twitch-user-card'
 import { enrichTwitchUserProfile } from '../../services/twitch-user-profile'
 import type { TwitchUserCredentials } from '../../services/twitch-users'
@@ -441,6 +446,7 @@ export interface DesktopApi {
   }): Promise<UserChatHistoryPage>
   getUserCardMetadata(params: UserCardMetadataRequest): Promise<UserCardMetadataResponse>
   getUserProfile(params: UserProfileRequest): Promise<UserProfileSnapshot>
+  getTwitchUserBadges(params: TwitchUserBadgesRequest): Promise<Badge[]>
   getUserNotes(params: { platform: Platform; platformUserId: string }): Promise<string>
   setUserNotes(params: { platform: Platform; platformUserId: string; text: string }): Promise<void>
   getModerationSettings(): Promise<ModerationSettings>
@@ -1390,6 +1396,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         ? enrichTwitchUserProfile(request, profile, accessToken).catch(() => profile)
         : profile
     },
+    getTwitchUserBadges: (params) => getTwitchUserBadges(params),
     getUserNotes: async (params) => getUserNotes(params),
     setUserNotes: async (params) => setUserNotes(params),
     getModerationSettings: async () => getModerationSettings(),
