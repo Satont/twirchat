@@ -254,10 +254,17 @@ try {
     await setState(read)
     const baseline = tabGeometry()
     const readLabel = bounds('tab-c-label')
+    const longLabel = bounds('tab-d-label')
     for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
-    for (const testId of tabIds.slice(0, -1)) {
+    for (const testId of ['tab-home', 'tab-a', 'tab-b', 'tab-c']) {
       assert.equal(bounds(testId).height, 32, 'Tabs keep the original height')
     }
+    assertFits('tab-d-label', 'tab-d')
+    assertFits('tab-c-live', 'tab-c')
+    assert(!nodeFor('tab-b-live'), 'The live dot only appears on live channels')
+    if (width === 900) assert(longLabel.width > 150, 'Long titles can use their full width')
+    if (width === 248)
+      assert(longLabel.height > readLabel.height, 'Long titles wrap at narrow widths')
     if (!wrapWidth) {
       const channel = bounds('tab-c')
       wrapWidth = Math.ceil(channel.x + channel.width + 10)
@@ -300,7 +307,7 @@ try {
       }
       const pill = bounds('tab-c-mentions')
       const label = bounds('tab-c-label')
-      assert(label.width > 0 && label.width < readLabel.width, 'The title gives space to the badge')
+      assert.deepEqual(label, readLabel, 'Mention badges leave the entire title visible')
       assert(label.x + label.width <= pill.x, 'The mention count clears the title')
       await until(() => current().getPaintedText().includes(badge), 'Mention count paints')
     }

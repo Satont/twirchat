@@ -41,7 +41,7 @@ import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { AccountAvatar } from './ChatAccountControl'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
-import { Icon, PlatformIcon } from './ui/Icon'
+import { Icon } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 
@@ -52,12 +52,6 @@ interface TabMenuItemOptions {
   disabled?: boolean
   autoFocus?: boolean
 }
-
-type TabContentMode = 'read' | 'measuring' | 'mentions'
-
-const TAB_LABEL_GAP = 5
-const TAB_MIN_VISIBLE_TITLE_WIDTH = 16
-const TAB_MAX_MENTION_WIDTH = 24
 
 interface ChannelTabsProps {
   watchedChannels: Array<Omit<ChatTabView, 'sourceChannelId'> & { sourceChannelId?: string }>
@@ -392,30 +386,13 @@ function ChannelTabs({
               label={label}
               active={active}
               activeColor={color}
+              isLive={live?.isLive}
               unread={unread.get(channel.id)}
               onClick={() => {
                 if (!suppressClick.current) onSelectTab(channel.id)
               }}
               icon={
                 <>
-                  {channel.platform ? (
-                    <PlatformIcon
-                      platform={channel.platform}
-                      size={12}
-                      color={active ? color : theme.text2}
-                    />
-                  ) : (
-                    <Icon name="chat" size={12} color={active ? color : theme.text2} />
-                  )}
-                  <div
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 3,
-                      flexShrink: 0,
-                      backgroundColor: live?.isLive ? color : 'transparent',
-                    }}
-                  />
                   {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
                   {tabSenders.get(channel.id)?.length ? (
                     <div
@@ -604,6 +581,7 @@ function Tab({
   icon,
   active,
   activeColor,
+  isLive,
   unread,
   onClick,
   testId,
@@ -614,6 +592,7 @@ function Tab({
   icon?: ReactNode
   active: boolean
   activeColor: string
+  isLive?: boolean
   unread?: TabUnread
   onClick: () => void
   testId: string
@@ -634,72 +613,6 @@ function Tab({
     : hasUnread
       ? t('app.tab.counts.unread')
       : undefined
-  const renderContent = (mode: TabContentMode) => {
-    const hidden = mode === 'measuring'
-    const showMentions = mode === 'mentions'
-    return (
-      <div
-        aria-hidden={hidden || undefined}
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: TAB_LABEL_GAP,
-          minWidth: 0,
-          pointerEvents: hidden ? 'none' : undefined,
-          visibility: hidden ? 'hidden' : undefined,
-          ...(showMentions ? { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } : {}),
-        }}
-      >
-        <Text
-          testId={hidden ? undefined : `${testId}-label`}
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: titleColor,
-            maxWidth: 150,
-            minWidth: showMentions
-              ? 0
-              : TAB_MAX_MENTION_WIDTH + TAB_LABEL_GAP + TAB_MIN_VISIBLE_TITLE_WIDTH,
-            flexShrink: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {label}
-        </Text>
-        {showMentions ? (
-          <div
-            testId={`${testId}-mentions`}
-            style={{
-              minWidth: 14,
-              height: 17,
-              flexShrink: 0,
-              paddingLeft: 2,
-              paddingRight: 2,
-              borderRadius: 9,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: theme.accent.tint20,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: 'Arial',
-                fontSize: 10,
-                fontWeight: 600,
-                color: mentionColor ?? theme.link,
-              }}
-            >
-              {mentionLabel}
-            </Text>
-          </div>
-        ) : null}
-      </div>
-    )
-  }
   return (
     <Tooltip delayDuration={250} style={{ flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
       <TooltipTrigger asChild>
@@ -721,6 +634,7 @@ function Tab({
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
+            position: 'relative',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
@@ -741,18 +655,59 @@ function Tab({
           }}
         >
           {icon}
-          <div
+          <Text
+            testId={`${testId}-label`}
             style={{
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
+              fontSize: 12,
+              fontWeight: 500,
+              color: titleColor,
               minWidth: 0,
-              flexShrink: 1,
+              whiteSpace: 'normal',
             }}
           >
-            {renderContent(mentionLabel ? 'measuring' : 'read')}
-            {mentionLabel ? renderContent('mentions') : null}
+            {label}
+          </Text>
+          <div
+            testId={mentionLabel ? `${testId}-mentions` : undefined}
+            style={{
+              width: 24,
+              height: 17,
+              flexShrink: 0,
+              borderRadius: 9,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: mentionLabel ? theme.accent.tint20 : undefined,
+            }}
+          >
+            {mentionLabel ? (
+              <Text
+                style={{
+                  fontFamily: 'Arial',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: mentionColor ?? theme.link,
+                }}
+              >
+                {mentionLabel}
+              </Text>
+            ) : null}
           </div>
+          {isLive ? (
+            <div
+              testId={`${testId}-live`}
+              style={{
+                position: 'absolute',
+                top: 3,
+                right: 2,
+                width: 5,
+                height: 5,
+                borderRadius: 3,
+                backgroundColor: activeColor,
+                pointerEvents: 'none',
+              }}
+            />
+          ) : null}
         </div>
       </TooltipTrigger>
       {description ? (
