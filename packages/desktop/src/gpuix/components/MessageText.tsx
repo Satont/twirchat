@@ -16,7 +16,7 @@ import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { claimMessageRowClick } from '../message-row-click'
-import { buildMessageTokens, mergePlainText } from '../message-tokens'
+import { buildMessageTokens, mergePlainText, type EmoteModifier } from '../message-tokens'
 import { accountsStore, authorEmoteStore, emoteStore } from '../state/app'
 import { chatPauseStore } from '../state/chat-pause'
 import { useStoreSelector } from '../state/create-store'
@@ -27,6 +27,7 @@ import { EmoteArtwork } from './ui/EmoteArtwork'
 import { EmoteTooltip } from './ui/EmoteTooltip'
 
 const EMPTY_CATALOG: EmoteCatalogEntry[] = []
+const NO_MODIFIERS: readonly EmoteModifier[] = []
 
 // Emote height scales with the chat font (2x = 28px at the 14px default —
 // Twitch's native 1x size, so emote rows stay close to text rows). Wide
@@ -126,6 +127,9 @@ export const MessageTokens = memo(function MessageTokens({
           emote={token.emote}
           alias={token.alias}
           catalog={authorCatalog}
+          chatModifiers={
+            renderPreferences.modifiers ? (token.modifiers ?? NO_MODIFIERS) : undefined
+          }
           theme={theme}
         >
           <div
