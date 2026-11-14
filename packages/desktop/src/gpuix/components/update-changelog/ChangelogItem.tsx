@@ -4,7 +4,7 @@ interface ChangelogItemProps {
 }
 
 export function ChangelogItem({ item, theme }: ChangelogItemProps) {
-  const shortLabel = item.label.split(':')[0]!;
+  const shortLabel = item.label.split(':')[0]!
   return (
     <div
       style={{
@@ -20,9 +20,7 @@ export function ChangelogItem({ item, theme }: ChangelogItemProps) {
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 18, color: 'white', fontWeight: 500 }}>
-          {shortLabel}
-        </div>
+        <div style={{ fontSize: 18, color: 'white', fontWeight: 500 }}>{shortLabel}</div>
         <div style={{ fontSize: 16, color: 'darkgray', fontWeight: 100, whiteSpace: 'normal' }}>
           {item.description}
         </div>
