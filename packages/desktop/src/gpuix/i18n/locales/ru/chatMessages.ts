@@ -45,6 +45,8 @@ export const ruChatMessages = {
   'chatMessages.notice.moderation': 'Модерация',
   'chatMessages.notice.modiversary': 'Годовщина модератора',
   'chatMessages.notice.watchStreak': 'Серия просмотра',
+  'chatMessages.notice.join': 'Вошли в чат: {users}',
+  'chatMessages.notice.part': 'Вышли из чата: {users}',
 
   'chatMessages.autoMod.submitting': 'Отправка…',
   'chatMessages.autoMod.reason.category':

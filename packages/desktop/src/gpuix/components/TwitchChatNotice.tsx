@@ -1,6 +1,7 @@
-import type { TwitchNoticeKind } from '@twirchat/shared/types'
+import type { TwitchMembershipNoticeKind, TwitchNoticeKind } from '@twirchat/shared/types'
 import type { ReactNode } from 'react'
 
+import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useT, type MessageKey } from '../i18n'
 import type { IconName } from '../icons'
@@ -29,7 +30,7 @@ const notices = {
   modiversary: { label: 'chatMessages.notice.modiversary', icon: 'calendar', tone: 'subscription' },
   watch_streak: { label: 'chatMessages.notice.watchStreak', icon: 'eye', tone: 'bits' },
 } satisfies Record<
-  TwitchNoticeKind | 'cheer',
+  Exclude<TwitchNoticeKind, TwitchMembershipNoticeKind> | 'cheer',
   { label: MessageKey; icon: IconName; tone: keyof typeof palette }
 >
 
@@ -52,10 +53,45 @@ export function TwitchChatNotice({
 }) {
   const theme = useTheme()
   const { t } = useT()
+  const labelSize = Math.max(10, Math.round(fontSize * 0.86))
+  if (isTwitchMembershipNoticeKind(kind)) {
+    return (
+      <div
+        testId={`twitch-notice-${id}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 8,
+          paddingLeft: 12,
+          paddingRight: 12,
+          paddingTop: 2,
+          paddingBottom: 2,
+        }}
+      >
+        <Text
+          style={{
+            color: theme.text2,
+            fontSize: labelSize,
+            flexGrow: 1,
+            flexShrink: 1,
+            minWidth: 0,
+            whiteSpace: 'normal',
+          }}
+        >
+          {t(kind === 'join' ? 'chatMessages.notice.join' : 'chatMessages.notice.part', {
+            users: sanitizeDisplayText(summary),
+          })}
+        </Text>
+        {time ? (
+          <Text style={{ color: theme.text2, fontSize: labelSize, flexShrink: 0 }}>{time}</Text>
+        ) : null}
+      </div>
+    )
+  }
   const { label, icon, tone } = notices[kind]
   const color = palette[tone][theme.isLight ? 'light' : 'dark']
   const iconSize = Math.max(12, Math.round(fontSize * 0.9))
-  const labelSize = Math.max(10, Math.round(fontSize * 0.86))
   return (
     <div
       testId={`twitch-notice-${id}`}

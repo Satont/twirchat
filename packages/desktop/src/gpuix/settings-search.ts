@@ -143,6 +143,7 @@ export type SettingsSectionId =
   | 'notifications'
   | 'timestamps'
   | 'replies'
+  | 'twitch-chat-events'
   | 'rules'
   | 'history'
   | 'image-uploader'
@@ -195,6 +196,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     searchPrefixes: ['settings.chat.replyOnDoubleClick'],
     keywords:
       'reply replies double click double-click mouse message answer thread replyOnDoubleClick ответ ответить двойной клик дабл клик мышь сообщение',
+  },
+  {
+    id: 'twitch-chat-events',
+    category: 'chat',
+    title: 'Twitch Chat Events',
+    saveMode: 'section',
+    searchPrefixes: ['settings.chat.showTwitchJoinPart'],
+    keywords: 'join joined part parted leave membership presence IRC showTwitchJoinPart вход выход',
   },
   {
     id: 'similarity',

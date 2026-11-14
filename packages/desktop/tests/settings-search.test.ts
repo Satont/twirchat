@@ -18,7 +18,7 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and a save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(28)
+    expect(SETTINGS_SECTIONS).toHaveLength(29)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
     )
@@ -61,6 +61,8 @@ describe('settings search index', () => {
       ['HH:MM', 'timestamps'],
       ['double click reply', 'replies'],
       ['дабл клик', 'replies'],
+      ['join part', 'twitch-chat-events'],
+      ['вход выход', 'twitch-chat-events'],
       ['zero width', 'emotes'],
       ['FFZ', 'emotes'],
       ['FFZ:AP', 'emotes'],
