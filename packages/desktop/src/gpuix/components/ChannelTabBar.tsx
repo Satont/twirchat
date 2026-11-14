@@ -82,8 +82,9 @@ export function ChannelTabBar({ leading, tabs }: { leading?: ReactNode; tabs?: C
         alignItems: 'center',
         alignContent: 'start',
         minWidth: 0,
-        gap: 2,
-        paddingTop: 6,
+        rowGap: 1,
+        columnGap: 2,
+        paddingTop: 4,
         paddingLeft: 8,
         paddingRight: 8,
         flexShrink: 0,
@@ -390,31 +391,25 @@ function ChannelTabs({
               label={label}
               active={active}
               activeColor={color}
+              live={live?.isLive}
               viewers={live?.isLive ? live.viewerCount : undefined}
               unread={unread.get(channel.id)}
               onClick={() => {
                 if (!suppressClick.current) onSelectTab(channel.id)
               }}
               icon={
-                <>
-                  {channel.platform ? (
-                    <PlatformIcon
-                      platform={channel.platform}
-                      size={12}
-                      color={active ? color : theme.text2}
-                    />
-                  ) : (
-                    <Icon name="chat" size={12} color={active ? color : theme.text2} />
-                  )}
-                  <div
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 3,
-                      flexShrink: 0,
-                      backgroundColor: live?.isLive ? color : 'transparent',
-                    }}
+                channel.platform ? (
+                  <PlatformIcon
+                    platform={channel.platform}
+                    size={12}
+                    color={active ? color : theme.text2}
                   />
+                ) : (
+                  <Icon name="chat" size={12} color={active ? color : theme.text2} />
+                )
+              }
+              accessories={
+                <>
                   {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
                   {tabSenders.get(channel.id)?.length ? (
                     <div
@@ -601,8 +596,10 @@ function ChannelTabs({
 function Tab({
   label,
   icon,
+  accessories,
   active,
   activeColor,
+  live,
   viewers,
   unread,
   onClick,
@@ -611,9 +608,11 @@ function Tab({
   onAuxClick,
 }: {
   label: string
-  icon?: ReactNode
+  icon: ReactNode
+  accessories?: ReactNode
   active: boolean
   activeColor: string
+  live?: boolean
   viewers?: number
   unread?: TabUnread
   onClick: () => void
@@ -663,15 +662,14 @@ function Tab({
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
-            position: 'relative',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 5,
-            paddingTop: 5,
-            paddingBottom: 6,
-            paddingLeft: 10,
-            paddingRight: 8,
+            gap: 4,
+            paddingTop: 3,
+            paddingBottom: 4,
+            paddingLeft: 7,
+            paddingRight: 6,
             cursor: 'pointer',
             borderTopLeftRadius: 6,
             borderTopRightRadius: 6,
@@ -683,7 +681,50 @@ function Tab({
             maxWidth: '100%',
           }}
         >
-          {icon}
+          <div
+            style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 18,
+              height: 16,
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+            {hasUnread ? (
+              <div
+                testId={`${testId}-unread`}
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 0,
+                  width: 4,
+                  height: 4,
+                  borderRadius: 1,
+                  backgroundColor: mentionColor ?? theme.text2,
+                  pointerEvents: 'none',
+                }}
+              />
+            ) : null}
+            {live ? (
+              <div
+                testId={`${testId}-live`}
+                style={{
+                  position: 'absolute',
+                  bottom: 2,
+                  right: 0,
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: activeColor,
+                  pointerEvents: 'none',
+                }}
+              />
+            ) : null}
+          </div>
+          {accessories}
           <Text
             testId={`${testId}-label`}
             style={{
@@ -715,31 +756,6 @@ function Tab({
             >
               {formatTabViewers(viewers)}
             </Text>
-          ) : null}
-          {hasUnread ? (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                right: 2,
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                pointerEvents: 'none',
-              }}
-            >
-              <div
-                testId={`${testId}-unread`}
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: 3,
-                  backgroundColor: mentionColor ?? theme.text2,
-                  pointerEvents: 'none',
-                }}
-              />
-            </div>
           ) : null}
         </div>
       </TooltipTrigger>

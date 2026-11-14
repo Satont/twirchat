@@ -15,6 +15,7 @@ const { useGpuixRequired } = await import('@gpuix/react')
 const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
+const { AppNavigation } = await import('../src/gpuix/components/AppNavigation')
 const { ChannelTabBar } = await import('../src/gpuix/components/ChannelTabBar')
 const { formatTabViewers } = await import('../src/gpuix/tab-counts')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
@@ -48,6 +49,7 @@ const state = createStore<CounterState>({
   mode: 'uniform',
 })
 const fixtureWidth = createStore(900)
+const showDenseHeader = createStore(false)
 const backend = getDesktopBackend()
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
@@ -78,10 +80,59 @@ const channels: NonNullable<Parameters<typeof ChannelTabBar>[0]['tabs']>['watche
   },
 ]
 
+const denseChannels: typeof channels = [
+  'linaryx',
+  'milanrodd',
+  'alexue4',
+  'suhodolsky',
+  'twirapp 1',
+  'mikerime',
+  'qbnk',
+  'lamiory',
+  'etoneloxot, le-xot',
+  'hibako',
+  'lanoreeazy',
+  'recrent',
+  'chopperinho',
+  'dapzer',
+].map((name) => ({
+  id: name,
+  platform: 'twitch',
+  displayName: name,
+  channelSlug: name,
+  createdAt: 0,
+}))
+
+function DenseHeader() {
+  return (
+    <ChannelTabBar
+      leading={<AppNavigation onSearchAll={() => {}} />}
+      tabs={{
+        watchedChannels: denseChannels,
+        activeTabId: 'dapzer',
+        watchedLiveStatuses: new Map([
+          ['twirapp 1', { isLive: true, viewerCount: 1 }],
+          ['recrent', { isLive: true, viewerCount: 6800 }],
+          ['chopperinho', { isLive: true, viewerCount: 21200 }],
+          ['dapzer', { isLive: true, viewerCount: 4 }],
+        ]),
+        unread: new Map([
+          ['recrent', { unread: 30, mentions: 1 }],
+          ['chopperinho', { unread: 100, mentions: 0 }],
+        ]),
+        onSelectTab: () => {},
+        onAddChannel: () => {},
+        onRemoveChannel: () => {},
+      }}
+    />
+  )
+}
+
 function Content() {
   const active = useGpuixRequired()
   const value = useStore(state)
   const width = useStore(fixtureWidth)
+  const dense = useStore(showDenseHeader)
   React.useEffect(() => {
     assert(active instanceof NativeRenderer)
     renderer = nativeWindow(active)
@@ -112,31 +163,32 @@ function Content() {
         backgroundColor: '#16161c',
       }}
     >
-      <ChannelTabBar
-        tabs={{
-          watchedChannels: channels,
-          activeTabId: value.active,
-          homeViewerCount: value.mode === 'mixed' ? 11 : undefined,
-          watchedLiveStatuses: new Map(
-            channels.map((channel) => [
-              channel.id,
-              value.mode === 'mixed'
-                ? {
-                    isLive: channel.id === 'a' || channel.id === 'c',
-                    viewerCount: channel.id === 'a' ? 1 : channel.id === 'c' ? 62200 : undefined,
-                  }
-                : { isLive: value.viewers !== undefined, viewerCount: value.viewers },
-            ]),
-          ),
-          unread,
-          onSelectTab: (id) => state.modify((previous) => ({ ...previous, active: id })),
-          onAddChannel: () => {},
-          onRemoveChannel: () => {},
-        }}
-      />
-      <text style={{ color: '#8b8b99', padding: 12 }}>
-        Private controlled counter geometry check
-      </text>
+      {dense ? (
+        <DenseHeader />
+      ) : (
+        <ChannelTabBar
+          tabs={{
+            watchedChannels: channels,
+            activeTabId: value.active,
+            homeViewerCount: value.mode === 'mixed' ? 11 : undefined,
+            watchedLiveStatuses: new Map(
+              channels.map((channel) => [
+                channel.id,
+                value.mode === 'mixed'
+                  ? {
+                      isLive: channel.id === 'a' || channel.id === 'c',
+                      viewerCount: channel.id === 'a' ? 1 : channel.id === 'c' ? 62200 : undefined,
+                    }
+                  : { isLive: value.viewers !== undefined, viewerCount: value.viewers },
+              ]),
+            ),
+            unread,
+            onSelectTab: (id) => state.modify((previous) => ({ ...previous, active: id })),
+            onAddChannel: () => {},
+            onRemoveChannel: () => {},
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -227,7 +279,10 @@ async function setState(next: CounterState) {
 try {
   await manager.start()
   await until(() => !!renderer, 'renderer')
-  for (const width of [900, 470, 420, 320, 248, 900]) {
+  let wrapWidth = 0
+  for (const size of [900, 'wrap', 420, 320, 248, 900]) {
+    const width = size === 'wrap' ? wrapWidth : size
+    assert(typeof width === 'number' && width > 0)
     fixtureWidth.set(width)
     await current().setWindowBounds({ width: Math.max(320, width), height: 220 })
     current().simulateMouseMove(20, 120)
@@ -244,10 +299,10 @@ try {
       })
       const baseline = tabGeometry()
       for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
-      assert.equal(bounds('tab-home').height, 32, 'Home uses the original compact tab height')
+      assert.equal(bounds('tab-home').height, 28, 'Home matches the navigation button height')
       for (const channel of channels) {
         const tabId = `tab-${channel.id}`
-        assert.equal(bounds(tabId).height, 32, 'Unread tabs keep the original compact height')
+        assert.equal(bounds(tabId).height, 28, 'Unread tabs keep a compact click target')
         assertFits(`${tabId}-viewers`, tabId)
         assertFits(`${tabId}-unread`, tabId)
       }
@@ -278,11 +333,15 @@ try {
     } satisfies CounterState
     await setState(read)
     const baseline = tabGeometry()
-    if (width === 470) {
+    if (!wrapWidth) {
+      const channel = bounds('tab-c')
+      wrapWidth = Math.ceil(channel.x + channel.width + 10)
+    }
+    if (size === 'wrap') {
       const home = bounds('tab-home')
       const channel = bounds('tab-c')
       assert.equal(channel.y, home.y, 'The live tab fits at the wrap threshold')
-      assert(width - channel.x - channel.width - 8 < 28, 'An inline pill would force a wrap')
+      assert(width - channel.x - channel.width - 8 < 5, 'A separate status slot would force a wrap')
     }
     const regular = { ...read, unread: 100 }
     await setState(regular)
@@ -301,14 +360,8 @@ try {
     const dot = bounds('tab-c-unread')
     assert.deepEqual(dot, unreadDot, 'Mention uses the same space as the unread dot')
     assertFits('tab-c-unread', 'tab-c')
-    for (const testId of ['tab-c-label', 'tab-c-viewers']) {
-      const text = bounds(testId)
-      assert(text.x + text.width <= dot.x, `Unread dot clears ${testId}`)
-      assert(
-        dot.y >= text.y && dot.y + dot.height <= text.y + text.height,
-        'Dot is on the text row',
-      )
-    }
+    assert(dot.x + dot.width <= bounds('tab-c-label').x, 'Unread marker clears the title')
+    assert(dot.y + dot.height <= bounds('tab-c-live').y, 'Unread and live indicators are distinct')
     current().simulateMouseMove(dot.x + dot.width / 2, dot.y + dot.height / 2)
     await until(() => !!nodeFor('tab-c-counts-tooltip'), 'counts tooltip opens over the dot')
     await until(
@@ -347,6 +400,20 @@ try {
     assert(!nodeFor('tab-a-viewers') && !nodeFor('tab-a-unread'), 'No absent channel counters')
     assert(!nodeFor('tab-home-viewers') && !nodeFor('tab-home-unread'), 'No absent Home counters')
   }
+  fixtureWidth.set(650)
+  showDenseHeader.set(true)
+  await current().setWindowBounds({ width: 650, height: 220 })
+  current().simulateMouseMove(20, 145)
+  await until(() => !!nodeFor('tab-dapzer'), 'dense navigation header paints')
+  const nav = bounds('app-navigation')
+  const home = bounds('tab-home')
+  assert.equal(nav.height, home.height, 'Navigation and tabs align on the first row')
+  assert.equal(nav.y, home.y, 'Navigation shares the first tab row')
+  const denseTabIds = ['tab-home', ...denseChannels.map(({ id }) => `tab-${id}`)]
+  for (const testId of [...denseTabIds, 'tab-add']) assertFits(testId, 'channel-tab-bar')
+  const rows = new Set(denseTabIds.map((testId) => bounds(testId).y))
+  assert.equal(rows.size, 3, 'The 650px header fits fourteen channels in three rows')
+  screenshots.push(await captureGuiQaDisplay('tab-counts-dense-650'))
   await Bun.write(
     join(session, 'tab-counts-result.json'),
     JSON.stringify(
