@@ -56,6 +56,31 @@ export function appendComposerMention(text: string, username: string): string {
   return `${text}${separator}@${name} `
 }
 
+export type ComposerMentionTarget =
+  | { kind: 'platform'; platform: Platform }
+  | { kind: 'watched'; channelId: string }
+
+/** Points the composer at the row's platform/channel so a mention cannot cross-post. */
+export function retargetComposerForMention(
+  state: ComposerState,
+  target: ComposerMentionTarget,
+): ComposerState {
+  switch (target.kind) {
+    case 'platform':
+      return state.activePlatform === target.platform
+        ? state
+        : { ...state, activePlatform: target.platform }
+    case 'watched':
+      return state.activeWatchedChannelId === target.channelId
+        ? state
+        : { ...state, activeWatchedChannelId: target.channelId }
+    default: {
+      const exhaustive: never = target
+      return exhaustive
+    }
+  }
+}
+
 export function rememberComposerMessage(state: ComposerState, text: string): ComposerState {
   const trimmed = text.trim()
   const history =

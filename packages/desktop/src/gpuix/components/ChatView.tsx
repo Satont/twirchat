@@ -82,7 +82,9 @@ import {
   appendComposerMention,
   composerStore,
   editComposer,
+  retargetComposerForMention,
   updateComposer,
+  type ComposerMentionTarget,
 } from '../state/composer'
 import { focusComposerByKey } from '../state/composer-focus'
 import { useStore, useStoreSelector } from '../state/create-store'
@@ -1001,20 +1003,6 @@ export function ChatView({
     },
     [feedChannels, getFeedSource],
   )
-  const mentionAuthor = useCallback(
-    (message: NormalizedChatMessage) => {
-      const username = sanitizeDisplayText(
-        message.author.username || message.author.displayName,
-      ).trim()
-      if (!username) return
-      updateComposer(paneKey, (current) => {
-        const text = appendComposerMention(current.text, username)
-        return text === current.text ? current : editComposer(current, text)
-      })
-      focusComposerByKey(paneKey, scope)
-    },
-    [paneKey, scope],
-  )
   const pickFeedChannel = useCallback(
     (id: string) => {
       setReply(null)
@@ -1231,6 +1219,34 @@ export function ChatView({
   // ── Header data ────────────────────────────────────────────────────────────
 
   const allChannels = useMemo(() => ownChatSendTargets(accounts), [accounts])
+  const mentionAuthor = useCallback(
+    (message: NormalizedChatMessage) => {
+      const username = sanitizeDisplayText(
+        message.author.username || message.author.displayName,
+      ).trim()
+      if (!username) return
+      let target: ComposerMentionTarget | null = null
+      if (feedChannels) {
+        const source = getFeedSource(message)
+        if (!source) return
+        if (reply && reply.sourceId !== source.id) setReply(null)
+        target = { kind: 'watched', channelId: source.id }
+      } else if (watchedChannel) {
+        if (message.platform !== watchedChannel.platform) return
+      } else {
+        if (!allChannels.some((candidate) => candidate.platform === message.platform)) return
+        if (reply && reply.message.platform !== message.platform) setReply(null)
+        target = { kind: 'platform', platform: message.platform }
+      }
+      updateComposer(paneKey, (current) => {
+        const retargeted = target ? retargetComposerForMention(current, target) : current
+        const text = appendComposerMention(retargeted.text, username)
+        return text === retargeted.text ? retargeted : editComposer(retargeted, text)
+      })
+      focusComposerByKey(paneKey, scope)
+    },
+    [allChannels, feedChannels, getFeedSource, paneKey, reply, scope, watchedChannel],
+  )
   const threadChannelStatus = useStoreSelector(watchedStatusesStore, (entries) =>
     threadChannel ? entries.get(threadChannel.id) : undefined,
   )

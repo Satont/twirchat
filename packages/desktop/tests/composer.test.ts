@@ -13,6 +13,7 @@ import {
   EMPTY_COMPOSER,
   parseComposerCommand,
   rememberComposerMessage,
+  retargetComposerForMention,
   updateComposer,
 } from '../src/gpuix/state/composer'
 import { literal } from './fixture-values'
@@ -25,6 +26,21 @@ describe('composer mentions', () => {
     expect(appendComposerMention('hello\n', 'viewer')).toBe('hello\n@viewer ')
     expect(appendComposerMention('hello', '@Viewer')).toBe('hello @Viewer ')
     expect(appendComposerMention('hello', '  ')).toBe('hello')
+  })
+
+  test('retargets the composer to the row platform or feed channel', () => {
+    const draft = { ...EMPTY_COMPOSER, text: 'hello' }
+    const platform = retargetComposerForMention(draft, { kind: 'platform', platform: 'twitch' })
+    expect(platform.activePlatform).toBe('twitch')
+    expect(platform.text).toBe('hello')
+    expect(retargetComposerForMention(platform, { kind: 'platform', platform: 'twitch' })).toBe(
+      platform,
+    )
+    const watched = retargetComposerForMention(draft, { kind: 'watched', channelId: 'kick:1' })
+    expect(watched.activeWatchedChannelId).toBe('kick:1')
+    expect(retargetComposerForMention(watched, { kind: 'watched', channelId: 'kick:1' })).toBe(
+      watched,
+    )
   })
 })
 
