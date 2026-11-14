@@ -8,8 +8,6 @@ import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
 
 import { SectionHeader, UserCardPanel } from './UserCardUI'
-import { Icon } from '../ui'
-import { accentGlow } from './utils'
 
 export function UserNotes({ target }: { target: UserCardTarget }) {
   const backend = useBackend()
@@ -68,8 +66,8 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
         >
           <SectionHeader
             icon="pencil"
-            title={t('userCard.note.title')}
-            hint={t('userCard.note.description')}
+            title={t('userCard.notes.title')}
+            hint={t('userCard.notes.hint')}
           />
         </div>
 

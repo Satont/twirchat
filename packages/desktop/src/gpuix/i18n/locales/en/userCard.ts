@@ -2,11 +2,7 @@ export const userCard = {
   'userCard.alias.pill': 'Alias: {alias}',
   'userCard.alias.title': 'Display alias',
   'userCard.alias.hint': 'Replaces the displayed name in chat. Leave empty to remove alias.',
-  'userCard.alias.remove': 'Remove alias',
-
-  'userCard.note.title': 'Make note',
-  'userCard.note.description': 'asd',
-
+  'userCard.alias.remove': 'Remove alias',  
   'userCard.opening': 'Opening…',
   'userCard.openChannel': 'Open channel',
   'userCard.openInWindow': 'Open in window',
@@ -102,6 +98,7 @@ export const userCard = {
   'userCard.history.loadingOlder': 'Loading older messages…',
   'userCard.history.loadOlder': 'Load older messages',
 
+  'userCard.notes.title': 'Make note',
   'userCard.notes.hint':
     'Private notes saved on this device. Supports Markdown headings, lists, quotes and code blocks.',
   'userCard.notes.edit': 'Edit notes',

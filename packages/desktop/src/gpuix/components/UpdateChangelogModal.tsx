@@ -221,6 +221,7 @@ export function UpdateChangelogModal({
                       alignItems: 'center',
                       gap: 6,
                       paddingTop: 6,
+                      paddingLeft: 15,
                       paddingBottom: 8,
                       borderWidth: 1,
                       borderColor: theme.hairline,
@@ -228,7 +229,7 @@ export function UpdateChangelogModal({
                       backgroundColor: theme.fill,
                     }}
                   >
-                    <div
+                    {/*<div
                       style={{
                         width: BADGE_WIDTH,
                         flexShrink: 0,
@@ -250,7 +251,7 @@ export function UpdateChangelogModal({
                       >
                         {t(badgeLabelKeys[section.kind])}
                       </Badge>
-                    </div>
+                    </div>*/}
                     <Text
                       style={{
                         fontSize: 13,

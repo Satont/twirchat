@@ -6,8 +6,6 @@ export const ruUserCard = {
   'userCard.alias.hint':
     'Заменяет отображаемое имя в чате. Оставьте пустым, чтобы удалить псевдоним.',
   'userCard.alias.remove': 'Удалить псевдоним',
-
-  'userCard.note.title': 'Создать запись',
   
   'userCard.opening': 'Открытие…',
   'userCard.openChannel': 'Открыть канал',
@@ -104,6 +102,7 @@ export const ruUserCard = {
   'userCard.history.loadingOlder': 'Загрузка старых сообщений…',
   'userCard.history.loadOlder': 'Загрузить старые сообщения',
 
+  'userCard.notes.title': 'Создание заметки',
   'userCard.notes.hint':
     'Личные заметки, сохранённые на этом устройстве. Поддерживаются заголовки Markdown, списки, цитаты и блоки кода.',
   'userCard.notes.edit': 'Редактировать заметки',
