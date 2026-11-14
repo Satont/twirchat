@@ -36,13 +36,7 @@ import { layoutStore } from '../state/layout'
 import { useOverlayClose } from '../state/overlays'
 import { tabSenderAccounts } from '../state/pane-accounts'
 import { tabUnreadStore, type TabUnread } from '../state/tab-unread'
-import {
-  formatTabUnread,
-  formatTabViewers,
-  TAB_UNREAD_WIDTH,
-  TAB_VIEWER_MIN_WIDTH,
-  TAB_MENTION_WIDTH,
-} from '../tab-counts'
+import { formatTabViewers, TAB_VIEWER_MIN_WIDTH } from '../tab-counts'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { AccountAvatar } from './ChatAccountControl'
@@ -630,7 +624,7 @@ function Tab({
   const theme = useTheme()
   const { tPlural } = useT()
   const [hovered, setHovered] = useState(false)
-  const unreadLabel = formatTabUnread(unread)
+  const hasUnread = (unread?.unread ?? 0) > 0
   const mentionColor = unread?.mentions ? (unread.color?.slice(0, 7) ?? theme.link) : undefined
   const counts: string[] = []
   if (viewers !== undefined)
@@ -674,7 +668,7 @@ function Tab({
             flexDirection: 'row',
             alignItems: 'center',
             gap: 5,
-            paddingTop: 14,
+            paddingTop: 5,
             paddingBottom: 6,
             paddingLeft: 10,
             paddingRight: 8,
@@ -722,34 +716,29 @@ function Tab({
               {formatTabViewers(viewers)}
             </Text>
           ) : null}
-          {unreadLabel ? (
+          {hasUnread ? (
             <div
-              testId={`${testId}-unread`}
               style={{
                 position: 'absolute',
-                top: 1,
-                right: 4,
-                width: mentionColor ? TAB_MENTION_WIDTH : TAB_UNREAD_WIDTH,
-                height: 13,
-                borderRadius: 7,
+                top: 0,
+                bottom: 0,
+                right: 2,
                 display: 'flex',
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: mentionColor ? theme.accent.tint20 : theme.fillHover,
                 pointerEvents: 'none',
               }}
             >
-              <Text
+              <div
+                testId={`${testId}-unread`}
                 style={{
-                  fontFamily: 'Arial',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  lineHeight: 11,
-                  color: mentionColor ?? theme.text2,
+                  width: 5,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: mentionColor ?? theme.text2,
+                  pointerEvents: 'none',
                 }}
-              >
-                {unreadLabel}
-              </Text>
+              />
             </div>
           ) : null}
         </div>

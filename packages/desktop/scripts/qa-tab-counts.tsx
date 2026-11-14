@@ -244,9 +244,12 @@ try {
       })
       const baseline = tabGeometry()
       for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
+      assert.equal(bounds('tab-home').height, 32, 'Home uses the original compact tab height')
       for (const channel of channels) {
-        assertFits(`tab-${channel.id}-viewers`, `tab-${channel.id}`)
-        assertFits(`tab-${channel.id}-unread`, `tab-${channel.id}`)
+        const tabId = `tab-${channel.id}`
+        assert.equal(bounds(tabId).height, 32, 'Unread tabs keep the original compact height')
+        assertFits(`${tabId}-viewers`, tabId)
+        assertFits(`${tabId}-unread`, tabId)
       }
       if (width <= 420)
         assert(bounds('tab-d').y > bounds('tab-home').y, 'Narrow tabs wrap to another row')
@@ -285,27 +288,29 @@ try {
     await setState(regular)
     assertTabGeometry(baseline, 'unread badges appear')
     assert(!nodeFor('tab-b-unread') && !nodeFor('tab-b-viewers'), 'Empty tabs render no counters')
-    assert(!nodeFor('tab-a-unread'), 'A read tab renders no unread pill')
+    assert(!nodeFor('tab-a-unread'), 'A read tab renders no unread dot')
     const empty = bounds('tab-b').width
     const oneViewer = bounds('tab-a').width
     assert(empty < 90, 'The empty xqc tab should stay compact')
     assert(oneViewer < 120, 'The single-viewer Satont tab should stay compact')
-    await until(
-      () =>
-        current().getPaintedText().join(' ').includes('62.2K') &&
-        current().getPaintedText().join(' ').includes('99+'),
-      'both visible count labels without scrolling',
-    )
+    assertFits('tab-home-unread', 'tab-home')
+    const unreadDot = bounds('tab-c-unread')
+    await until(() => current().getPaintedText().includes('62.2K'), 'viewer count stays visible')
     await setState({ ...regular, mentions: 100 })
     assertTabGeometry(baseline, 'unread becomes a mention')
-    await until(() => current().getPaintedText().includes('@99+'), 'painted capped mention badge')
-    const badge = bounds('tab-c-unread')
+    const dot = bounds('tab-c-unread')
+    assert.deepEqual(dot, unreadDot, 'Mention uses the same space as the unread dot')
     assertFits('tab-c-unread', 'tab-c')
     for (const testId of ['tab-c-label', 'tab-c-viewers']) {
-      assert(badge.y + badge.height <= bounds(testId).y, `Mention badge clears ${testId}`)
+      const text = bounds(testId)
+      assert(text.x + text.width <= dot.x, `Unread dot clears ${testId}`)
+      assert(
+        dot.y >= text.y && dot.y + dot.height <= text.y + text.height,
+        'Dot is on the text row',
+      )
     }
-    current().simulateMouseMove(badge.x + badge.width / 2, badge.y + badge.height / 2)
-    await until(() => !!nodeFor('tab-c-counts-tooltip'), 'counts tooltip opens over the badge')
+    current().simulateMouseMove(dot.x + dot.width / 2, dot.y + dot.height / 2)
+    await until(() => !!nodeFor('tab-c-counts-tooltip'), 'counts tooltip opens over the dot')
     await until(
       () =>
         current()
@@ -314,7 +319,7 @@ try {
           .includes('62,200 viewers · 100 unread messages · 100 mentions'),
       'counts tooltip shows exact totals',
     )
-    current().simulateClick(badge.x + badge.width / 2, badge.y + badge.height / 2, 0)
+    current().simulateClick(dot.x + dot.width / 2, dot.y + dot.height / 2, 0)
     await until(
       () => state.get().active === 'c' && !nodeFor('tab-c-unread'),
       'click selects and reads tab',
