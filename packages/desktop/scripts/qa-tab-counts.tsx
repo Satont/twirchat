@@ -17,7 +17,6 @@ const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { AppNavigation } = await import('../src/gpuix/components/AppNavigation')
 const { ChannelTabBar } = await import('../src/gpuix/components/ChannelTabBar')
-const { formatTabViewers } = await import('../src/gpuix/tab-counts')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 
@@ -34,19 +33,15 @@ const automationSchema: z.ZodType<AutomationNode> = z.lazy(() =>
   }),
 )
 interface CounterState {
-  viewers: number | undefined
   unread: number
   mentions: number
   active: string
-  mode: 'uniform' | 'mixed'
 }
 type Renderer = GpuixRenderer & NativeWindowControls
 const state = createStore<CounterState>({
-  viewers: 9,
-  unread: 9,
+  unread: 0,
   mentions: 0,
   active: 'a',
-  mode: 'uniform',
 })
 const fixtureWidth = createStore(900)
 const showDenseHeader = createStore(false)
@@ -111,10 +106,10 @@ function DenseHeader() {
         watchedChannels: denseChannels,
         activeTabId: 'dapzer',
         watchedLiveStatuses: new Map([
-          ['twirapp 1', { isLive: true, viewerCount: 1 }],
-          ['recrent', { isLive: true, viewerCount: 6800 }],
-          ['chopperinho', { isLive: true, viewerCount: 21200 }],
-          ['dapzer', { isLive: true, viewerCount: 4 }],
+          ['twirapp 1', { isLive: true }],
+          ['recrent', { isLive: true }],
+          ['chopperinho', { isLive: true }],
+          ['dapzer', { isLive: true }],
         ]),
         unread: new Map([
           ['recrent', { unread: 30, mentions: 1 }],
@@ -140,19 +135,10 @@ function Content() {
   React.useEffect(() => {
     commits++
   })
-  const unread = new Map(
-    channels.map((channel) => [
-      channel.id,
-      value.mode === 'mixed'
-        ? {
-            unread: channel.id === 'c' && value.active !== 'c' ? value.unread : 0,
-            mentions: channel.id === 'c' && value.active !== 'c' ? value.mentions : 0,
-          }
-        : { unread: value.unread, mentions: value.mentions },
-    ]),
-  )
-  if (value.mode === 'mixed' && value.active !== 'home')
-    unread.set('home', { unread: value.unread, mentions: 0 })
+  const unread = new Map<string, { unread: number; mentions: number }>()
+  for (const id of ['b', 'c', 'home']) {
+    if (id !== value.active) unread.set(id, { unread: value.unread, mentions: value.mentions })
+  }
   return (
     <div
       style={{
@@ -170,18 +156,7 @@ function Content() {
           tabs={{
             watchedChannels: channels,
             activeTabId: value.active,
-            homeViewerCount: value.mode === 'mixed' ? 11 : undefined,
-            watchedLiveStatuses: new Map(
-              channels.map((channel) => [
-                channel.id,
-                value.mode === 'mixed'
-                  ? {
-                      isLive: channel.id === 'a' || channel.id === 'c',
-                      viewerCount: channel.id === 'a' ? 1 : channel.id === 'c' ? 62200 : undefined,
-                    }
-                  : { isLive: value.viewers !== undefined, viewerCount: value.viewers },
-              ]),
-            ),
+            watchedLiveStatuses: new Map([['c', { isLive: true }]]),
             unread,
             onSelectTab: (id) => state.modify((previous) => ({ ...previous, active: id })),
             onAddChannel: () => {},
@@ -258,18 +233,7 @@ async function until(check: () => boolean, label: string) {
   }
 }
 const screenshots: string[] = []
-const geometry: Array<{
-  width: number
-  mode: string
-  checked: number
-  baseline: Record<string, { x: number; y: number; width: number }>
-}> = []
-const compactWidths: Array<{ width: number; empty: number; oneViewer: number; both: number }> = []
-const groups = [
-  { name: 'plain', values: [9, 10, 99, 999], mentions: false },
-  { name: 'compact', values: [60000, 61500, 68800, 99900], mentions: false },
-  { name: 'mentions', values: [9, 10, 99, 999], mentions: true },
-]
+const geometry: Array<{ width: number; baseline: ReturnType<typeof tabGeometry> }> = []
 async function setState(next: CounterState) {
   const previous = commits
   state.set(next)
@@ -279,61 +243,21 @@ async function setState(next: CounterState) {
 try {
   await manager.start()
   await until(() => !!renderer, 'renderer')
+  const read = { unread: 0, mentions: 0, active: 'a' } satisfies CounterState
   let wrapWidth = 0
-  for (const size of [900, 'wrap', 420, 320, 248, 900]) {
+  for (const size of [900, 'wrap', 420, 320, 248]) {
     const width = size === 'wrap' ? wrapWidth : size
     assert(typeof width === 'number' && width > 0)
     fixtureWidth.set(width)
     await current().setWindowBounds({ width: Math.max(320, width), height: 220 })
-    current().simulateMouseMove(20, 120)
-    for (const group of groups) {
-      await setState({ viewers: 9, unread: 9, mentions: 0, active: 'a', mode: 'uniform' })
-      const first = group.values[0]
-      assert(first !== undefined)
-      await setState({
-        viewers: first,
-        unread: first,
-        mentions: group.mentions ? first : 0,
-        active: 'a',
-        mode: 'uniform',
-      })
-      const baseline = tabGeometry()
-      for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
-      assert.equal(bounds('tab-home').height, 32, 'Home keeps the original tab height')
-      for (const channel of channels) {
-        const tabId = `tab-${channel.id}`
-        assert.equal(bounds(tabId).height, 32, 'Unread tabs keep the original tab height')
-        assertFits(`${tabId}-viewers`, tabId)
-        assertFits(`${tabId}-unread`, tabId)
-      }
-      if (width <= 420)
-        assert(bounds('tab-d').y > bounds('tab-home').y, 'Narrow tabs wrap to another row')
-      for (const [index, viewers] of group.values.entries()) {
-        await setState({
-          viewers,
-          unread: viewers,
-          mentions: group.mentions ? viewers : 0,
-          active: index % 2 ? 'b' : 'a',
-          mode: 'uniform',
-        })
-        await until(
-          () => current().getPaintedText().join(' ').includes(formatTabViewers(viewers)),
-          'painted viewer count',
-        )
-        assertTabGeometry(baseline, `${group.name} at ${viewers} viewers`)
-      }
-      geometry.push({ width, mode: group.name, checked: group.values.length, baseline })
-    }
-    const read = {
-      viewers: undefined,
-      unread: 0,
-      mentions: 0,
-      active: 'b',
-      mode: 'mixed',
-    } satisfies CounterState
+    current().simulateMouseMove(20, 140)
     await setState(read)
     const baseline = tabGeometry()
     const readLabel = bounds('tab-c-label')
+    for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
+    for (const testId of tabIds.slice(0, -1)) {
+      assert.equal(bounds(testId).height, 32, 'Tabs keep the original height')
+    }
     if (!wrapWidth) {
       const channel = bounds('tab-c')
       wrapWidth = Math.ceil(channel.x + channel.width + 10)
@@ -342,79 +266,68 @@ try {
       const home = bounds('tab-home')
       const channel = bounds('tab-c')
       assert.equal(channel.y, home.y, 'The live tab fits at the wrap threshold')
-      assert(width - channel.x - channel.width - 8 < 5, 'A separate status slot would force a wrap')
+      assert(width - channel.x - channel.width - 8 < 5, 'An extra badge slot would force a wrap')
     }
-    const regular = { ...read, unread: 100 }
-    await setState(regular)
-    assertTabGeometry(baseline, 'unread badges appear')
-    assert(!nodeFor('tab-b-unread') && !nodeFor('tab-b-viewers'), 'Empty tabs render no counters')
-    assert(!nodeFor('tab-a-unread'), 'A read tab renders no unread pill')
-    const empty = bounds('tab-b').width
-    const oneViewer = bounds('tab-a').width
-    assert(empty < 100, 'The empty xqc tab should stay compact')
-    assert(oneViewer < 130, 'The single-viewer tab only reserves room for a short title')
-    assertFits('tab-home-unread', 'tab-home')
-    const regularPill = bounds('tab-c-unread')
-    await until(() => current().getPaintedText().includes('62.2K'), 'viewer count stays visible')
-    await setState({ ...regular, mentions: 100 })
-    assertTabGeometry(baseline, 'unread becomes a mention')
-    const pill = bounds('tab-c-unread')
-    assert(pill.width > regularPill.width, 'The original mention pill is wider')
-    assertFits('tab-c-unread', 'tab-c')
-    const label = bounds('tab-c-label')
-    const viewers = bounds('tab-c-viewers')
-    assert(label.width > 0, 'The tab title retains space beside a mention pill')
-    assert(label.width < readLabel.width, 'The title gives space to the inline pill')
-    assert(label.x + label.width <= viewers.x, 'Viewer count clears the title')
-    assert(viewers.x + viewers.width <= pill.x, 'The pill sits inline after the viewer count')
-    assert(
-      pill.y < viewers.y + viewers.height && viewers.y < pill.y + pill.height,
-      'The pill stays on the viewer line',
-    )
-    await until(
-      () => current().getPaintedText().includes('@99+'),
-      'the original mention count paints',
-    )
+    if (width <= 320) {
+      assert(bounds('tab-d').y > bounds('tab-home').y, 'Narrow tabs wrap to another row')
+    }
+    await setState({ ...read, unread: 124 })
+    assertTabGeometry(baseline, 'ordinary unread appears')
+    assert.deepEqual(bounds('tab-c-label'), readLabel, 'Ordinary unread leaves the title intact')
+    assert(!nodeFor('tab-c-mentions'), 'Ordinary unread has no numeric badge')
+    assert(!nodeFor('tab-c-viewers') && !nodeFor('tab-home-viewers'), 'Tabs render no viewer count')
+    assert(!current().getPaintedText().includes('124'), 'Ordinary unread total never paints')
     const channelTab = bounds('tab-c')
     const tabX = channelTab.x + 6
     const tabY = channelTab.y + channelTab.height / 2
     current().simulateMouseMove(tabX, tabY)
-    await until(() => !!nodeFor('tab-c-counts-tooltip'), 'counts tooltip opens over the tab')
     await until(
-      () =>
-        current()
-          .getPaintedText()
-          .join(' ')
-          .includes('62,200 viewers · 100 unread messages · 100 mentions'),
-      'counts tooltip shows exact totals',
+      () => current().getPaintedText().includes('Unread messages'),
+      'Ordinary unread tooltip describes state without a count',
+    )
+    current().simulateMouseMove(20, 140)
+    for (const [mentions, badge] of [
+      [1, '1'],
+      [9, '9'],
+      [10, '10'],
+      [99, '99'],
+      [124, '99+'],
+    ] satisfies Array<[number, string]>) {
+      await setState({ ...read, unread: 124, mentions })
+      assertTabGeometry(baseline, `mention badge for ${mentions}`)
+      for (const id of ['tab-home', 'tab-b', 'tab-c']) {
+        assertFits(`${id}-mentions`, id)
+      }
+      const pill = bounds('tab-c-mentions')
+      const label = bounds('tab-c-label')
+      assert(label.width > 0 && label.width < readLabel.width, 'The title gives space to the badge')
+      assert(label.x + label.width <= pill.x, 'The mention count clears the title')
+      await until(() => current().getPaintedText().includes(badge), 'Mention count paints')
+    }
+    current().simulateMouseMove(tabX, tabY)
+    await until(() => !!nodeFor('tab-c-counts-tooltip'), 'Tooltip opens over the tab')
+    await until(
+      () => current().getPaintedText().includes('124 mentions'),
+      'Tooltip shows the exact mention count',
     )
     current().simulateClick(tabX, tabY, 0)
     await until(
-      () => state.get().active === 'c' && !nodeFor('tab-c-unread'),
-      'click selects and reads tab',
+      () => state.get().active === 'c' && !nodeFor('tab-c-mentions'),
+      'Click selects the tab and clears mentions',
     )
-    assertTabGeometry(baseline, 'pointer selection clears unread')
+    assertTabGeometry(baseline, 'pointer selection clears mentions')
     current().focusElement(idFor('tab-home'))
     current().simulateKeystrokes('enter')
     await until(
-      () => state.get().active === 'home' && !nodeFor('tab-home-unread'),
-      'Enter selects and reads Home',
+      () => state.get().active === 'home' && !nodeFor('tab-home-mentions'),
+      'Enter selects Home and clears mentions',
     )
-    assertTabGeometry(baseline, 'keyboard selection clears unread')
-    await setState(regular)
-    const lowerTab = bounds('tab-d')
-    current().simulateMouseDown(lowerTab.x + 10, lowerTab.y + 10, 0)
-    current().simulateMouseUp(lowerTab.x + 10, lowerTab.y + 10, 0)
-    await until(() => state.get().active === 'd', 'pointer selection on a wrapped tab')
-    await setState(regular)
+    assertTabGeometry(baseline, 'keyboard selection clears mentions')
     current().focusElement(idFor('tab-d'))
     current().simulateKeystrokes('enter')
     await until(() => state.get().active === 'd', 'keyboard selection on a wrapped tab')
-    compactWidths.push({ width, empty, oneViewer, both: bounds('tab-c').width })
+    geometry.push({ width, baseline })
     screenshots.push(await captureGuiQaDisplay('tab-counts-' + width))
-    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'uniform' })
-    assert(!nodeFor('tab-a-viewers') && !nodeFor('tab-a-unread'), 'No absent channel counters')
-    assert(!nodeFor('tab-home-viewers') && !nodeFor('tab-home-unread'), 'No absent Home counters')
   }
   fixtureWidth.set(650)
   showDenseHeader.set(true)
@@ -434,11 +347,7 @@ try {
   screenshots.push(await captureGuiQaDisplay('tab-counts-dense-650'))
   await Bun.write(
     join(session, 'tab-counts-result.json'),
-    JSON.stringify(
-      { ok: true, geometry, compactWidths, screenshots, lowRateControlledCheck: true },
-      null,
-      2,
-    ),
+    JSON.stringify({ ok: true, geometry, screenshots }, null, 2),
   )
 } catch (error) {
   await captureGuiQaDisplay('tab-counts-failure')

@@ -44,7 +44,7 @@ import { registerHotkeyActions } from '../state/hotkeys'
 import { allPanels, layoutStore, loadLayout, splitPanel, reopenClosedSplit } from '../state/layout'
 import { messageSimilarityPreferences } from '../state/message-similarity'
 import { setMainTab } from '../state/settings-session'
-import { saveStreamerMode, streamerModeStore } from '../state/streamer-mode'
+import { saveStreamerMode } from '../state/streamer-mode'
 import { visitChatTab, navigateChatTabHistory } from '../state/tab-history'
 import { clearTabUnread } from '../state/tab-unread'
 import { changeWindowPresentation, useWindowPresentation } from '../state/window-presentation'
@@ -333,7 +333,6 @@ export function App() {
   const windows = useDesktopWindows()
   const scope = useWindowScope()
   const presentation = useWindowPresentation()
-  const streamerMode = useStore(streamerModeStore)
   // Runs during the first render — before the first layout — so text that
   // names Inter/Manrope never falls back. Idempotent across hot remounts.
   registerBundledFonts(useGpuixRequired())
@@ -403,42 +402,17 @@ export function App() {
     for (const ch of watchedChannels) {
       if (isPluginWatchedChannel(ch) || ch.platform === 'youtube') continue
       const status = streamStatuses.get(`${ch.platform}:${ch.channelSlug.toLowerCase()}`)
-      channels.set(ch.id, {
-        isLive: status?.isLive ?? false,
-        viewerCount:
-          streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration
-            ? undefined
-            : status?.viewerCount,
-      })
+      channels.set(ch.id, { isLive: status?.isLive ?? false })
     }
     const tabs = new Map(channels)
     for (const tab of tabWatchedChannels) {
       const status = tab.sourceChannelIds
-        ? {
-            isLive: tab.sourceChannelIds.some((id) => channels.get(id)?.isLive),
-            viewerCount: undefined,
-          }
+        ? { isLive: tab.sourceChannelIds.some((id) => channels.get(id)?.isLive) }
         : channels.get(tab.sourceChannelId)
       if (status) tabs.set(tab.id, status)
     }
     return tabs
-  }, [watchedChannels, streamStatuses, tabWatchedChannels, streamerMode])
-
-  const homeViewerCount = useMemo(() => {
-    if (streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration)
-      return undefined
-    let total = 0
-    let anyLive = false
-    for (const acc of accounts) {
-      if (acc.platform !== 'twitch' && acc.platform !== 'kick') continue
-      const status = streamStatuses.get(`${acc.platform}:${acc.username.toLowerCase()}`)
-      if (status?.isLive) {
-        anyLive = true
-        total += status.viewerCount ?? 0
-      }
-    }
-    return anyLive ? total : undefined
-  }, [accounts, streamStatuses, streamerMode])
+  }, [watchedChannels, streamStatuses, tabWatchedChannels])
 
   const tabSelectorItems = useMemo<TabItem[]>(() => {
     const items: TabItem[] = [{ id: 'home', label: t('app.tabs.home') }]
@@ -624,7 +598,6 @@ export function App() {
                       watchedChannels: visibleTabs,
                       activeTabId: activeWatchedTab,
                       watchedLiveStatuses,
-                      homeViewerCount,
                       tabChannelNames,
                       onSelectTab: selectWatchedTab,
                       onAddChannel: () => setShowAddModal(true),
