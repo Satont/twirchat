@@ -36,24 +36,17 @@ import { layoutStore } from '../state/layout'
 import { useOverlayClose } from '../state/overlays'
 import { tabSenderAccounts } from '../state/pane-accounts'
 import { tabUnreadStore, type TabUnread } from '../state/tab-unread'
-import {
-  formatTabUnread,
-  formatTabViewers,
-  TAB_UNREAD_WIDTH,
-  TAB_VIEWER_MIN_WIDTH,
-  TAB_MENTION_WIDTH,
-} from '../tab-counts'
+import { formatTabMentions } from '../tab-counts'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { AccountAvatar } from './ChatAccountControl'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
-import { Icon, PlatformIcon } from './ui/Icon'
+import { Icon } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 
 export interface WatchedLiveStatus {
   isLive: boolean
-  viewerCount?: number
 }
 interface TabMenuItemOptions {
   disabled?: boolean
@@ -64,7 +57,6 @@ interface ChannelTabsProps {
   watchedChannels: Array<Omit<ChatTabView, 'sourceChannelId'> & { sourceChannelId?: string }>
   activeTabId: string
   watchedLiveStatuses: Map<string, WatchedLiveStatus>
-  homeViewerCount?: number
   tabChannelNames?: Map<string, string[]>
   unread?: ReadonlyMap<string, TabUnread>
   onSelectTab: (id: string) => void
@@ -107,7 +99,6 @@ function ChannelTabs({
   watchedChannels,
   activeTabId,
   watchedLiveStatuses,
-  homeViewerCount,
   tabChannelNames,
   unread: suppliedUnread,
   onSelectTab,
@@ -231,7 +222,6 @@ function ChannelTabs({
         }
         active={activeTabId === 'home'}
         activeColor={theme.text}
-        viewers={homeViewerCount}
         unread={unread.get('home')}
         onClick={() => onSelectTab('home')}
       />
@@ -396,31 +386,13 @@ function ChannelTabs({
               label={label}
               active={active}
               activeColor={color}
-              viewers={live?.isLive ? live.viewerCount : undefined}
+              isLive={live?.isLive}
               unread={unread.get(channel.id)}
               onClick={() => {
                 if (!suppressClick.current) onSelectTab(channel.id)
               }}
               icon={
                 <>
-                  {channel.platform ? (
-                    <PlatformIcon
-                      platform={channel.platform}
-                      size={12}
-                      color={active ? color : theme.text2}
-                    />
-                  ) : (
-                    <Icon name="chat" size={12} color={active ? color : theme.text2} />
-                  )}
-                  <div
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 3,
-                      flexShrink: 0,
-                      backgroundColor: live?.isLive ? color : 'transparent',
-                    }}
-                  />
                   {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
                   {tabSenders.get(channel.id)?.length ? (
                     <div
@@ -609,7 +581,7 @@ function Tab({
   icon,
   active,
   activeColor,
-  viewers,
+  isLive,
   unread,
   onClick,
   testId,
@@ -620,7 +592,7 @@ function Tab({
   icon?: ReactNode
   active: boolean
   activeColor: string
-  viewers?: number
+  isLive?: boolean
   unread?: TabUnread
   onClick: () => void
   testId: string
@@ -628,26 +600,19 @@ function Tab({
   onAuxClick?: Props['onAuxClick']
 }) {
   const theme = useTheme()
-  const { tPlural } = useT()
+  const { t, tPlural } = useT()
   const [hovered, setHovered] = useState(false)
-  const unreadLabel = formatTabUnread(unread)
-  const mentionColor = unread?.mentions ? (unread.color?.slice(0, 7) ?? theme.link) : undefined
-  const counts: string[] = []
-  if (viewers !== undefined)
-    counts.push(tPlural('app.tab.counts.viewers', viewers, { count: viewers.toLocaleString() }))
-  if (unread && unread.unread > 0)
-    counts.push(
-      tPlural('app.tab.counts.unread', unread.unread, {
-        count: unread.unread.toLocaleString(),
-      }),
-    )
-  if (unread && unread.mentions > 0)
-    counts.push(
-      tPlural('app.tab.counts.mentions', unread.mentions, {
-        count: unread.mentions.toLocaleString(),
-      }),
-    )
-  const description = counts.join(' · ')
+  const mentions = unread?.mentions ?? 0
+  const mentionLabel = formatTabMentions(mentions)
+  const mentionColor = mentionLabel ? (unread?.color?.slice(0, 7) ?? theme.link) : undefined
+  const hasUnread = (unread?.unread ?? 0) > 0
+  const titleColor =
+    mentionColor ?? (active ? activeColor : hasUnread || hovered ? theme.text : theme.text2)
+  const description = mentionLabel
+    ? tPlural('app.tab.counts.mentions', mentions, { count: mentions.toLocaleString() })
+    : hasUnread
+      ? t('app.tab.counts.unread')
+      : undefined
   return (
     <Tooltip delayDuration={250} style={{ flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
       <TooltipTrigger asChild>
@@ -655,7 +620,7 @@ function Tab({
           testId={testId}
           {...interaction}
           aria-label={label}
-          aria-description={description || undefined}
+          aria-description={description}
           onAuxClick={onAuxClick}
           tabIndex={0}
           onClick={onClick}
@@ -674,10 +639,10 @@ function Tab({
             flexDirection: 'row',
             alignItems: 'center',
             gap: 5,
-            paddingTop: 14,
-            paddingBottom: 6,
-            paddingLeft: 10,
-            paddingRight: 8,
+            paddingTop: 5,
+            paddingBottom: 4,
+            paddingLeft: 9,
+            paddingRight: 9,
             cursor: 'pointer',
             borderTopLeftRadius: 6,
             borderTopRightRadius: 6,
@@ -695,62 +660,59 @@ function Tab({
             style={{
               fontSize: 12,
               fontWeight: 500,
-              color: mentionColor ?? (active ? activeColor : hovered ? theme.text : theme.text2),
-              maxWidth: 150,
+              color: titleColor,
               minWidth: 0,
-              flexShrink: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              whiteSpace: 'normal',
             }}
           >
             {label}
           </Text>
-          {viewers !== undefined ? (
-            <Text
-              testId={`${testId}-viewers`}
-              style={{
-                fontFamily: 'Arial',
-                fontSize: 10.5,
-                minWidth: TAB_VIEWER_MIN_WIDTH,
-                flexShrink: 0,
-                textAlign: 'left',
-                whiteSpace: 'nowrap',
-                color: active ? activeColor : theme.text2,
-              }}
-            >
-              {formatTabViewers(viewers)}
-            </Text>
-          ) : null}
-          {unreadLabel ? (
+          {mentionLabel ? (
             <div
-              testId={`${testId}-unread`}
+              testId={`${testId}-mentions`}
               style={{
                 position: 'absolute',
-                top: 1,
-                right: 4,
-                width: mentionColor ? TAB_MENTION_WIDTH : TAB_UNREAD_WIDTH,
-                height: 13,
-                borderRadius: 7,
+                top: 0,
+                right: 2,
+                height: 10,
+                paddingLeft: 2,
+                paddingRight: 2,
+                borderRadius: 5,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: mentionColor ? theme.accent.tint20 : theme.fillHover,
+                backgroundColor: theme.accent.tint20,
                 pointerEvents: 'none',
               }}
             >
               <Text
                 style={{
                   fontFamily: 'Arial',
-                  fontSize: 10,
+                  fontSize: 8,
                   fontWeight: 600,
-                  lineHeight: 11,
-                  color: mentionColor ?? theme.text2,
+                  lineHeight: 10,
+                  color: mentionColor ?? theme.link,
+                  pointerEvents: 'none',
                 }}
               >
-                {unreadLabel}
+                {mentionLabel}
               </Text>
             </div>
+          ) : null}
+          {isLive ? (
+            <div
+              testId={`${testId}-live`}
+              style={{
+                position: 'absolute',
+                top: 3,
+                left: 2,
+                width: 5,
+                height: 5,
+                borderRadius: 3,
+                backgroundColor: activeColor,
+                pointerEvents: 'none',
+              }}
+            />
           ) : null}
         </div>
       </TooltipTrigger>
@@ -768,6 +730,7 @@ function Tab({
             maxWidth: 280,
           }}
         >
+          {mentionLabel ? <Text style={{ fontSize: 11, color: theme.text }}>{label}</Text> : null}
           <Text style={{ fontSize: 11, color: theme.text }}>{description}</Text>
         </TooltipContent>
       ) : null}
