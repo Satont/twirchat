@@ -56,20 +56,13 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
     }
   }
   return (
-    <UserCardPanel style={{}}>
+    <UserCardPanel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-          }}
-        >
-          <SectionHeader
-            icon="pencil"
-            title={t('userCard.notes.title')}
-            hint={t('userCard.notes.hint')}
-          />
-        </div>
+        <SectionHeader
+          icon="pencil"
+          title={t('userCard.notes.title')}
+          hint={t('userCard.notes.hint')}
+        />
 
         <div
           style={{
