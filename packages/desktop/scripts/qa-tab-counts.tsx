@@ -257,8 +257,12 @@ try {
     const longLabel = bounds('tab-d-label')
     for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
     for (const testId of ['tab-home', 'tab-a', 'tab-b', 'tab-c']) {
-      assert.equal(bounds(testId).height, 32, 'Tabs keep the original height')
+      assert.equal(bounds(testId).height, 30, 'Tabs match the navigation row height')
     }
+    const shortTab = bounds('tab-b')
+    const shortLabel = bounds('tab-b-label')
+    assert.equal(shortTab.width - shortLabel.width, 18, 'Short tabs use only the title and padding')
+    assert.equal(shortLabel.x - shortTab.x, 9, 'The title is centered in the tab')
     assertFits('tab-d-label', 'tab-d')
     assertFits('tab-c-live', 'tab-c')
     assert(!nodeFor('tab-b-live'), 'The live dot only appears on live channels')
@@ -308,7 +312,9 @@ try {
       const pill = bounds('tab-c-mentions')
       const label = bounds('tab-c-label')
       assert.deepEqual(label, readLabel, 'Mention badges leave the entire title visible')
-      assert(label.x + label.width <= pill.x, 'The mention count clears the title')
+      const live = bounds('tab-c-live')
+      assert(live.x + live.width <= pill.x, 'The live indicator clears the mention count')
+      assert(pill.y < label.y, 'The mention count stays in the upper corner')
       await until(() => current().getPaintedText().includes(badge), 'Mention count paints')
     }
     current().simulateMouseMove(tabX, tabY)

@@ -640,9 +640,9 @@ function Tab({
             alignItems: 'center',
             gap: 5,
             paddingTop: 5,
-            paddingBottom: 6,
-            paddingLeft: 10,
-            paddingRight: 8,
+            paddingBottom: 4,
+            paddingLeft: 9,
+            paddingRight: 9,
             cursor: 'pointer',
             borderTopLeftRadius: 6,
             borderTopRightRadius: 6,
@@ -667,39 +667,45 @@ function Tab({
           >
             {label}
           </Text>
-          <div
-            testId={mentionLabel ? `${testId}-mentions` : undefined}
-            style={{
-              width: 24,
-              height: 17,
-              flexShrink: 0,
-              borderRadius: 9,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: mentionLabel ? theme.accent.tint20 : undefined,
-            }}
-          >
-            {mentionLabel ? (
+          {mentionLabel ? (
+            <div
+              testId={`${testId}-mentions`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 2,
+                height: 10,
+                paddingLeft: 2,
+                paddingRight: 2,
+                borderRadius: 5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.accent.tint20,
+                pointerEvents: 'none',
+              }}
+            >
               <Text
                 style={{
                   fontFamily: 'Arial',
-                  fontSize: 10,
+                  fontSize: 8,
                   fontWeight: 600,
+                  lineHeight: 10,
                   color: mentionColor ?? theme.link,
+                  pointerEvents: 'none',
                 }}
               >
                 {mentionLabel}
               </Text>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           {isLive ? (
             <div
               testId={`${testId}-live`}
               style={{
                 position: 'absolute',
                 top: 3,
-                right: 2,
+                left: 2,
                 width: 5,
                 height: 5,
                 borderRadius: 3,
