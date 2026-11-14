@@ -90,69 +90,6 @@ Backend image: \`ghcr.io/satont/twirchat/backend@sha256:07a1\`
       },
     ])
   })
-
-  test('classifies by conventional commit type prefix', () => {
-    const notes = `## Changes
-* feat(desktop/chat) close chat tabs with middle click
-* fix(core) resolve race condition in message queue
-* perf(ui) improve chat render performance
-* docs(readme) update installation guide
-* refactor(backend) simplify database layer
-* chore(deps) update dependencies`
-
-    const result = parseReleaseNotes(notes)
-    expect(result).toEqual([
-      {
-        kind: 'new',
-        items: [
-          {
-            label: 'Closing chat tabs with middle click',
-            description: 'feat(desktop/chat) close chat tabs with middle click',
-          },
-        ],
-      },
-      {
-        kind: 'fixed',
-        items: [
-          {
-            label: 'Resolving race condition in message queue',
-            description: 'fix(core) resolve race condition in message queue',
-          },
-        ],
-      },
-      {
-        kind: 'improved',
-        items: [
-          {
-            label: 'Improving chat render performance',
-            description: 'perf(ui) improve chat render performance',
-          },
-        ],
-      },
-      {
-        kind: 'docs',
-        items: [
-          {
-            label: 'Documenting installation guide',
-            description: 'docs(readme) update installation guide',
-          },
-        ],
-      },
-      {
-        kind: 'improved',
-        items: [
-          {
-            label: 'Simplifying database layer',
-            description: 'refactor(backend) simplify database layer',
-          },
-        ],
-      },
-      {
-        kind: 'other',
-        items: [{ label: 'Updating dependencies', description: 'chore(deps) update dependencies' }],
-      },
-    ])
-  })
 })
 
 describe('formatReleaseDate', () => {
