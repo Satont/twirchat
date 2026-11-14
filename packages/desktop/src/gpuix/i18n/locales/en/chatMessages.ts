@@ -42,8 +42,8 @@ export const chatMessages = {
   'chatMessages.notice.moderation': 'Moderation',
   'chatMessages.notice.modiversary': 'Moderator anniversary',
   'chatMessages.notice.watchStreak': 'Watch streak',
-  'chatMessages.notice.join': '{user} joined the chat',
-  'chatMessages.notice.part': '{user} left the chat',
+  'chatMessages.notice.join': 'Users joined: {users}',
+  'chatMessages.notice.part': 'Users parted: {users}',
 
   'chatMessages.autoMod.submitting': 'Submitting…',
   'chatMessages.autoMod.reason.category':

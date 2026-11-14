@@ -34,6 +34,8 @@ import { createDefaultTwitchSenderPool, type TwitchSenderPool } from './sender-p
 
 const reconnectDelayMs = 5000
 const tokenRetryDelayMs = 30_000
+const membershipWindowMs = 1000
+const membershipBatchSize = 20
 
 const log = logger('twitch')
 
@@ -72,6 +74,12 @@ type TwitchIrcNotice = Pick<
   'text' | 'notice' | 'author'
 >
 
+interface MembershipBatch {
+  id: string
+  users: Map<string, string>
+  timestamp: Date
+}
+
 export { twitchAuthorAppearance, twitchMessageMetadata } from './normalize-message'
 
 // ============================================================
@@ -84,6 +92,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private chatClient: ChatClient | null = null
   private badgeRefreshInterval: ReturnType<typeof setInterval> | null = null
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
+  private membershipTimer: ReturnType<typeof setTimeout> | undefined
+  private membershipBatches = new Map<TwitchMembershipNoticeKind, MembershipBatch>()
+  private membershipSequence = 0
   private channelName = ''
   private shouldReconnect = true
   private isConnected = false
@@ -129,6 +140,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   async connect(channelName: string): Promise<void> {
     const revision = ++this.identityRevision
+    this.clearMembershipNotices()
     this.releaseWriter()
     this.channelName = twitchIrcChannelName(channelName)
     this.badgeCache = new Map()
@@ -247,6 +259,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   private async connectChatClient(): Promise<void> {
     const revision = this.identityRevision
+    this.clearMembershipNotices()
     try {
       if (this.chatClient) {
         try {
@@ -309,7 +322,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       if (channelId !== this.channelName) return
 
       if (user.toLowerCase() !== client.irc.currentNick.toLowerCase()) {
-        this.emit('notice', buildTwitchSystemMessage({ channelId, text: user, notice: { kind } }))
+        this.queueMembershipNotice(kind, channelId, user, current)
         return
       }
 
@@ -335,6 +348,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       // Intentional quit (teardown in connectChatClient / disconnect()) — treating it as a
       // real disconnect stacks reconnect timers and loops "disconnected" status emissions.
       if (manually) {
+        this.clearMembershipNotices()
         return
       }
 
@@ -580,7 +594,69 @@ export class TwitchAdapter extends BasePlatformAdapter {
     )
   }
 
+  private queueMembershipNotice(
+    kind: TwitchMembershipNoticeKind,
+    channelId: string,
+    user: string,
+    current: () => boolean,
+  ): void {
+    if (!this.membershipTimer) {
+      this.membershipTimer = setTimeout(() => {
+        const batches = [...this.membershipBatches]
+        this.clearMembershipNotices()
+        for (const [pendingKind, batch] of batches) {
+          if (!current()) break
+          this.emitMembershipNotice(pendingKind, channelId, batch)
+        }
+      }, membershipWindowMs)
+      this.membershipTimer.unref()
+    }
+
+    let batch = this.membershipBatches.get(kind)
+    if (!batch) {
+      // Chat sorts equal timestamps by message ID.
+      const sequence = String(++this.membershipSequence).padStart(16, '0')
+      batch = {
+        id: `membership:${sequence}:${crypto.randomUUID()}`,
+        users: new Map(),
+        timestamp: new Date(),
+      }
+      this.membershipBatches.set(kind, batch)
+    }
+    const login = user.toLowerCase()
+    if (batch.users.has(login)) return
+    batch.users.set(login, user)
+    if (batch.users.size === membershipBatchSize) {
+      this.membershipBatches.delete(kind)
+      this.emitMembershipNotice(kind, channelId, batch)
+    }
+  }
+
+  private emitMembershipNotice(
+    kind: TwitchMembershipNoticeKind,
+    channelId: string,
+    batch: MembershipBatch,
+  ): void {
+    this.emit(
+      'notice',
+      buildTwitchSystemMessage({
+        channelId,
+        id: batch.id,
+        text: [...batch.users.values()].join(', '),
+        timestamp: batch.timestamp,
+        notice: { kind },
+      }),
+    )
+  }
+
+  private clearMembershipNotices(): void {
+    clearTimeout(this.membershipTimer)
+    this.membershipTimer = undefined
+    this.membershipBatches.clear()
+  }
+
   private handleDisconnect(delayMs = reconnectDelayMs): void {
+    this.clearMembershipNotices()
     this.isConnected = false
 
     this.emit('status', {
@@ -855,6 +931,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   }
 
   private clearTimers(): void {
+    this.clearMembershipNotices()
     if (this.badgeRefreshInterval) {
       clearInterval(this.badgeRefreshInterval)
       this.badgeRefreshInterval = null

@@ -61,7 +61,7 @@ export function TwitchChatNotice({
         style={{
           display: 'flex',
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: 8,
           paddingLeft: 12,
           paddingRight: 12,
@@ -74,14 +74,13 @@ export function TwitchChatNotice({
             color: theme.text2,
             fontSize: labelSize,
             flexGrow: 1,
+            flexShrink: 1,
             minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            whiteSpace: 'normal',
           }}
         >
           {t(kind === 'join' ? 'chatMessages.notice.join' : 'chatMessages.notice.part', {
-            user: sanitizeDisplayText(summary),
+            users: sanitizeDisplayText(summary),
           })}
         </Text>
         {time ? (
