@@ -38,3 +38,29 @@ bun run --cwd packages/desktop qa:gui --dbus --keep --timeout 70 -- bun scripts/
 bun run --cwd packages/desktop bench:chat
 bun run --cwd packages/desktop bench:chat --scenario c50-r5000-p4 --mode production --duration 30
 ```
+
+## Adaptive channel tabs follow-up
+
+The follow-up removes viewer totals, ordinary unread numbers, and platform icons from
+channel tabs. Native QA confirmed full centered names, 30 px single-line tabs, and stable
+tab and Add button bounds across unread states and mention counts up to `99+`. The fixture
+covered 248–900 px, including the 292 px wrap threshold. Long names wrap at narrow widths.
+The drag fixture processed 466 chat messages and made zero fresh geometry queries.
+
+All 15 development scenarios completed. The production comparison used the same workload,
+runtime, and native artifact as above, with a fresh baseline on the follow-up base.
+
+| Production run | Processed msg/s | CPU % of one core | RSS median MiB | RSS peak MiB | JS heap peak MiB | Event-loop lag p95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Before | 4985.54 | 65.56 | 377.66 | 434.17 | 152.69 | 15.30 |
+| After 1 | 4987.11 | 44.30 | 366.81 | 424.67 | 128.47 | 4.45 |
+| After 2 | 4990.95 | 44.88 | 373.87 | 439.61 | 150.30 | 3.86 |
+| After 3 | 4987.95 | 45.17 | 370.15 | 441.27 | 140.46 | 3.92 |
+| After median | 4987.95 | 44.88 | 370.15 | 439.61 | 140.46 | 3.92 |
+
+Each run processed at least 99.7% of the offered rate. Median and peak RSS changed by
+−2.0% and +1.3%, respectively. The harness mounts `ChatView` directly, so the CPU and lag
+differences reflect variation in the chat workload on a shared host.
+
+- Before `cdead2e5a2ac1d6a92c76bd832b92cc36abd2e03`, runtime SHA-256 `60e423ba4d0a2ae50cb4b477dae2b6ddc1eb728abd76d1351429927d96e55da5`.
+- After `808de0b1e5cfa052180b7f1a99c852b2ec519b24`, runtime SHA-256 `c8d2e48d3427b940231612651fc2b39ca0ae35d9a6d7e67d22c233f2584f9a02`.
