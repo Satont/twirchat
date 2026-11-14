@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { describeTabCounts, formatTabViewers } from '../src/gpuix/tab-counts'
+import { describeTabCounts, formatTabUnread, formatTabViewers } from '../src/gpuix/tab-counts'
 
 test('tab viewer totals retain compact labels through rounding and large-count boundaries', () => {
   const counts = [
@@ -46,7 +46,13 @@ test('tab viewer totals retain compact labels through rounding and large-count b
   expect(counts.every((count) => formatTabViewers(count).length <= 5)).toBe(true)
 })
 
-test('tab count descriptions retain exact viewer, unread and mention totals', () => {
+test('visible unread/mention badges retain capped labels and full count descriptions', () => {
+  expect(formatTabUnread(undefined)).toBe('')
+  expect(formatTabUnread({ unread: 0, mentions: 0 })).toBe('')
+  expect(formatTabUnread({ unread: 9, mentions: 0 })).toBe('9')
+  expect(formatTabUnread({ unread: 10, mentions: 0 })).toBe('10')
+  expect(formatTabUnread({ unread: 100, mentions: 0 })).toBe('99+')
+  expect(formatTabUnread({ unread: 1000, mentions: 999 })).toBe('@99+')
   expect(describeTabCounts(61500, { unread: 1000, mentions: 999 })).toBe(
     '61,500 viewers · 1,000 unread messages · 999 mentions',
   )

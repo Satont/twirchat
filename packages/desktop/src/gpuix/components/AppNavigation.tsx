@@ -149,7 +149,8 @@ export function AppNavigation({ onSearchAll }: { onSearchAll?: () => void }) {
         alignSelf: 'flex-start',
         alignItems: 'center',
         gap: 4,
-        marginRight: 4,
+        paddingBottom: 2,
+        marginRight: 6,
         userSelect: 'none',
       }}
     >

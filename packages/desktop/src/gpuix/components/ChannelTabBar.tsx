@@ -36,7 +36,13 @@ import { layoutStore } from '../state/layout'
 import { useOverlayClose } from '../state/overlays'
 import { tabSenderAccounts } from '../state/pane-accounts'
 import { tabUnreadStore, type TabUnread } from '../state/tab-unread'
-import { formatTabViewers, TAB_VIEWER_MIN_WIDTH } from '../tab-counts'
+import {
+  formatTabUnread,
+  formatTabViewers,
+  TAB_UNREAD_WIDTH,
+  TAB_VIEWER_MIN_WIDTH,
+  TAB_MENTION_WIDTH,
+} from '../tab-counts'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { AccountAvatar } from './ChatAccountControl'
@@ -53,6 +59,11 @@ interface TabMenuItemOptions {
   disabled?: boolean
   autoFocus?: boolean
 }
+
+type TabContentMode = 'read' | 'measuring' | 'unread'
+
+const TAB_LABEL_GAP = 5
+const TAB_MIN_VISIBLE_TITLE_WIDTH = 16
 
 interface ChannelTabsProps {
   watchedChannels: Array<Omit<ChatTabView, 'sourceChannelId'> & { sourceChannelId?: string }>
@@ -82,9 +93,8 @@ export function ChannelTabBar({ leading, tabs }: { leading?: ReactNode; tabs?: C
         alignItems: 'center',
         alignContent: 'start',
         minWidth: 0,
-        rowGap: 1,
-        columnGap: 2,
-        paddingTop: 4,
+        gap: 2,
+        paddingTop: 6,
         paddingLeft: 8,
         paddingRight: 8,
         flexShrink: 0,
@@ -391,25 +401,31 @@ function ChannelTabs({
               label={label}
               active={active}
               activeColor={color}
-              live={live?.isLive}
               viewers={live?.isLive ? live.viewerCount : undefined}
               unread={unread.get(channel.id)}
               onClick={() => {
                 if (!suppressClick.current) onSelectTab(channel.id)
               }}
               icon={
-                channel.platform ? (
-                  <PlatformIcon
-                    platform={channel.platform}
-                    size={12}
-                    color={active ? color : theme.text2}
-                  />
-                ) : (
-                  <Icon name="chat" size={12} color={active ? color : theme.text2} />
-                )
-              }
-              accessories={
                 <>
+                  {channel.platform ? (
+                    <PlatformIcon
+                      platform={channel.platform}
+                      size={12}
+                      color={active ? color : theme.text2}
+                    />
+                  ) : (
+                    <Icon name="chat" size={12} color={active ? color : theme.text2} />
+                  )}
+                  <div
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 3,
+                      flexShrink: 0,
+                      backgroundColor: live?.isLive ? color : 'transparent',
+                    }}
+                  />
                   {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
                   {tabSenders.get(channel.id)?.length ? (
                     <div
@@ -596,10 +612,8 @@ function ChannelTabs({
 function Tab({
   label,
   icon,
-  accessories,
   active,
   activeColor,
-  live,
   viewers,
   unread,
   onClick,
@@ -608,11 +622,9 @@ function Tab({
   onAuxClick,
 }: {
   label: string
-  icon: ReactNode
-  accessories?: ReactNode
+  icon?: ReactNode
   active: boolean
   activeColor: string
-  live?: boolean
   viewers?: number
   unread?: TabUnread
   onClick: () => void
@@ -623,8 +635,10 @@ function Tab({
   const theme = useTheme()
   const { tPlural } = useT()
   const [hovered, setHovered] = useState(false)
-  const hasUnread = (unread?.unread ?? 0) > 0
+  const unreadLabel = formatTabUnread(unread)
   const mentionColor = unread?.mentions ? (unread.color?.slice(0, 7) ?? theme.link) : undefined
+  const titleColor = mentionColor ?? (active ? activeColor : hovered ? theme.text : theme.text2)
+  const viewerLabel = viewers === undefined ? undefined : formatTabViewers(viewers)
   const counts: string[] = []
   if (viewers !== undefined)
     counts.push(tPlural('app.tab.counts.viewers', viewers, { count: viewers.toLocaleString() }))
@@ -641,6 +655,105 @@ function Tab({
       }),
     )
   const description = counts.join(' · ')
+  const renderContent = (mode: TabContentMode) => {
+    const hidden = mode === 'measuring'
+    const badgeLabel = mode === 'unread' ? unreadLabel : ''
+    return (
+      <div
+        aria-hidden={hidden || undefined}
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: TAB_LABEL_GAP,
+          minWidth: 0,
+          pointerEvents: hidden ? 'none' : undefined,
+          visibility: hidden ? 'hidden' : undefined,
+          ...(mode === 'unread'
+            ? { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }
+            : {}),
+        }}
+      >
+        <Text
+          testId={hidden ? undefined : `${testId}-label`}
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: titleColor,
+            maxWidth: 150,
+            minWidth:
+              mode === 'unread'
+                ? 0
+                : TAB_MENTION_WIDTH + TAB_LABEL_GAP + TAB_MIN_VISIBLE_TITLE_WIDTH,
+            flexShrink: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
+        </Text>
+        {viewerLabel !== undefined || badgeLabel ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              flexShrink: 0,
+              height: 17,
+            }}
+          >
+            {viewerLabel !== undefined ? (
+              <Text
+                testId={hidden ? undefined : `${testId}-viewers`}
+                style={{
+                  fontFamily: 'Arial',
+                  fontSize: 10.5,
+                  minWidth: TAB_VIEWER_MIN_WIDTH,
+                  flexShrink: 0,
+                  textAlign: 'left',
+                  whiteSpace: 'nowrap',
+                  color: active ? activeColor : theme.text2,
+                }}
+              >
+                {viewerLabel}
+              </Text>
+            ) : null}
+            {badgeLabel ? (
+              <div
+                testId={`${testId}-unread`}
+                style={{
+                  width: mentionColor ? TAB_MENTION_WIDTH : TAB_UNREAD_WIDTH,
+                  height: 17,
+                  flexShrink: 0,
+                  paddingLeft: 2,
+                  paddingRight: 2,
+                  borderRadius: 9,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: mentionColor ? theme.accent.tint20 : theme.fillHover,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: 'Arial',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textAlign: 'right',
+                    color: mentionColor ?? theme.text2,
+                  }}
+                >
+                  {badgeLabel}
+                </Text>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
   return (
     <Tooltip delayDuration={250} style={{ flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
       <TooltipTrigger asChild>
@@ -665,11 +778,11 @@ function Tab({
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 4,
-            paddingTop: 3,
-            paddingBottom: 4,
-            paddingLeft: 7,
-            paddingRight: 6,
+            gap: 5,
+            paddingTop: 5,
+            paddingBottom: 6,
+            paddingLeft: 10,
+            paddingRight: 8,
             cursor: 'pointer',
             borderTopLeftRadius: 6,
             borderTopRightRadius: 6,
@@ -681,82 +794,19 @@ function Tab({
             maxWidth: '100%',
           }}
         >
+          {icon}
           <div
             style={{
               position: 'relative',
               display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              width: 18,
-              height: 16,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-            {hasUnread ? (
-              <div
-                testId={`${testId}-unread`}
-                style={{
-                  position: 'absolute',
-                  top: 2,
-                  right: 0,
-                  width: 4,
-                  height: 4,
-                  borderRadius: 1,
-                  backgroundColor: mentionColor ?? theme.text2,
-                  pointerEvents: 'none',
-                }}
-              />
-            ) : null}
-            {live ? (
-              <div
-                testId={`${testId}-live`}
-                style={{
-                  position: 'absolute',
-                  bottom: 2,
-                  right: 0,
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: activeColor,
-                  pointerEvents: 'none',
-                }}
-              />
-            ) : null}
-          </div>
-          {accessories}
-          <Text
-            testId={`${testId}-label`}
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              color: mentionColor ?? (active ? activeColor : hovered ? theme.text : theme.text2),
-              maxWidth: 150,
+              flexDirection: 'column',
               minWidth: 0,
               flexShrink: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
             }}
           >
-            {label}
-          </Text>
-          {viewers !== undefined ? (
-            <Text
-              testId={`${testId}-viewers`}
-              style={{
-                fontFamily: 'Arial',
-                fontSize: 10.5,
-                minWidth: TAB_VIEWER_MIN_WIDTH,
-                flexShrink: 0,
-                textAlign: 'left',
-                whiteSpace: 'nowrap',
-                color: active ? activeColor : theme.text2,
-              }}
-            >
-              {formatTabViewers(viewers)}
-            </Text>
-          ) : null}
+            {renderContent(unreadLabel ? 'measuring' : 'read')}
+            {unreadLabel ? renderContent('unread') : null}
+          </div>
         </div>
       </TooltipTrigger>
       {description ? (
@@ -773,6 +823,7 @@ function Tab({
             maxWidth: 280,
           }}
         >
+          {unreadLabel ? <Text style={{ fontSize: 11, color: theme.text }}>{label}</Text> : null}
           <Text style={{ fontSize: 11, color: theme.text }}>{description}</Text>
         </TooltipContent>
       ) : null}
