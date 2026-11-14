@@ -623,94 +623,15 @@ function Tab({
   viewers?: number
   unread?: TabUnread
   onClick: () => void
-  testId?: string
+  testId: string
   interaction?: Pick<Props, 'onKeyDown' | 'onMouseDown' | 'onMouseMove' | 'onMouseUp'>
   onAuxClick?: Props['onAuxClick']
 }) {
   const theme = useTheme()
-  const [hovered, setHovered] = useState(false)
-  return (
-    <div
-      testId={testId}
-      {...interaction}
-      onAuxClick={onAuxClick}
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        interaction?.onKeyDown?.(event)
-        if (event.key === 'enter' || event.key === 'space') {
-          event.preventDefault()
-          onClick()
-        }
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingTop: 5,
-        paddingBottom: 6,
-        paddingLeft: 10,
-        paddingRight: 8,
-        cursor: 'pointer',
-        borderTopLeftRadius: 6,
-        borderTopRightRadius: 6,
-        borderBottomWidth: 2,
-        borderColor: active ? activeColor : 'transparent',
-        backgroundColor: active ? theme.accent.tint10 : hovered ? theme.fillHover : undefined,
-        flexShrink: 0,
-        minWidth: 0,
-        maxWidth: '100%',
-      }}
-    >
-      {icon}
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          color: unread?.mentions
-            ? (unread.color?.slice(0, 7) ?? theme.link)
-            : active
-              ? activeColor
-              : hovered
-                ? theme.text
-                : theme.text2,
-          maxWidth: 150,
-          minWidth: 0,
-          flexShrink: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-      </Text>
-      <TabCounts
-        viewers={viewers}
-        unread={unread}
-        color={active ? activeColor : theme.text2}
-        testId={testId}
-      />
-    </div>
-  )
-}
-
-function TabCounts({
-  viewers,
-  unread,
-  color,
-  testId,
-}: {
-  viewers?: number
-  unread?: TabUnread
-  color: string
-  testId?: string
-}) {
-  const theme = useTheme()
   const { tPlural } = useT()
-  const label = formatTabUnread(unread)
+  const [hovered, setHovered] = useState(false)
+  const unreadLabel = formatTabUnread(unread)
+  const mentionColor = unread?.mentions ? (unread.color?.slice(0, 7) ?? theme.link) : undefined
   const counts: string[] = []
   if (viewers !== undefined)
     counts.push(tPlural('app.tab.counts.viewers', viewers, { count: viewers.toLocaleString() }))
@@ -727,22 +648,64 @@ function TabCounts({
       }),
     )
   const description = counts.join(' · ')
-  if (viewers === undefined && !label) return null
   return (
-    <Tooltip delayDuration={250}>
+    <Tooltip delayDuration={250} style={{ flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
       <TooltipTrigger asChild>
         <div
-          testId={`${testId}-counts`}
-          aria-label={description || undefined}
+          testId={testId}
+          {...interaction}
+          aria-label={label}
+          aria-description={description || undefined}
+          onAuxClick={onAuxClick}
+          tabIndex={0}
+          onClick={onClick}
+          onKeyDown={(event) => {
+            interaction?.onKeyDown?.(event)
+            if (event.key === 'enter' || event.key === 'space') {
+              event.preventDefault()
+              onClick()
+            }
+          }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
           style={{
+            position: 'relative',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 4,
+            gap: 5,
+            paddingTop: 14,
+            paddingBottom: 6,
+            paddingLeft: 10,
+            paddingRight: 8,
+            cursor: 'pointer',
+            borderTopLeftRadius: 6,
+            borderTopRightRadius: 6,
+            borderBottomWidth: 2,
+            borderColor: active ? activeColor : 'transparent',
+            backgroundColor: active ? theme.accent.tint10 : hovered ? theme.fillHover : undefined,
             flexShrink: 0,
-            height: 17,
+            minWidth: 0,
+            maxWidth: '100%',
           }}
         >
+          {icon}
+          <Text
+            testId={`${testId}-label`}
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: mentionColor ?? (active ? activeColor : hovered ? theme.text : theme.text2),
+              maxWidth: 150,
+              minWidth: 0,
+              flexShrink: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {label}
+          </Text>
           {viewers !== undefined ? (
             <Text
               testId={`${testId}-viewers`}
@@ -753,27 +716,27 @@ function TabCounts({
                 flexShrink: 0,
                 textAlign: 'left',
                 whiteSpace: 'nowrap',
-                color,
+                color: active ? activeColor : theme.text2,
               }}
             >
               {formatTabViewers(viewers)}
             </Text>
           ) : null}
-          {label ? (
+          {unreadLabel ? (
             <div
               testId={`${testId}-unread`}
               style={{
-                width: unread && unread.mentions > 0 ? TAB_MENTION_WIDTH : TAB_UNREAD_WIDTH,
-                height: 17,
-                flexShrink: 0,
-                paddingLeft: 2,
-                paddingRight: 2,
-                borderRadius: 9,
+                position: 'absolute',
+                top: 1,
+                right: 4,
+                width: mentionColor ? TAB_MENTION_WIDTH : TAB_UNREAD_WIDTH,
+                height: 13,
+                borderRadius: 7,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor:
-                  unread && unread.mentions > 0 ? theme.accent.tint20 : theme.fillHover,
+                backgroundColor: mentionColor ? theme.accent.tint20 : theme.fillHover,
+                pointerEvents: 'none',
               }}
             >
               <Text
@@ -781,14 +744,11 @@ function TabCounts({
                   fontFamily: 'Arial',
                   fontSize: 10,
                   fontWeight: 600,
-                  textAlign: 'right',
-                  color:
-                    unread && unread.mentions > 0
-                      ? (unread.color?.slice(0, 7) ?? theme.link)
-                      : theme.text2,
+                  lineHeight: 11,
+                  color: mentionColor ?? theme.text2,
                 }}
               >
-                {label}
+                {unreadLabel}
               </Text>
             </div>
           ) : null}
