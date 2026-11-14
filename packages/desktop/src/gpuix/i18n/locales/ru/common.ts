@@ -4,6 +4,7 @@ export const ruCommon = {
   'common.save': 'Сохранить',
   'common.saveChanges': 'Сохранить изменения',
   'common.saving': 'Сохранение…',
+  'common.saved': 'Сохраненно',
   'common.discard': 'Отменить',
   'common.cancel': 'Отмена',
   'common.close': 'Закрыть',
