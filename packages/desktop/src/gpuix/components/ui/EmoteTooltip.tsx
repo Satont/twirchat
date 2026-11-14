@@ -12,6 +12,7 @@ import { sanitizeDisplayText } from '../../../views/shared/utils/display-text'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useT } from '../../i18n'
+import { PREFIX_MODIFIERS, SUFFIX_MODIFIERS, type EmoteModifier } from '../../message-tokens'
 import { showNotice } from '../../state/app'
 import { useStoreSelector } from '../../state/create-store'
 import {
@@ -30,6 +31,7 @@ interface EmoteTooltipDetails {
   emote: Omit<Emote, 'positions'>
   alias?: string
   catalog: readonly EmoteCatalogEntry[]
+  chatModifiers?: readonly EmoteModifier[]
   theme: Theme
 }
 
@@ -37,6 +39,7 @@ export function EmoteTooltip({
   emote,
   alias,
   catalog,
+  chatModifiers,
   children,
   theme,
 }: EmoteTooltipDetails & { children: ReactNode }) {
@@ -62,14 +65,26 @@ export function EmoteTooltip({
           },
         }}
       >
-        <EmoteTooltipBody emote={emote} alias={alias} catalog={catalog} theme={theme} />
+        <EmoteTooltipBody
+          emote={emote}
+          alias={alias}
+          catalog={catalog}
+          chatModifiers={chatModifiers}
+          theme={theme}
+        />
       </TooltipContent>
     </Tooltip>
   )
 }
 
 /** Mounted only while the tooltip is open, so chat rows hold no per-emote subscriptions. */
-function EmoteTooltipBody({ emote, alias = emote.name, catalog, theme }: EmoteTooltipDetails) {
+function EmoteTooltipBody({
+  emote,
+  alias = emote.name,
+  catalog,
+  chatModifiers,
+  theme,
+}: EmoteTooltipDetails) {
   const backend = useBackend()
   const font = useFont()
   const { t } = useT()
@@ -118,6 +133,7 @@ function EmoteTooltipBody({ emote, alias = emote.name, catalog, theme }: EmoteTo
             </text>
           ) : null}
         </div>
+        {chatModifiers ? <EmoteModifierDetails modifiers={chatModifiers} theme={theme} /> : null}
         <div
           onClick={() => {
             if (/^https?:\/\//i.test(url)) runUiTask(backend.api.openExternalUrl({ url }))
@@ -167,6 +183,35 @@ function EmoteTooltipBody({ emote, alias = emote.name, catalog, theme }: EmoteTo
           </text>
         </div>
       </div>
+    </div>
+  )
+}
+
+function EmoteModifierDetails({
+  modifiers,
+  theme,
+}: {
+  modifiers: readonly EmoteModifier[]
+  theme: Theme
+}) {
+  const font = useFont()
+  const { t } = useT()
+  const style = { fontSize: 11, color: theme.text2, fontFamily: font, maxWidth: 245 }
+  const effects = [...new Set(modifiers)].map((modifier) => t(`misc.emote.effect.${modifier}`))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {effects.length ? (
+        <text style={style}>
+          {t('misc.emote.appliedModifiers', { effects: effects.join(', ') })}
+        </text>
+      ) : null}
+      <text style={style}>
+        {t('misc.emote.prefixModifiers', { codes: Object.keys(PREFIX_MODIFIERS).join(' ') })}
+      </text>
+      <text style={style}>
+        {t('misc.emote.suffixModifiers', { codes: Object.keys(SUFFIX_MODIFIERS).join(' ') })}
+      </text>
     </div>
   )
 }

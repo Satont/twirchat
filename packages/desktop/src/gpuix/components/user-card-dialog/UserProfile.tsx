@@ -1,4 +1,3 @@
-import { useMediaQuery } from '@desktop/gpuix/hooks/use-media'
 import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
@@ -9,7 +8,7 @@ import {
   type UserCardProfileState,
 } from '@gpuix/hooks/user-card-dialog/use-user-card-profile'
 import { useT } from '@gpuix/i18n'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
+import { Tooltip, TooltipContent, TooltipTrigger, useWindowSize } from '@gpuix/react'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
@@ -270,7 +269,8 @@ export function UserProfileView({
     }
   }
 
-  const isWideScreen = useMediaQuery('(min-width: 480px)')
+  // Render cosmetics section (7TV badges, paints, etc.)
+  const isWideScreen = useWindowSize().width >= 480
   const cosmeticsSection =
     cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
       <div

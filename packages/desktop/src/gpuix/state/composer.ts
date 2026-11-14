@@ -48,6 +48,39 @@ export function editComposer(state: ComposerState, text: string): ComposerState 
   return { ...state, text, historyIndex: null }
 }
 
+/** Appends a mention after the draft, keeping one separating space and room to keep typing. */
+export function appendComposerMention(text: string, username: string): string {
+  const name = username.trim().replace(/^@/u, '')
+  if (!name) return text
+  const separator = text.length > 0 && !/\s$/u.test(text) ? ' ' : ''
+  return `${text}${separator}@${name} `
+}
+
+export type ComposerMentionTarget =
+  | { kind: 'platform'; platform: Platform }
+  | { kind: 'watched'; channelId: string }
+
+/** Points the composer at the row's platform/channel so a mention cannot cross-post. */
+export function retargetComposerForMention(
+  state: ComposerState,
+  target: ComposerMentionTarget,
+): ComposerState {
+  switch (target.kind) {
+    case 'platform':
+      return state.activePlatform === target.platform
+        ? state
+        : { ...state, activePlatform: target.platform }
+    case 'watched':
+      return state.activeWatchedChannelId === target.channelId
+        ? state
+        : { ...state, activeWatchedChannelId: target.channelId }
+    default: {
+      const exhaustive: never = target
+      return exhaustive
+    }
+  }
+}
+
 export function rememberComposerMessage(state: ComposerState, text: string): ComposerState {
   const trimmed = text.trim()
   const history =

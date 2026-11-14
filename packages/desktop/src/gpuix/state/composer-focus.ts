@@ -42,6 +42,12 @@ export function focusComposerForPane(tabId: string, panelId: string, scope = 'ma
   if (!entry) return false
   return entry.callback() !== false
 }
+/** Focuses the exact composer key when the pane's activity is already known. */
+export function focusComposerByKey(paneKey: string, scope = 'main'): boolean {
+  const entry = windows.get(scope)?.get(paneKey)
+  if (!entry) return false
+  return entry.callback() !== false
+}
 export function cleanupWindowComposerFocus(scope: string): void {
   windows.delete(scope)
 }

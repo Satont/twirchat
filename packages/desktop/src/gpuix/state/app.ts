@@ -14,6 +14,7 @@ import type {
 } from '@twirchat/shared/types'
 
 import { similarityChannelKey } from '../../services/message-similarity'
+import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import {
   appendLiveChatMessagesWithCount,
   mergeChatMessageSnapshot,
@@ -877,6 +878,11 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     queueWatchedMessage(channelId, message)
   })
   subscribe('twitch_chat_notice', ({ message, watchedChannelId }) => {
+    if (
+      isTwitchMembershipNoticeKind(message.metadata?.twitchNotice?.kind) &&
+      settingsStore.get()?.showTwitchJoinPart === false
+    )
+      return
     mentionAppearances.addMessage(message)
     if (watchedChannelId) queueWatchedMessage(watchedChannelId, message)
     else {

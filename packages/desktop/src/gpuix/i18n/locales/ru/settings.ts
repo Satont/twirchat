@@ -84,6 +84,7 @@ export const ruSettings = {
   'settings.section.timestamps.desc': 'Настройте отображение времени в чате',
   'settings.section.replies': 'Ответы',
   'settings.section.replies.desc': 'Выберите, как начинать ответ на сообщение',
+  'settings.section.twitch-chat-events': 'События чата Twitch',
   'settings.section.pause': 'Пауза чата',
   'settings.section.pause.desc': 'Останавливайте чат, пока читаете или открываете ссылки',
   'settings.section.twitch-session': 'Дополнительная сессия Twitch',
@@ -124,6 +125,7 @@ export const ruSettings = {
   'settings.chat.replyOnDoubleClick': 'Ответ двойным кликом',
   'settings.chat.replyOnDoubleClickHint':
     'Двойной клик по сообщению начинает ответ. Выключите, чтобы выделять слова двойным кликом.',
+  'settings.chat.showTwitchJoinPart': 'Показывать вход и выход пользователей из чата',
 
   'settings.twir.suggest': 'Подсказывать команды Twir',
   'settings.twir.suggestHint': 'Показывать публичные команды выбранного чата при вводе !',

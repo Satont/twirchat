@@ -1,4 +1,14 @@
-import type { NormalizedChatMessage, TwitchChatNotice } from '@twirchat/shared/types'
+import type {
+  NormalizedChatMessage,
+  TwitchChatNotice,
+  TwitchMembershipNoticeKind,
+} from '@twirchat/shared/types'
+
+export function isTwitchMembershipNoticeKind(
+  kind: string | undefined,
+): kind is TwitchMembershipNoticeKind {
+  return kind === 'join' || kind === 'part'
+}
 
 interface TwitchSystemMessageInput {
   channelId: string

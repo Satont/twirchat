@@ -22,7 +22,8 @@ const { wireHighlightNotifications, notificationPreferences } =
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
-const { focusNativeQaWindow } = await import('./qa-x11')
+const { composerStore } = await import('../src/gpuix/state/composer')
+const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const channel = { id: 'qa', platform: 'kick', channelSlug: 'qa', displayName: 'QA', createdAt: 0 }
 const layout = {
@@ -174,6 +175,52 @@ async function command(text) {
   renderer.simulateKeystrokes('ctrl-f12')
   await Bun.sleep(60)
 }
+async function rightClickAuthor(messageId: string, label: string): Promise<void> {
+  const testId = `chat-author-kick-${messageId}`
+  await until(() => nodes().some((node) => node.testId === testId), `${label} author name`)
+  const author = nodes().find((node) => node.testId === testId)
+  assert.ok(author, `${label} author name`)
+  const box = renderer.getElementBounds(author.id)
+  assert.ok(box, `${label} author name bounds`)
+  const window = getNativeQaWindowGeometry('TwirChat')
+  const click = Bun.spawnSync(
+    [
+      '/usr/bin/xdotool',
+      'mousemove',
+      '--sync',
+      String(Math.round(window.x + box.x + box.width / 2)),
+      String(Math.round(window.y + box.y + box.height / 2)),
+      'click',
+      '3',
+    ],
+    { env: process.env, timeout: 5000 },
+  )
+  assert.equal(click.exitCode, 0, click.stderr.toString())
+  await until(
+    () => composerStore.get().get('qa-tab:pane:qa')?.text === '@viewer ',
+    `${label} author mention appended to the composer`,
+  )
+  // A secondary release could surface a late click-driven dialog on the next frame.
+  await Bun.sleep(150)
+  const input = nodes().find((node) => node.testId === 'chat-input')
+  assert.ok(input, 'composer input')
+  assert.equal(renderer.getFocusedElementId(), input.id, `${label} mention focuses the composer`)
+  assert.equal(
+    nodes().some((node) => node.testId === 'message-actions-menu'),
+    false,
+    `${label} author right click keeps the row menu closed`,
+  )
+  assert.equal(
+    nodes().some((node) => node.testId === 'user-card-avatar'),
+    false,
+    `${label} author right click keeps the user card closed`,
+  )
+  composerStore.modify((current) => {
+    const next = new Map(current)
+    next.delete('qa-tab:pane:qa')
+    return next
+  })
+}
 function pause(options) {
   chatPauseStore.update({
     value: { hoverSeconds: 0, modifier: 'none', doubleClickLinks: false, ...options },
@@ -213,6 +260,13 @@ try {
   await focusNativeQaWindow('TwirChat')
   incoming('BEFORE_HOVER')
   await until(() => painted('BEFORE_HOVER'), 'initial message')
+  await rightClickAuthor('BEFORE_HOVER', 'modern')
+  app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
+  await Bun.sleep(60)
+  incoming('COMPACT_MENTION')
+  await rightClickAuthor('COMPACT_MENTION', 'compact')
+  app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false })
+  await Bun.sleep(60)
   pause({ hoverSeconds: -1 })
   await Bun.sleep(50)
   const list = bounds('chat-messages')

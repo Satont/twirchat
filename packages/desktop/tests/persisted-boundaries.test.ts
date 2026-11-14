@@ -40,6 +40,7 @@ test('persisted partial settings retain nested defaults and reject wrong externa
     expect(settings.potatIntegrationEnabled).toBe(true)
     expect(settings.supibotIntegrationEnabled).toBe(true)
     expect(settings.showModerationRail).toBe(true)
+    expect(settings.showTwitchJoinPart).toBe(true)
     expect(settings.overlay).toEqual({ ...DEFAULT_SETTINGS.overlay, fontSize: 22 })
     expect(settings.hotkeys).toEqual({ ...DEFAULT_SETTINGS.hotkeys, newTab: 'ctrl+n' })
     SettingsStore.set({
@@ -50,6 +51,7 @@ test('persisted partial settings retain nested defaults and reject wrong externa
       potatIntegrationEnabled: false,
       supibotIntegrationEnabled: false,
       showModerationRail: false,
+      showTwitchJoinPart: false,
     })
     expect(SettingsStore.get()).toMatchObject({
       twirIntegrationEnabled: false,
@@ -58,6 +60,7 @@ test('persisted partial settings retain nested defaults and reject wrong externa
       potatIntegrationEnabled: false,
       supibotIntegrationEnabled: false,
       showModerationRail: false,
+      showTwitchJoinPart: false,
     })
     f.database.run('UPDATE settings SET value=? WHERE key=?', [
       JSON.stringify({ fontSize: 'wrong' }),

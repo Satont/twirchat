@@ -32,7 +32,11 @@ import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
 import { t, tPlural, useLanguage } from '../i18n'
 import { icons } from '../icons'
-import { claimMessageRowClick, isMessageRowDoubleClick } from '../message-row-click'
+import {
+  claimMessageRowClick,
+  isMessageRowContextMenu,
+  isMessageRowDoubleClick,
+} from '../message-row-click'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
@@ -48,6 +52,7 @@ import { MessageTranslation } from './MessageTranslation'
 import { TwitchChatNotice } from './TwitchChatNotice'
 import { Badge as BadgeComponent } from './ui/Badge'
 import { BadgeTooltip } from './ui/BadgeTooltip'
+import { EventTimestamp } from './ui/EventTimestamp'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
@@ -529,6 +534,8 @@ export interface ChatMessageProps {
   renderModerationRail?: (rowHovered: boolean) => import('react').ReactNode
   onOpenUserCard?: (target: UserCardTarget) => void
   onReply?: (message: NormalizedChatMessage) => void
+  /** A secondary press on the author name types the author's mention into the composer. */
+  onMentionAuthor?: (message: NormalizedChatMessage) => void
   /** A primary double-click on the row calls `onReply`. */
   replyOnDoubleClick?: boolean
   onOpenThread?: (message: NormalizedChatMessage) => void
@@ -702,6 +709,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           if (isMessageRowDoubleClick(event)) onReply(message)
         }
       : undefined
+  const onMentionAuthor = props.onMentionAuthor
+  const mentionAuthor = onMentionAuthor ? () => onMentionAuthor(message) : undefined
 
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
@@ -740,6 +749,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           fontSize={fontSize}
           summary={message.text}
           detail={notice.detail}
+          chatTheme={props.chatTheme}
+          timestampFormat={props.timestampFormat}
           time={
             props.showTimestamp
               ? formatMessageTime(message.timestamp, props.timestampFormat)
@@ -786,10 +797,9 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 8,
           paddingTop: 3,
           paddingBottom: 3,
-          paddingLeft: 14,
+          paddingLeft: props.chatTheme === 'compact' ? 12 : 14,
           paddingRight: 14,
           backgroundColor: palette.bg,
           borderBottomWidth: 1,
@@ -797,38 +807,55 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           position: 'relative',
         }}
       >
-        {sourceLabel}
+        {props.showTimestamp ? (
+          <EventTimestamp
+            time={formatMessageTime(message.timestamp, props.timestampFormat)}
+            fontSize={fontSize}
+            format={props.timestampFormat}
+            compact={props.chatTheme === 'compact'}
+            testId={`chat-timestamp-${message.id}`}
+          />
+        ) : null}
         <div
           style={{
-            width: 17,
-            height: 17,
-            borderRadius: 9,
-            backgroundColor: palette.iconBg,
             display: 'flex',
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            userSelect: 'none',
+            gap: 8,
+            flexGrow: 1,
+            minWidth: 0,
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: 800, color: palette.iconColor, lineHeight: 12 }}>
-            {palette.glyph}
-          </Text>
+          {sourceLabel}
+          <div
+            style={{
+              width: 17,
+              height: 17,
+              borderRadius: 9,
+              backgroundColor: palette.iconBg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+          >
+            <Text
+              style={{ fontSize: 12, fontWeight: 800, color: palette.iconColor, lineHeight: 12 }}
+            >
+              {palette.glyph}
+            </Text>
+          </div>
+          <div style={{ flexGrow: 1, minWidth: 0 }}>
+            <MessageText
+              message={message}
+              fontSize={Math.round(fontSize * 0.88)}
+              isSystem
+              channelSlug={props.channelSlug}
+              onOpenUserCard={props.onOpenUserCard}
+            />
+          </div>
         </div>
-        <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <MessageText
-            message={message}
-            fontSize={Math.round(fontSize * 0.88)}
-            isSystem
-            channelSlug={props.channelSlug}
-            onOpenUserCard={props.onOpenUserCard}
-          />
-        </div>
-        {props.showTimestamp ? (
-          <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2, flexShrink: 0 }}>
-            {formatMessageTime(message.timestamp, props.timestampFormat)}
-          </Text>
-        ) : null}
       </div>
     )
   }
@@ -876,7 +903,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     const content = (
       <div
         onMouseDown={(event) => {
-          if (event.button === 2) {
+          if (event.button === 2 && isMessageRowContextMenu(event)) {
             setMenuRequest((value) => value + 1)
             setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
           }
@@ -965,6 +992,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             fontSize={fontSize}
             color={authorColor}
             onClick={openUserCard}
+            onMention={mentionAuthor}
+            testId={`chat-author-${message.platform}-${message.id}`}
           />
           {isFirstMessage ? (
             <BadgeComponent
@@ -1045,7 +1074,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const content = (
     <div
       onMouseDown={(event) => {
-        if (event.button === 2) {
+        if (event.button === 2 && isMessageRowContextMenu(event)) {
           setMenuRequest((value) => value + 1)
           setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
         }
@@ -1128,6 +1157,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             fontSize={fontSize}
             color={authorColor}
             onClick={openUserCard}
+            onMention={mentionAuthor}
+            testId={`chat-author-${message.platform}-${message.id}`}
           />
           {isFirstMessage ? (
             <BadgeComponent

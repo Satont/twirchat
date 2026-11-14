@@ -13,6 +13,7 @@ import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
 import { onTwitchSendRejected } from '../src/platforms/twitch/send-outcomes'
 import { createTwitchSenderPool, type TwitchSenderPool } from '../src/platforms/twitch/sender-pool'
 import { normalizedChatMessageSchema } from '../src/services/persisted-schemas'
+import { compareMessages } from '../src/views/main/utils/chat-message-buffer'
 
 describe('twitchMessageMetadata', () => {
   test('preserves Twitch first/returning/highlight/reward/bits/subscription/shared-chat metadata', () => {
@@ -110,6 +111,86 @@ function writerFixture(
 }
 
 describe('Twitch system notices', () => {
+  test.each([
+    { anonymous: false, nick: 'viewer', mode: 'authenticated' },
+    { anonymous: true, nick: 'justinfan12345', mode: 'anonymous' },
+  ])(
+    'groups membership changes in $mode chat without treating them as self joins',
+    async ({ anonymous, nick, mode }) => {
+      const { adapter, client, messages } = readerFixture('viewer', 'another')
+      Object.assign(adapter, { anonymous, isConnected: false })
+      const notices: NormalizedChatMessage[] = []
+      const statuses: unknown[] = []
+      adapter.on('notice', (notice) => notices.push(notice))
+      adapter.on('status', (status) => statuses.push(status))
+
+      client.irc.receiveLine(`:tmi.twitch.tv 001 ${nick} :Welcome, GLHF!`)
+      const firstJoinAt = Date.now()
+      client.irc.receiveLine(':maya!maya@maya.tmi.twitch.tv JOIN #another')
+      const firstJoinReceivedAt = Date.now()
+      client.irc.receiveLine(':MAYA!maya@maya.tmi.twitch.tv JOIN #another')
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv JOIN #another')
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv JOIN #elsewhere')
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv PART #elsewhere')
+      expect(statuses).toEqual([])
+
+      const self = `:${nick.toUpperCase()}!${nick}@${nick}.tmi.twitch.tv`
+      client.irc.receiveLine(`${self} JOIN #another`)
+      client.irc.receiveLine(`${self} JOIN #another`)
+      client.irc.receiveLine(`${self} PART #another`)
+      client.irc.receiveLine(':maya!maya@maya.tmi.twitch.tv PART #another')
+      expect(statuses).toEqual([
+        { platform: 'twitch', channelLogin: 'another', status: 'connected', mode },
+      ])
+      expect(notices).toEqual([])
+      await Bun.sleep(1050)
+      expect(messages).toEqual([])
+      expect(notices).toMatchObject([
+        {
+          channelId: 'another',
+          text: 'maya, liam',
+          type: 'system',
+          metadata: { twitchNotice: { kind: 'join' } },
+        },
+        {
+          channelId: 'another',
+          text: 'maya',
+          type: 'system',
+          metadata: { twitchNotice: { kind: 'part' } },
+        },
+      ])
+      expect(notices[0]?.id).not.toBe(notices[1]?.id)
+      expect(notices[0]?.timestamp.getTime()).toBeGreaterThanOrEqual(firstJoinAt)
+      expect(notices[0]?.timestamp.getTime()).toBeLessThanOrEqual(firstJoinReceivedAt)
+      const simultaneous = notices.map((notice) => ({ ...notice, timestamp: new Date(0) }))
+      expect(simultaneous.toReversed().toSorted(compareMessages)).toEqual(simultaneous)
+      for (const notice of notices)
+        expect(normalizedChatMessageSchema.parse(JSON.parse(JSON.stringify(notice)))).toEqual(
+          notice,
+        )
+    },
+  )
+
+  test('flushes a full membership row early and discards pending rows on disconnect', async () => {
+    const { adapter, client } = readerFixture('viewer', 'another')
+    const notices: string[] = []
+    adapter.on('notice', ({ text }) => notices.push(text))
+    const users = Array.from({ length: 20 }, (_, index) => `viewer${index}`)
+    for (const user of [...users, 'overflow']) {
+      client.irc.receiveLine(`:${user}!${user}@${user}.tmi.twitch.tv JOIN #another`)
+    }
+    expect(notices).toEqual([users.join(', ')])
+
+    const stale = readerFixture('viewer', 'another')
+    stale.adapter.on('notice', ({ text }) => notices.push(text))
+    stale.client.irc.receiveLine(':discarded!discarded@discarded.tmi.twitch.tv JOIN #another')
+    await stale.adapter.disconnect()
+    stale.client.irc.receiveLine(':late!late@late.tmi.twitch.tv PART #another')
+
+    await Bun.sleep(1050)
+    expect(notices).toEqual([users.join(', '), 'overflow'])
+  })
+
   test('shows IRC moderation actions without redisplaying deleted content', () => {
     const { adapter, client, messages } = readerFixture('viewer', 'another')
     const notices: NormalizedChatMessage[] = []

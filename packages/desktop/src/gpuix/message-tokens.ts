@@ -18,13 +18,24 @@ import tlds from 'tlds'
 import { chunkGraphemes, sanitizeDisplayText } from '../views/shared/utils/display-text'
 import { buildMessageParts } from '../views/shared/utils/messageParts'
 
+export type EmoteModifier =
+  | 'wide'
+  | 'flip-horizontal'
+  | 'flip-vertical'
+  | 'zero-space'
+  | 'cursed'
+  | 'rotate-left'
+  | 'rotate-right'
+  | 'party'
+  | 'shake'
+
 export type MessageToken =
   | { kind: 'text'; text: string }
   | { kind: 'mention'; text: string; username: string }
   | { kind: 'link'; text: string; url: string }
-  | { kind: 'emote'; emote: Emote; alias?: string; overlays?: Emote[]; modifiers?: string[] }
+  | { kind: 'emote'; emote: Emote; alias?: string; overlays?: Emote[]; modifiers?: EmoteModifier[] }
 
-const PREFIX_MODIFIERS: Record<string, string> = {
+export const PREFIX_MODIFIERS: Readonly<Record<string, EmoteModifier>> = {
   'w!': 'wide',
   'h!': 'flip-horizontal',
   'v!': 'flip-vertical',
@@ -35,7 +46,7 @@ const PREFIX_MODIFIERS: Record<string, string> = {
   'p!': 'party',
   's!': 'shake',
 }
-const SUFFIX_MODIFIERS: Record<string, string> = {
+export const SUFFIX_MODIFIERS: Readonly<Record<string, EmoteModifier>> = {
   ffzW: 'wide',
   ffzX: 'flip-horizontal',
   ffzY: 'flip-vertical',
@@ -47,7 +58,7 @@ export function layerEmoteTokens(
   options: { zeroWidth?: boolean; modifiers?: boolean } = {},
 ): MessageToken[] {
   const result: MessageToken[] = []
-  let prefixes: Array<{ token: MessageToken; modifier: string }> = []
+  let prefixes: Array<{ token: MessageToken; modifier: EmoteModifier }> = []
   for (const token of tokens) {
     const text = token.kind === 'text' ? token.text.trim() : ''
     const prefix = options.modifiers !== false ? PREFIX_MODIFIERS[text] : undefined
