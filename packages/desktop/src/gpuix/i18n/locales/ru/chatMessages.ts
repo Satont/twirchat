@@ -11,6 +11,7 @@ export const ruChatMessages = {
   'chatMessages.announcement': 'Объявление',
 
   'chatMessages.actions.reply': 'Ответить',
+  'chatMessages.actions.moreActions': 'Ещё действия',
   'chatMessages.actions.openUserCard': 'Открыть карточку пользователя',
   'chatMessages.actions.copyMessage': 'Скопировать сообщение',
   'chatMessages.actions.copyFullMessage': 'Скопировать сообщение целиком',

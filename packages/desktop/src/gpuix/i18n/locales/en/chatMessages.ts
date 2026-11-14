@@ -8,6 +8,7 @@ export const chatMessages = {
   'chatMessages.announcement': 'Announcement',
 
   'chatMessages.actions.reply': 'Reply',
+  'chatMessages.actions.moreActions': 'More actions',
   'chatMessages.actions.openUserCard': 'Open user card',
   'chatMessages.actions.copyMessage': 'Copy message',
   'chatMessages.actions.copyFullMessage': 'Copy full message',

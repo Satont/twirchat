@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import { PLATFORM_COMMAND_NAMES } from '@twirchat/shared/channel-tools'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { useEffect, useRef, useState } from 'react'
@@ -34,6 +35,8 @@ export function MessageActionsMenu({
   request = 0,
   position,
   onMenuButtonClick,
+  title,
+  onHoverChange,
 }: {
   message: NormalizedChatMessage
   channelSlug?: string
@@ -42,9 +45,10 @@ export function MessageActionsMenu({
   onOpenUserCard?: () => void
   onSearch?: (query: string) => void
   request?: number
-  /** Window coordinates for a cursor-opened menu; null anchors it to the button. */
   position?: { x: number; y: number } | null
   onMenuButtonClick: () => void
+  title?: string
+  onHoverChange?: (hovered: boolean) => void
 }) {
   const backend = useBackend()
   const paneAccountId = usePaneAccountId()
@@ -206,28 +210,80 @@ export function MessageActionsMenu({
   const cursorPosition = position ?? undefined
   return (
     <div style={{ position: 'relative', display: 'flex' }}>
-      <div
-        testId="msg-more"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onClick={(event) => {
-          if (!claimMessageRowClick(event)) return
-          onMenuButtonClick()
-          setOpen((value) => !value)
-        }}
-        style={{
-          padding: 3,
-          borderRadius: 4,
-          cursor: 'pointer',
-          backgroundColor: visible || hovered || open ? theme.fill : 'transparent',
-        }}
-      >
-        <Icon
-          name="moreVertical"
-          size={13}
-          color={visible || hovered || open ? theme.text2 : 'transparent'}
-        />
-      </div>
+      {title ? (
+        <Tooltip delayDuration={250}>
+          <TooltipTrigger asChild>
+            <div
+              testId="msg-more"
+              onMouseEnter={() => {
+                setHovered(true)
+                onHoverChange?.(true)
+              }}
+              onMouseLeave={() => {
+                setHovered(false)
+                onHoverChange?.(false)
+              }}
+              onClick={(event) => {
+                if (!claimMessageRowClick(event)) return
+                onMenuButtonClick()
+                setOpen((value) => !value)
+              }}
+              style={{
+                padding: 3,
+                borderRadius: 4,
+                cursor: 'pointer',
+                backgroundColor: visible || hovered || open ? theme.fill : 'transparent',
+              }}
+            >
+              <Icon
+                name="moreVertical"
+                size={13}
+                color={visible || hovered || open ? theme.text2 : 'transparent'}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent
+            side="top"
+            style={{
+              backgroundColor: theme.popover,
+              color: theme.text,
+              padding: 7,
+              borderRadius: 5,
+            }}
+          >
+            <Text style={{ fontSize: 12, color: theme.text }}>{title}</Text>
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <div
+          testId="msg-more"
+          onMouseEnter={() => {
+            setHovered(true)
+            onHoverChange?.(true)
+          }}
+          onMouseLeave={() => {
+            setHovered(false)
+            onHoverChange?.(false)
+          }}
+          onClick={(event) => {
+            if (!claimMessageRowClick(event)) return
+            onMenuButtonClick()
+            setOpen((value) => !value)
+          }}
+          style={{
+            padding: 3,
+            borderRadius: 4,
+            cursor: 'pointer',
+            backgroundColor: visible || hovered || open ? theme.fill : 'transparent',
+          }}
+        >
+          <Icon
+            name="moreVertical"
+            size={13}
+            color={visible || hovered || open ? theme.text2 : 'transparent'}
+          />
+        </div>
+      )}
       {open ? (
         <anchored
           deferred

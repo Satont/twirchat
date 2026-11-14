@@ -42,6 +42,7 @@ export interface UserCardHeaderProps {
   windows: DesktopWindows | null
   standalone: boolean
   openingWindow: boolean
+  openWindow: () => void
 }
 
 export interface UserCardHeaderAccent {
