@@ -67,11 +67,11 @@ Backend image: \`ghcr.io/satont/twirchat/backend@sha256:07a1\`
 
 describe('formatReleaseDate', () => {
   test('formats the GitHub timestamp as a UTC calendar date', () => {
-    expect(formatReleaseDate('2026-11-08T17:20:39Z')).toBe('Nov 8, 2026')
+    expect(formatReleaseDate('2026-11-08T17:20:39Z')).toBe('November 8, 2026')
   })
 
-  test('returns null for missing or invalid timestamps', () => {
+  test('returns null for empty string and "Invalid Date" for invalid timestamps', () => {
     expect(formatReleaseDate('')).toBeNull()
-    expect(formatReleaseDate('not-a-date')).toBeNull()
+    expect(formatReleaseDate('not-a-date')).toBe('Invalid Date')
   })
 })
