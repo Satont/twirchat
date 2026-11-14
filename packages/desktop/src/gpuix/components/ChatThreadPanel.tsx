@@ -28,6 +28,7 @@ interface ChatThreadPanelProps {
   aliases: ReadonlyMap<string, string>
   onClose: () => void
   onReply?: (message: NormalizedChatMessage) => void
+  onMentionAuthor?: (message: NormalizedChatMessage) => void
   onOpenUserCard: (target: UserCardTarget) => void
 }
 
@@ -43,6 +44,7 @@ export function ChatThreadPanel({
   aliases,
   onClose,
   onReply,
+  onMentionAuthor,
   onOpenUserCard,
 }: ChatThreadPanelProps) {
   const theme = useTheme()
@@ -112,11 +114,12 @@ export function ChatThreadPanel({
         chatTheme={settings?.chatTheme}
         hideReplyPreview
         onReply={preview ? undefined : onReply}
+        onMentionAuthor={preview ? undefined : onMentionAuthor}
         replyOnDoubleClick={settings?.replyOnDoubleClick}
         onOpenUserCard={onOpenUserCard}
       />
     ),
-    [aliases, channelSlug, onOpenUserCard, onReply, settings],
+    [aliases, channelSlug, onMentionAuthor, onOpenUserCard, onReply, settings],
   )
   const replyRows = useMemo(
     () =>

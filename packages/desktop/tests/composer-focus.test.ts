@@ -5,6 +5,7 @@ import type { WatchedChannelsLayout } from '@twirchat/shared/types'
 import { getActivePane, clearWindowActivePane } from '../src/gpuix/state/active-pane'
 import {
   cleanupWindowComposerFocus,
+  focusComposerByKey,
   focusComposerForPane,
   registerComposerFocus,
 } from '../src/gpuix/state/composer-focus'
@@ -21,6 +22,7 @@ const scopes = ['main', 'focus-other', 'focus-queued']
 afterEach(() => {
   for (const scope of scopes) {
     cleanupWindowLayoutFocus(scope)
+    cleanupWindowComposerFocus(scope)
     clearWindowActivePane(scope)
   }
 })
@@ -65,6 +67,19 @@ test('composer identity avoids panel-prefix collisions and supports activity IDs
 test('unavailable composer leaves focus to the chooser or container fallback', () => {
   registerComposerFocus('tab:panel:home', () => false)
   expect(focusComposerForPane('tab', 'panel')).toBe(false)
+})
+test('an exact composer key targets only its own activity', () => {
+  const calls: string[] = []
+  registerComposerFocus('tab:panel:home', () => {
+    calls.push('home')
+  })
+  registerComposerFocus('tab:panel:watched', () => {
+    calls.push('watched')
+  })
+  expect(focusComposerByKey('tab:panel:watched')).toBe(true)
+  expect(calls).toEqual(['watched'])
+  cleanupWindowComposerFocus('main')
+  expect(focusComposerByKey('tab:panel:watched')).toBe(false)
 })
 test('queued pane focus fires when registration arrives, only in its own window', () => {
   const calls: string[] = []

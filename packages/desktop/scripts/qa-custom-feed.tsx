@@ -122,7 +122,7 @@ function input(...args: string[]) {
   const result = Bun.spawnSync(['/usr/bin/xdotool', ...args], { env: process.env, timeout: 3000 })
   assert.equal(result.exitCode, 0, result.stderr.toString())
 }
-function pointAt(node: AutomationNode, press: boolean): void {
+function pointAt(node: AutomationNode, press: boolean, button = 1): void {
   const bounds = current().getPaintedElementBounds(node.id)
   assert(bounds, `Missing painted bounds for ${node.testId ?? node.id}`)
   const window = getNativeQaWindowGeometry('TwirChat')
@@ -131,13 +131,18 @@ function pointAt(node: AutomationNode, press: boolean): void {
     '--sync',
     String(Math.round(window.x + bounds.x + bounds.width / 2)),
     String(Math.round(window.y + bounds.y + bounds.height / 2)),
-    ...(press ? ['click', '1'] : []),
+    ...(press ? ['click', String(button)] : []),
   )
 }
 function click(testId: string): void {
   const node = find(testId)
   assert(node, testId)
   pointAt(node, true)
+}
+function rightClick(testId: string): void {
+  const node = find(testId)
+  assert(node, testId)
+  pointAt(node, true, 3)
 }
 
 async function stageSource(platform: WatchedChannel['platform'], slug: string, count: number) {
@@ -266,6 +271,19 @@ try {
   await send('Hello Kick', 1)
   assert.equal(sent[0]?.id, kick.id)
   assert.equal(sent[0]?.accountId, 'qa-kick')
+
+  rightClick('chat-author-twitch-sample-11')
+  await until(
+    () =>
+      draft() === '@juniper ' &&
+      composerStore.get().get(composerKey)?.activeWatchedChannelId === twitch.id,
+    'right click scopes the mention to the Twitch source',
+  )
+  assert.equal(find('message-actions-menu'), undefined, 'mention keeps the row menu closed')
+  assert.equal(find('user-card-avatar'), undefined, 'mention keeps the user card closed')
+  input('key', 'ctrl+a')
+  input('key', 'BackSpace')
+  await until(() => draft() === '', 'mention draft cleared')
 
   pointAt(later, false)
   const replyOnLastRow = () => {

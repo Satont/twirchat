@@ -78,7 +78,15 @@ import { stepChatFontSize } from '../state/chat-font-size'
 import { chatPauseStore } from '../state/chat-pause'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
-import { composerStore, updateComposer } from '../state/composer'
+import {
+  appendComposerMention,
+  composerStore,
+  editComposer,
+  retargetComposerForMention,
+  updateComposer,
+  type ComposerMentionTarget,
+} from '../state/composer'
+import { focusComposerByKey } from '../state/composer-focus'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import {
@@ -1211,6 +1219,34 @@ export function ChatView({
   // ── Header data ────────────────────────────────────────────────────────────
 
   const allChannels = useMemo(() => ownChatSendTargets(accounts), [accounts])
+  const mentionAuthor = useCallback(
+    (message: NormalizedChatMessage) => {
+      const username = sanitizeDisplayText(
+        message.author.username || message.author.displayName,
+      ).trim()
+      if (!username) return
+      let target: ComposerMentionTarget | null = null
+      if (feedChannels) {
+        const source = getFeedSource(message)
+        if (!source) return
+        if (reply && reply.sourceId !== source.id) setReply(null)
+        target = { kind: 'watched', channelId: source.id }
+      } else if (watchedChannel) {
+        if (message.platform !== watchedChannel.platform) return
+      } else {
+        if (!allChannels.some((candidate) => candidate.platform === message.platform)) return
+        if (reply && reply.message.platform !== message.platform) setReply(null)
+        target = { kind: 'platform', platform: message.platform }
+      }
+      updateComposer(paneKey, (current) => {
+        const retargeted = target ? retargetComposerForMention(current, target) : current
+        const text = appendComposerMention(retargeted.text, username)
+        return text === retargeted.text ? retargeted : editComposer(retargeted, text)
+      })
+      focusComposerByKey(paneKey, scope)
+    },
+    [allChannels, feedChannels, getFeedSource, paneKey, reply, scope, watchedChannel],
+  )
   const threadChannelStatus = useStoreSelector(watchedStatusesStore, (entries) =>
     threadChannel ? entries.get(threadChannel.id) : undefined,
   )
@@ -2354,6 +2390,7 @@ export function ChatView({
                     moderationOutcome={outcome}
                     onOpenUserCard={setUserCardTarget}
                     onReply={replyFromRow}
+                    onMentionAuthor={mentionAuthor}
                     replyOnDoubleClick={settings?.replyOnDoubleClick}
                     onOpenThread={showThread}
                     onSearch={openSearch}
@@ -2460,6 +2497,7 @@ export function ChatView({
                 aliases={aliasMap}
                 onClose={closeThread}
                 onReply={canReplyFromThread ? replyFromThread : undefined}
+                onMentionAuthor={mentionAuthor}
                 onOpenUserCard={setUserCardTarget}
               />
             </PaneAccountContext.Provider>
