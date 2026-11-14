@@ -23,7 +23,16 @@ import type {
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import type { JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { normalizePrivateCommand } from '../../services/private-commands'
@@ -91,6 +100,7 @@ import { useWindowScope } from '../state/window-scope'
 import { platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { AutocompletePopup } from './AutocompletePopup'
+import { ChannelPointsControl } from './ChannelPointsControl'
 import { ChatAccountControl } from './ChatAccountControl'
 import { ComposerImageUpload } from './ComposerImageUpload'
 import { EmotePicker } from './EmotePicker'
@@ -100,6 +110,7 @@ import { Text } from './ui/Text'
 
 /** Show the length counter this many characters before the limit. */
 const LENGTH_WARNING_MARGIN = 50
+type ComposerPicker = { kind: 'emotes' } | { kind: 'rewards'; target: string }
 interface OutgoingPreviewItem {
   platform: Platform
   channelId: string
@@ -344,7 +355,8 @@ export function ChatInput(props: ChatInputProps) {
   useEffect(() => {
     void loadTranslationSettings(backend).catch(() => {})
   }, [backend])
-  const [emotePickerOpen, setEmotePickerOpen] = useState(false)
+  const [picker, setPicker] = useState<ComposerPicker | null>(null)
+  const emotePickerOpen = picker?.kind === 'emotes'
   // Timestamp of the last outside-click dismissal: the same gesture ends in a
   // click on the trigger (mousedown closes, mouseup clicks) — swallow it.
   const emotePickerDismissedAt = useRef(0)
@@ -1188,7 +1200,7 @@ export function ChatInput(props: ChatInputProps) {
       openEmotesPopup: currentChannelInfoAvailable()
         ? () => {
             setHistorySearch(null)
-            setEmotePickerOpen(true)
+            setPicker({ kind: 'emotes' })
           }
         : null,
       paste: () => editorAction('paste'),
@@ -1276,6 +1288,20 @@ export function ChatInput(props: ChatInputProps) {
     : ownChannelTarget
       ? { platform: ownChannelTarget.platform, channelId: ownChannelTarget.channelLogin }
       : null
+  const primaryTwitch = props.accounts.find((account) => account.platform === 'twitch')
+  const rewardsChannel =
+    primaryTwitch && (!props.watchedChannel || watchedAccount?.id === primaryTwitch.id)
+      ? twitchCommandChannelLogin()?.toLowerCase()
+      : undefined
+  const rewardsTarget =
+    rewardsChannel && primaryTwitch ? `${primaryTwitch.id}:${rewardsChannel}` : undefined
+  if (picker?.kind === 'rewards' && picker.target !== rewardsTarget) setPicker(null)
+  const openRewards = useCallback(() => {
+    if (rewardsTarget) setPicker({ kind: 'rewards', target: rewardsTarget })
+  }, [rewardsTarget, setPicker])
+  const closeRewards = useCallback(() => {
+    setPicker((open) => (open?.kind === 'rewards' && open.target === rewardsTarget ? null : open))
+  }, [rewardsTarget, setPicker])
 
   const autoTranslationTargets = autoTranslationKey ? autoTranslationKey.split(',') : null
   return (
@@ -1956,7 +1982,7 @@ export function ChatInput(props: ChatInputProps) {
             onClick={() => {
               if (isDisabled) return
               if (Date.now() - emotePickerDismissedAt.current < 250) return
-              setEmotePickerOpen((open) => !open)
+              setPicker((open) => (open?.kind === 'emotes' ? null : { kind: 'emotes' }))
             }}
             style={{
               flexShrink: 0,
@@ -1975,6 +2001,16 @@ export function ChatInput(props: ChatInputProps) {
           >
             <Icon name="smile" size={16} color={emotePickerOpen ? theme.link : theme.text2} />
           </div>
+          {rewardsTarget && rewardsChannel && primaryTwitch ? (
+            <ChannelPointsControl
+              key={rewardsTarget}
+              accountId={primaryTwitch.id}
+              channelSlug={rewardsChannel}
+              open={picker?.kind === 'rewards' && picker.target === rewardsTarget}
+              onOpen={openRewards}
+              onClose={closeRewards}
+            />
+          ) : null}
           {/* The tooltip renders its own flex wrapper, so the frame alignment
               that keeps the button on the bottom row must live on the Tooltip. */}
           <Tooltip delayDuration={200} style={{ alignSelf: 'flex-end', flexShrink: 0 }}>
@@ -2061,11 +2097,11 @@ export function ChatInput(props: ChatInputProps) {
                 }
                 return `${current}${current.endsWith(' ') || current === '' ? '' : ' '}${alias} `
               })
-              setEmotePickerOpen(false)
+              setPicker((open) => (open?.kind === 'emotes' ? null : open))
             }}
             onClose={() => {
               emotePickerDismissedAt.current = Date.now()
-              setEmotePickerOpen(false)
+              setPicker((open) => (open?.kind === 'emotes' ? null : open))
             }}
           />
         ) : null}

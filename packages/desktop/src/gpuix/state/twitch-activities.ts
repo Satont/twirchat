@@ -47,7 +47,7 @@ const snapshotFields: TwitchActivitySnapshotPart[] = [
   'pointsBalance',
 ]
 let snapshotRevision = 0
-let identityRevision = 0
+let requestRevision = 0
 const fieldRevisions = new Map<string, Map<TwitchActivitySnapshotPart, number>>()
 function patch(channel: string, fields: Partial<ActivitiesState>): void {
   twitchActivitiesStore.modify((states) =>
@@ -71,11 +71,11 @@ export function loadTwitchActivities(
   if (current) return current
   patch(key, { loading: true, error: null })
   const requestedAt = snapshotRevision
-  const requestedIdentity = identityRevision
+  const requestedRevision = requestRevision
   const request = backend.api
     .getTwitchActivities({ channelSlug: key })
     .then((snapshot) => {
-      if (requestedIdentity !== identityRevision) return
+      if (requestedRevision !== requestRevision) return
       const previous = twitchActivitiesStore.get().get(key)?.snapshot
       const newer = fieldRevisions.get(key)
       if (previous && newer) {
@@ -89,7 +89,7 @@ export function loadTwitchActivities(
       patch(key, { snapshot, loading: false, error: null })
     })
     .catch((error) => {
-      if (requestedIdentity === identityRevision)
+      if (requestedRevision === requestRevision)
         patch(key, {
           loading: false,
           error: error instanceof Error ? error.message : String(error),
@@ -125,8 +125,9 @@ export function applyTwitchActivitySnapshot(update: TwitchActivitySnapshotUpdate
 export async function runTwitchActivity(
   backend: { api: Pick<DesktopApi, 'getTwitchActivities' | 'executeTwitchActivityAction'> },
   action: TwitchActivityAction,
+  expectedAccountId?: string,
 ): Promise<void> {
-  await backend.api.executeTwitchActivityAction(action)
+  await backend.api.executeTwitchActivityAction(action, expectedAccountId)
   await pending.get(action.channelSlug.toLowerCase())
   await loadTwitchActivities(backend, action.channelSlug)
 }
@@ -136,7 +137,7 @@ export function wireTwitchActivities(backend: {
 }): () => void {
   const offAccounts = backend.events.on('accounts_changed', ({ platform, identityChanged }) => {
     if (platform !== 'twitch' || !identityChanged) return
-    identityRevision++
+    requestRevision++
     pending.clear()
     fieldRevisions.clear()
     for (const timer of refreshTimers.values()) clearTimeout(timer)
@@ -145,6 +146,22 @@ export function wireTwitchActivities(backend: {
     twitchActivityCapabilitiesStore.set(new Map())
     whispersStore.set([])
     lastWhisperRecipientStore.set(null)
+  })
+  const offWebSession = backend.events.on('twitch_web_session_changed', () => {
+    requestRevision++
+    pending.clear()
+    twitchActivitiesStore.modify((states) => {
+      const next = new Map(states)
+      for (const [slug, state] of states) {
+        const snapshot = state.snapshot
+        next.set(slug, {
+          ...state,
+          loading: false,
+          snapshot: snapshot && { ...snapshot, pointsBalance: undefined },
+        })
+      }
+      return next
+    })
   })
   const offSnapshot = backend.events.on('twitch_activity_snapshot', applyTwitchActivitySnapshot)
   const offCapability = backend.events.on('twitch_activity_capability', (capability) =>
@@ -183,6 +200,7 @@ export function wireTwitchActivities(backend: {
   })
   return () => {
     offAccounts()
+    offWebSession()
     offActivity()
     offWhisper()
     offSnapshot()

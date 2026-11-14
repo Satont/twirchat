@@ -12,6 +12,16 @@ export const ruComposer = {
   'composer.placeholder.connectAccount': 'Подключите аккаунт…',
   'composer.send': 'Отправить сообщение',
 
+  'composer.rewards.open': 'Открыть награды канала · {balance}',
+  'composer.rewards.title': 'Баллы канала',
+  'composer.rewards.paused': 'Награда на паузе.',
+  'composer.rewards.outOfStock': 'Награда закончилась.',
+  'composer.rewards.insufficient': 'Для этой награды не хватает баллов.',
+  'composer.rewards.inputLimit': 'Введите не больше {limit} символов.',
+  'composer.rewards.redeem': 'Активировать за {cost}',
+  'composer.rewards.redeeming': 'Активация…',
+  'composer.rewards.success': 'Награда активирована · {reward}',
+
   'composer.history.hint': 'Поиск отправленных сообщений · Enter или Esc оставляет результат',
   'composer.history.placeholder': 'Поиск по истории сообщений…',
   'composer.history.typeToSearch': 'Начните вводить текст для поиска по отправленным сообщениям',

@@ -98,3 +98,25 @@ test('an old account snapshot cannot repopulate state or delete the new account 
   await second
   expect(twitchActivitiesStore.get().get('channel')?.snapshot?.pointsBalance).toBe(2)
 })
+
+test('changing the web session invalidates the balance and any outstanding snapshot', async () => {
+  const { promise, resolve } = Promise.withResolvers<TwitchActivitiesSnapshot>()
+  const backend = fixture(() => promise)
+  const previous = {
+    ...snapshot(4321),
+    pinnedMessage: { id: 'pin', messageId: 'message', text: 'Hi' },
+  }
+  twitchActivitiesStore.set(
+    new Map([['channel', { snapshot: previous, loading: false, error: null }]]),
+  )
+
+  const pending = loadTwitchActivities(backend, 'channel')
+  backend.events.emit('twitch_web_session_changed', undefined)
+  resolve(snapshot(9999))
+  await pending
+
+  expect(twitchActivitiesStore.get().get('channel')).toMatchObject({
+    snapshot: { pointsBalance: undefined, pinnedMessage: previous.pinnedMessage },
+    loading: false,
+  })
+})

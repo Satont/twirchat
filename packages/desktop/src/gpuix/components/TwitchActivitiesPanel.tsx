@@ -627,6 +627,7 @@ function Rewards({ channel, snapshot, busy, perform }: SectionProps) {
                 busy ||
                 !reward.isEnabled ||
                 reward.isPaused ||
+                reward.isInStock === false ||
                 (reward.isInputRequired && !input.trim()) ||
                 (snapshot.pointsBalance !== undefined && snapshot.pointsBalance < reward.cost)
               }
@@ -636,6 +637,7 @@ function Rewards({ channel, snapshot, busy, perform }: SectionProps) {
                   channelSlug: channel,
                   rewardId: reward.id,
                   rewardTitle: reward.title,
+                  rewardPrompt: reward.prompt,
                   cost: reward.cost,
                   input: input.trim(),
                 })
