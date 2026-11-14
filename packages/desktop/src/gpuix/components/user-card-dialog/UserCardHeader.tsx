@@ -80,6 +80,7 @@ export function UserCardHeader({
   windows,
   standalone,
   openingWindow,
+  openWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -106,8 +107,7 @@ export function UserCardHeader({
         display: 'flex',
         flexDirection: 'row',
         flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         gap: 16,
         padding: 20,
         marginLeft: 16,
@@ -301,7 +301,7 @@ export function UserCardHeader({
               <div>{titleHandle}</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             <div
               style={{
                 display: 'flex',
@@ -372,8 +372,8 @@ export function UserCardHeader({
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {windows && !standalone ? (
             <GhostButton
-              disabled={openingPublicChannel}
-              onClick={openPublicChannel}
+              disabled={openingWindow}
+              onClick={openWindow}
               icon="externalLink"
               style={{
                 backgroundColor: headerButtonBg,

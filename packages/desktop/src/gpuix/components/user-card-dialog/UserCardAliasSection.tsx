@@ -38,7 +38,6 @@ export function UserCardAliasSection({
           flexDirection: 'row',
           flexWrap: 'wrap',
           gap: 8,
-          alignItems: 'stretch',
         }}
       >
         <input
@@ -53,7 +52,7 @@ export function UserCardAliasSection({
           }}
           theme={{ caret: theme.link }}
           style={{
-            flexGrow: 1,
+            flexGrow: 8,
             flexBasis: 180,
             minWidth: 0,
             minHeight: 38,
@@ -79,7 +78,12 @@ export function UserCardAliasSection({
         <InlineButton
           icon="check"
           onClick={() => runUiTask(handleSaveAlias())}
-          style={{ minWidth: 104, paddingLeft: 18, paddingRight: 18 }}
+          style={{
+            flexGrow: 1,
+            flexBasis: 60,
+            paddingLeft: 18,
+            paddingRight: 18,
+          }}
         >
           {t('common.save')}
         </InlineButton>

@@ -106,9 +106,19 @@ export function UserCardDialog({
     if (hideAvatar) setAvatarMenuOpen(false)
   }, [hideAvatar])
 
-  const [openingWindow, setOpeningWindow] = useState(false)
-
   const effectiveAlias = currentAlias ?? target.currentAlias
+  const [openingWindow, setOpeningWindow] = useState(false)
+  const openInWindow = async () => {
+    if (!windows) return
+    setOpeningWindow(true)
+    try {
+      await windows.openUser({ ...target, currentAlias: effectiveAlias })
+      onClose()
+    } finally {
+      setOpeningWindow(false)
+    }
+  }
+
   /**
    * Twitch only reports chat badges with messages, so collect every badge the
    * user displayed in the retained buffers. This also fills in platform badges
@@ -265,6 +275,7 @@ export function UserCardDialog({
       windows={windows}
       standalone={standalone}
       openingWindow={openingWindow}
+      openWindow={() => runUiTask(openInWindow())}
       hideAvatar={hideAvatar}
       channelUrl={channelUrl}
       openingPublicChannel={publicChannel.isOpening}
