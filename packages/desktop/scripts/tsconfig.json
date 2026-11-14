@@ -5,6 +5,7 @@
     "qa-painted-geometry.tsx",
     "qa-drag-interactions.tsx",
     "qa-custom-feed.tsx",
+    "qa-feed-membership.tsx",
     "qa-seventv-notices.tsx",
     "qa-background-images.tsx",
     "qa-history-logs.tsx",

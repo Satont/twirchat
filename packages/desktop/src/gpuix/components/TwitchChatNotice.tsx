@@ -48,6 +48,7 @@ export function TwitchChatNotice({
   time,
   chatTheme = 'modern',
   timestampFormat,
+  sourceLabel,
   children,
 }: {
   id: string
@@ -58,6 +59,8 @@ export function TwitchChatNotice({
   time?: string
   chatTheme?: 'modern' | 'compact'
   timestampFormat?: TimestampFormat
+  /** Feed source chip for combined feeds; membership notices keep it on their single line. */
+  sourceLabel?: ReactNode
   children?: ReactNode
 }) {
   const theme = useTheme()
@@ -88,6 +91,9 @@ export function TwitchChatNotice({
         }}
       >
         {timestamp}
+        {sourceLabel ? (
+          <div style={{ display: 'flex', flexShrink: 0, marginRight: 4 }}>{sourceLabel}</div>
+        ) : null}
         <Text
           style={{
             color: theme.text2,

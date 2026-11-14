@@ -14,6 +14,7 @@
     "qa:changelog": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-changelog.tsx",
     "qa:chat": "bun scripts/qa-gui.ts --dbus --display-width 1800 --display-height 1500 --timeout 45 -- bun scripts/qa-chat-behavior.tsx",
     "qa:chat-events": "bun scripts/qa-gui.ts --display-width 820 --display-height 320 --timeout 45 -- bun scripts/qa-chat-event-times.tsx",
+    "qa:feed-membership": "bun scripts/qa-gui.ts --display-width 820 --display-height 420 --timeout 45 -- bun scripts/qa-feed-membership.tsx",
     "build": "bun scripts/build-desktop.ts",
     "build:release": "bun scripts/build-release.ts",
     "package:runtime": "bun scripts/package-runtime-assets.ts",

@@ -40,6 +40,7 @@
     "scripts/qa-painted-geometry.tsx",
     "scripts/qa-drag-interactions.tsx",
     "scripts/qa-custom-feed.tsx",
+    "scripts/qa-feed-membership.tsx",
     "scripts/qa-seventv-notices.tsx",
     "scripts/qa-background-images.tsx",
     "scripts/qa-history-logs.tsx",
