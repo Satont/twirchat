@@ -52,6 +52,7 @@ import { MessageTranslation } from './MessageTranslation'
 import { TwitchChatNotice } from './TwitchChatNotice'
 import { Badge as BadgeComponent } from './ui/Badge'
 import { BadgeTooltip } from './ui/BadgeTooltip'
+import { EventTimestamp } from './ui/EventTimestamp'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
@@ -748,6 +749,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           fontSize={fontSize}
           summary={message.text}
           detail={notice.detail}
+          chatTheme={props.chatTheme}
+          timestampFormat={props.timestampFormat}
           time={
             props.showTimestamp
               ? formatMessageTime(message.timestamp, props.timestampFormat)
@@ -794,10 +797,9 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 8,
           paddingTop: 3,
           paddingBottom: 3,
-          paddingLeft: 14,
+          paddingLeft: props.chatTheme === 'compact' ? 12 : 14,
           paddingRight: 14,
           backgroundColor: palette.bg,
           borderBottomWidth: 1,
@@ -805,38 +807,55 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           position: 'relative',
         }}
       >
-        {sourceLabel}
+        {props.showTimestamp ? (
+          <EventTimestamp
+            time={formatMessageTime(message.timestamp, props.timestampFormat)}
+            fontSize={fontSize}
+            format={props.timestampFormat}
+            compact={props.chatTheme === 'compact'}
+            testId={`chat-timestamp-${message.id}`}
+          />
+        ) : null}
         <div
           style={{
-            width: 17,
-            height: 17,
-            borderRadius: 9,
-            backgroundColor: palette.iconBg,
             display: 'flex',
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            userSelect: 'none',
+            gap: 8,
+            flexGrow: 1,
+            minWidth: 0,
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: 800, color: palette.iconColor, lineHeight: 12 }}>
-            {palette.glyph}
-          </Text>
+          {sourceLabel}
+          <div
+            style={{
+              width: 17,
+              height: 17,
+              borderRadius: 9,
+              backgroundColor: palette.iconBg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+          >
+            <Text
+              style={{ fontSize: 12, fontWeight: 800, color: palette.iconColor, lineHeight: 12 }}
+            >
+              {palette.glyph}
+            </Text>
+          </div>
+          <div style={{ flexGrow: 1, minWidth: 0 }}>
+            <MessageText
+              message={message}
+              fontSize={Math.round(fontSize * 0.88)}
+              isSystem
+              channelSlug={props.channelSlug}
+              onOpenUserCard={props.onOpenUserCard}
+            />
+          </div>
         </div>
-        <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <MessageText
-            message={message}
-            fontSize={Math.round(fontSize * 0.88)}
-            isSystem
-            channelSlug={props.channelSlug}
-            onOpenUserCard={props.onOpenUserCard}
-          />
-        </div>
-        {props.showTimestamp ? (
-          <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2, flexShrink: 0 }}>
-            {formatMessageTime(message.timestamp, props.timestampFormat)}
-          </Text>
-        ) : null}
       </div>
     )
   }
