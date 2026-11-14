@@ -93,11 +93,15 @@ function Content() {
     channels.map((channel) => [
       channel.id,
       value.mode === 'mixed'
-        ? { unread: channel.id === 'c' ? 100 : 0, mentions: 0 }
+        ? {
+            unread: channel.id === 'c' && value.active !== 'c' ? value.unread : 0,
+            mentions: channel.id === 'c' && value.active !== 'c' ? value.mentions : 0,
+          }
         : { unread: value.unread, mentions: value.mentions },
     ]),
   )
-  if (value.mode === 'mixed') unread.set('home', { unread: 22, mentions: 0 })
+  if (value.mode === 'mixed' && value.active !== 'home')
+    unread.set('home', { unread: value.unread, mentions: 0 })
   return (
     <div
       style={{
@@ -125,7 +129,7 @@ function Content() {
             ]),
           ),
           unread,
-          onSelectTab: (id) => state.modify((current) => ({ ...current, active: id })),
+          onSelectTab: (id) => state.modify((previous) => ({ ...previous, active: id })),
           onAddChannel: () => {},
           onRemoveChannel: () => {},
         }}
@@ -159,9 +163,40 @@ function idFor(testId: string): number {
   return node.id
 }
 function bounds(testId: string) {
-  const bounds = current().getPaintedElementBounds(idFor(testId))
-  assert(bounds, `Unpainted ${testId}`)
-  return bounds
+  const rect = current().getPaintedElementBounds(idFor(testId))
+  assert(rect, `Unpainted ${testId}`)
+  return rect
+}
+const tabIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add']
+function tabGeometry() {
+  return Object.fromEntries(
+    ['channel-tab-bar', ...tabIds].map((testId) => {
+      const { x, y, width, height } = bounds(testId)
+      return [testId, { x, y, width, height }]
+    }),
+  )
+}
+function assertTabGeometry(expected: ReturnType<typeof tabGeometry>, description: string) {
+  const actual = tabGeometry()
+  for (const [testId, rect] of Object.entries(expected)) {
+    const tab = actual[testId]
+    assert(tab)
+    for (const axis of ['x', 'y', 'width', 'height'] satisfies Array<keyof typeof rect>) {
+      assert(Math.abs(tab[axis] - rect[axis]) < 0.01, `${testId} changed ${axis}: ${description}`)
+    }
+  }
+}
+function assertFits(innerId: string, outerId: string) {
+  const inner = bounds(innerId)
+  const outer = bounds(outerId)
+  assert(
+    inner.x >= outer.x && inner.x + inner.width <= outer.x + outer.width,
+    `${innerId} fits ${outerId} horizontally`,
+  )
+  assert(
+    inner.y >= outer.y && inner.y + inner.height <= outer.y + outer.height,
+    `${innerId} fits ${outerId} vertically`,
+  )
 }
 async function until(check: () => boolean, label: string) {
   const deadline = performance.now() + 5000
@@ -192,7 +227,7 @@ async function setState(next: CounterState) {
 try {
   await manager.start()
   await until(() => !!renderer, 'renderer')
-  for (const width of [900, 420, 320, 248, 900]) {
+  for (const width of [900, 470, 420, 320, 248, 900]) {
     fixtureWidth.set(width)
     await current().setWindowBounds({ width: Math.max(320, width), height: 220 })
     current().simulateMouseMove(20, 120)
@@ -207,26 +242,11 @@ try {
         active: 'a',
         mode: 'uniform',
       })
-      const testIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add']
-      const baseline = Object.fromEntries(
-        testIds.map((testId) => {
-          const { x, y, width } = bounds(testId)
-          return [testId, { x, y, width }]
-        }),
-      )
-      const bar = bounds('channel-tab-bar')
-      for (const testId of testIds) {
-        const tab = bounds(testId)
-        assert(tab.x >= bar.x && tab.x + tab.width <= bar.x + bar.width, `${testId} fits the row`)
-        assert(tab.y >= bar.y && tab.y + tab.height <= bar.y + bar.height, `${testId} fits the bar`)
-      }
+      const baseline = tabGeometry()
+      for (const testId of tabIds) assertFits(testId, 'channel-tab-bar')
       for (const channel of channels) {
-        const tab = bounds(`tab-${channel.id}`)
-        const counts = bounds(`tab-${channel.id}-counts`)
-        assert(
-          counts.x >= tab.x && counts.x + counts.width <= tab.x + tab.width,
-          'Counts fit the tab',
-        )
+        assertFits(`tab-${channel.id}-viewers`, `tab-${channel.id}`)
+        assertFits(`tab-${channel.id}-unread`, `tab-${channel.id}`)
       }
       if (width <= 420)
         assert(bounds('tab-d').y > bounds('tab-home').y, 'Narrow tabs wrap to another row')
@@ -242,33 +262,30 @@ try {
           () => current().getPaintedText().join(' ').includes(formatTabViewers(viewers)),
           'painted viewer count',
         )
-        for (const testId of testIds) {
-          const actual = bounds(testId)
-          const expected = baseline[testId]
-          assert(expected)
-          assert(
-            Math.abs(actual.x - expected.x) < 0.01,
-            testId + ' moved in ' + group.name + ' at ' + viewers,
-          )
-          assert(
-            Math.abs(actual.y - expected.y) < 0.01,
-            testId + ' changed row in ' + group.name + ' at ' + viewers,
-          )
-          assert(
-            Math.abs(actual.width - expected.width) < 0.01,
-            testId + ' resized in ' + group.name + ' at ' + viewers,
-          )
-        }
+        assertTabGeometry(baseline, `${group.name} at ${viewers} viewers`)
       }
       geometry.push({ width, mode: group.name, checked: group.values.length, baseline })
     }
-    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'mixed' })
-    assert(!nodeFor('tab-b-counts'), 'An empty tab must not contain invisible counter cells')
-    assert(!nodeFor('tab-a-unread'), 'A read tab must not reserve an unread pill')
-    assert(
-      nodeFor('tab-c-viewers') && nodeFor('tab-c-unread'),
-      'Both viewer and unread counts remain visible together',
-    )
+    const read = {
+      viewers: undefined,
+      unread: 0,
+      mentions: 0,
+      active: 'b',
+      mode: 'mixed',
+    } satisfies CounterState
+    await setState(read)
+    const baseline = tabGeometry()
+    if (width === 470) {
+      const home = bounds('tab-home')
+      const channel = bounds('tab-c')
+      assert.equal(channel.y, home.y, 'The live tab fits at the wrap threshold')
+      assert(width - channel.x - channel.width - 8 < 28, 'An inline pill would force a wrap')
+    }
+    const regular = { ...read, unread: 100 }
+    await setState(regular)
+    assertTabGeometry(baseline, 'unread badges appear')
+    assert(!nodeFor('tab-b-unread') && !nodeFor('tab-b-viewers'), 'Empty tabs render no counters')
+    assert(!nodeFor('tab-a-unread'), 'A read tab renders no unread pill')
     const empty = bounds('tab-b').width
     const oneViewer = bounds('tab-a').width
     assert(empty < 90, 'The empty xqc tab should stay compact')
@@ -279,22 +296,51 @@ try {
         current().getPaintedText().join(' ').includes('99+'),
       'both visible count labels without scrolling',
     )
+    await setState({ ...regular, mentions: 100 })
+    assertTabGeometry(baseline, 'unread becomes a mention')
+    await until(() => current().getPaintedText().includes('@99+'), 'painted capped mention badge')
+    const badge = bounds('tab-c-unread')
+    assertFits('tab-c-unread', 'tab-c')
+    for (const testId of ['tab-c-label', 'tab-c-viewers']) {
+      assert(badge.y + badge.height <= bounds(testId).y, `Mention badge clears ${testId}`)
+    }
+    current().simulateMouseMove(badge.x + badge.width / 2, badge.y + badge.height / 2)
+    await until(() => !!nodeFor('tab-c-counts-tooltip'), 'counts tooltip opens over the badge')
+    await until(
+      () =>
+        current()
+          .getPaintedText()
+          .join(' ')
+          .includes('62,200 viewers · 100 unread messages · 100 mentions'),
+      'counts tooltip shows exact totals',
+    )
+    current().simulateClick(badge.x + badge.width / 2, badge.y + badge.height / 2, 0)
+    await until(
+      () => state.get().active === 'c' && !nodeFor('tab-c-unread'),
+      'click selects and reads tab',
+    )
+    assertTabGeometry(baseline, 'pointer selection clears unread')
+    current().focusElement(idFor('tab-home'))
+    current().simulateKeystrokes('enter')
+    await until(
+      () => state.get().active === 'home' && !nodeFor('tab-home-unread'),
+      'Enter selects and reads Home',
+    )
+    assertTabGeometry(baseline, 'keyboard selection clears unread')
+    await setState(regular)
     const lowerTab = bounds('tab-d')
     current().simulateMouseDown(lowerTab.x + 10, lowerTab.y + 10, 0)
     current().simulateMouseUp(lowerTab.x + 10, lowerTab.y + 10, 0)
     await until(() => state.get().active === 'd', 'pointer selection on a wrapped tab')
-    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'mixed' })
+    await setState(regular)
     current().focusElement(idFor('tab-d'))
     current().simulateKeystrokes('enter')
     await until(() => state.get().active === 'd', 'keyboard selection on a wrapped tab')
     compactWidths.push({ width, empty, oneViewer, both: bounds('tab-c').width })
     screenshots.push(await captureGuiQaDisplay('tab-counts-' + width))
     await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'uniform' })
-    assert(
-      !nodeFor('tab-a-counts'),
-      'Unavailable viewers and zero unread must leave no counter group',
-    )
-    assert(!nodeFor('tab-home-counts'), 'The home tab must not reserve absent statistics')
+    assert(!nodeFor('tab-a-viewers') && !nodeFor('tab-a-unread'), 'No absent channel counters')
+    assert(!nodeFor('tab-home-viewers') && !nodeFor('tab-home-unread'), 'No absent Home counters')
   }
   await Bun.write(
     join(session, 'tab-counts-result.json'),
