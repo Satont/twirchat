@@ -111,13 +111,17 @@ export function ChatAppearanceDialog({
         </div>
 
         <div
+          testId="appearance-scroll"
           style={{
             flexGrow: 1,
             minHeight: 0,
-            overflowY: 'auto',
+            overflowY: 'scroll',
+            scrollbarColor: theme.scrollbar,
+            scrollbarWidth: 4,
             padding: 20,
             display: 'flex',
             flexDirection: narrow ? 'column' : 'row',
+            alignItems: narrow ? 'stretch' : 'flex-start',
             gap: 16,
           }}
         >
