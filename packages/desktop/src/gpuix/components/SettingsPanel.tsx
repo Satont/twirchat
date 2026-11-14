@@ -97,6 +97,7 @@ type AppSettingsSectionId = Extract<
   | 'updates'
   | 'timestamps'
   | 'replies'
+  | 'twitch-chat-events'
   | 'self-ping'
   | 'overlay'
   | 'shortcuts'
@@ -114,6 +115,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'updates',
   'timestamps',
   'replies',
+  'twitch-chat-events',
   'self-ping',
   'overlay',
   'shortcuts',
@@ -148,6 +150,8 @@ function appSectionFields(
       }
     case 'replies':
       return { replyOnDoubleClick: source.replyOnDoubleClick }
+    case 'twitch-chat-events':
+      return { showTwitchJoinPart: source.showTwitchJoinPart }
     case 'self-ping':
       return { selfPing: { ...source.selfPing } }
     case 'overlay':
@@ -1111,6 +1115,23 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
                     {appFooter('replies')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="twitch-chat-events"
+                    title={t('settings.section.twitch-chat-events')}
+                  >
+                    <SettingsRow first last label={t('settings.chat.showTwitchJoinPart')}>
+                      <Switch
+                        testId="settings-show-twitch-join-part"
+                        checked={local.showTwitchJoinPart}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.showTwitchJoinPart = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('twitch-chat-events')}
                   </SettingsSection>
                   <SettingsSection
                     id="pause"

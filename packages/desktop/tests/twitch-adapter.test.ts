@@ -110,6 +110,60 @@ function writerFixture(
 }
 
 describe('Twitch system notices', () => {
+  test.each([
+    { anonymous: false, nick: 'viewer', mode: 'authenticated' },
+    { anonymous: true, nick: 'justinfan12345', mode: 'anonymous' },
+  ])(
+    'shows membership changes in $mode chat without treating them as self joins',
+    async ({ anonymous, nick, mode }) => {
+      const { adapter, client, messages } = readerFixture('viewer', 'another')
+      Object.assign(adapter, { anonymous, isConnected: false })
+      const notices: NormalizedChatMessage[] = []
+      const statuses: unknown[] = []
+      adapter.on('notice', (notice) => notices.push(notice))
+      adapter.on('status', (status) => statuses.push(status))
+
+      client.irc.receiveLine(`:tmi.twitch.tv 001 ${nick} :Welcome, GLHF!`)
+      client.irc.receiveLine(':maya!maya@maya.tmi.twitch.tv JOIN #another')
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv JOIN #elsewhere')
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv PART #elsewhere')
+      expect(statuses).toEqual([])
+
+      const self = `:${nick.toUpperCase()}!${nick}@${nick}.tmi.twitch.tv`
+      client.irc.receiveLine(`${self} JOIN #another`)
+      client.irc.receiveLine(`${self} JOIN #another`)
+      client.irc.receiveLine(`${self} PART #another`)
+      client.irc.receiveLine(':maya!maya@maya.tmi.twitch.tv PART #another')
+      expect(statuses).toEqual([
+        { platform: 'twitch', channelLogin: 'another', status: 'connected', mode },
+      ])
+
+      await adapter.disconnect()
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv JOIN #another')
+      client.irc.receiveLine(':liam!liam@liam.tmi.twitch.tv PART #another')
+      expect(messages).toEqual([])
+      expect(notices).toMatchObject([
+        {
+          channelId: 'another',
+          text: 'maya',
+          type: 'system',
+          metadata: { twitchNotice: { kind: 'join' } },
+        },
+        {
+          channelId: 'another',
+          text: 'maya',
+          type: 'system',
+          metadata: { twitchNotice: { kind: 'part' } },
+        },
+      ])
+      expect(notices[0]?.id).not.toBe(notices[1]?.id)
+      for (const notice of notices)
+        expect(normalizedChatMessageSchema.parse(JSON.parse(JSON.stringify(notice)))).toEqual(
+          notice,
+        )
+    },
+  )
+
   test('shows IRC moderation actions without redisplaying deleted content', () => {
     const { adapter, client, messages } = readerFixture('viewer', 'another')
     const notices: NormalizedChatMessage[] = []

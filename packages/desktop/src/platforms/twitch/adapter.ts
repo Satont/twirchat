@@ -9,7 +9,12 @@ import { logger } from '@twirchat/shared/logger'
  * - Authenticated: reads the account's stored token on every (re)connect and
  *   refreshes it through the desktop OAuth client when it expires
  */
-import type { Badge, ChatSendReceipt, NormalizedEvent } from '@twirchat/shared/types'
+import type {
+  Badge,
+  ChatSendReceipt,
+  NormalizedEvent,
+  TwitchMembershipNoticeKind,
+} from '@twirchat/shared/types'
 import { ChatClient, RoomState as TwitchRoomState, UserNotice } from '@twurple/chat'
 import type { ChatMessage, ChatRaidInfo, ChatSubGiftInfo, ChatSubInfo } from '@twurple/chat'
 import { LogLevel } from '@twurple/chat'
@@ -260,6 +265,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             : undefined,
         channels: [this.channelName],
         readOnly: true,
+        requestMembershipEvents: true,
         logger: {
           custom: (level, message) => {
             if (level === LogLevel.ERROR) {
@@ -297,20 +303,17 @@ export class TwitchAdapter extends BasePlatformAdapter {
       log.info('[Twitch] Connected to chat')
     })
 
-    // Joined channel
-    client.onJoin((channel, user) => {
+    const onMembership = (kind: TwitchMembershipNoticeKind, channel: string, user: string) => {
       if (!current()) return
-      if (channel.replace('#', '').toLowerCase() !== this.channelName) {
+      const channelId = twitchIrcChannelName(channel)
+      if (channelId !== this.channelName) return
+
+      if (user.toLowerCase() !== client.irc.currentNick.toLowerCase()) {
+        this.emit('notice', buildTwitchSystemMessage({ channelId, text: user, notice: { kind } }))
         return
       }
 
-      // Anonymous sessions connect as justinfan* and can't be matched by login,
-      // so the first join in our own channel is ours.
-      const isSelf = this.anonymous || user.toLowerCase() === (this.login ?? '').toLowerCase()
-      if (!isSelf || this.isConnected) {
-        return
-      }
-
+      if (kind !== 'join' || this.isConnected) return
       log.info('[Twitch] Joined channel', { channel })
       this.isConnected = true
       this.emit('status', {
@@ -319,7 +322,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
         platform: 'twitch',
         status: 'connected',
       })
-    })
+    }
+    client.onJoin((channel, user) => onMembership('join', channel, user))
+    client.onPart((channel, user) => onMembership('part', channel, user))
 
     // Disconnected
     client.onDisconnect((manually, reason) => {

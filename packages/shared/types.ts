@@ -37,6 +37,8 @@ export interface Emote {
 // Нормализованные сообщения и события
 // ============================================================
 
+export type TwitchMembershipNoticeKind = 'join' | 'part'
+
 export interface TwitchChatNotice {
   kind:
     | 'sub'
@@ -48,6 +50,7 @@ export interface TwitchChatNotice {
     | 'moderation'
     | 'modiversary'
     | 'watch_streak'
+    | TwitchMembershipNoticeKind
   detail?: string
 }
 
@@ -271,6 +274,7 @@ export interface AppSettings {
   timestampFormat: TimestampFormat
   /** Double-clicking a chat message starts a reply to it. */
   replyOnDoubleClick: boolean
+  showTwitchJoinPart: boolean
   showAvatars: boolean
   showBadges: boolean
   showChannelLabel: boolean
@@ -345,6 +349,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showTimestamp: true,
   timestampFormat: 'HH:MM:SS',
   replyOnDoubleClick: true,
+  showTwitchJoinPart: true,
   theme: 'dark',
   themeMode: 'dark',
   twirIntegrationEnabled: true,

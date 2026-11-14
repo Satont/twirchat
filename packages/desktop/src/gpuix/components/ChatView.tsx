@@ -28,6 +28,7 @@ import {
   hoverPauseDurationMs,
   DOUBLE_CLICK_PAUSE_MS,
 } from '../../services/chat-pause'
+import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { buildChattersTargets } from '../../views/main/utils/chatters'
@@ -636,9 +637,15 @@ export function ChatView({
         : autoMod.rows,
     [autoMod.rows, pausedAutoModKeys],
   )
+  const hideTwitchJoinPart = settings?.showTwitchJoinPart === false
   const displayedMessages = useMemo(
     () =>
       readingMessages.filter((message) => {
+        if (
+          hideTwitchJoinPart &&
+          isTwitchMembershipNoticeKind(message.metadata?.twitchNotice?.kind)
+        )
+          return false
         if (isMessageHiddenForStreamer(message, streamerMode)) return false
         if (chatMessageKey(message) === revealedMessageKey) return true
         if (clearedKeys.has(chatMessageKey(message))) return false
@@ -672,6 +679,7 @@ export function ChatView({
       readingMessages,
       clearedKeys,
       settings?.platformFilter,
+      hideTwitchJoinPart,
       mentionsOnly,
       search,
       aliasMap,
