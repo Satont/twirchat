@@ -6,7 +6,7 @@ export const ruUserCard = {
   'userCard.alias.hint':
     'Заменяет отображаемое имя в чате. Оставьте пустым, чтобы удалить псевдоним.',
   'userCard.alias.remove': 'Удалить псевдоним',
-  
+
   'userCard.opening': 'Открытие…',
   'userCard.openChannel': 'Открыть канал',
   'userCard.openInWindow': 'Открыть в окне',

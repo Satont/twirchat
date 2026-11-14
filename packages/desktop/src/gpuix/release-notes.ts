@@ -1,10 +1,15 @@
-import { t, type MessageKey } from './i18n'
+import { t } from './i18n'
 
 export type ReleaseNoteKind = 'new' | 'improved' | 'fixed' | 'removed' | 'docs' | 'other'
 
+export interface ChangelogItem {
+  label: string
+  description: string
+}
+
 export interface ReleaseNotesSection {
   kind: ReleaseNoteKind
-  items: string[]
+  items: ChangelogItem[]
 }
 
 export const releaseNoteKindLabels: Record<ReleaseNoteKind, string> = {
@@ -58,20 +63,6 @@ const kindOrder: readonly ReleaseNoteKind[] = [
   'other',
 ]
 const hiddenSectionTitles = new Set(['new contributors'])
-const monthKeys: readonly MessageKey[] = [
-  'commands.release.month.1',
-  'commands.release.month.2',
-  'commands.release.month.3',
-  'commands.release.month.4',
-  'commands.release.month.5',
-  'commands.release.month.6',
-  'commands.release.month.7',
-  'commands.release.month.8',
-  'commands.release.month.9',
-  'commands.release.month.10',
-  'commands.release.month.11',
-  'commands.release.month.12',
-]
 
 const newVerbs = new Set([
   'add',
@@ -98,6 +89,7 @@ const improvedVerbs = new Set([
   'optimize',
   'parallelize',
   'performance',
+  'perf',
   'reduce',
   'refactor',
   'reuse',
@@ -135,7 +127,8 @@ interface ParsedSection {
 }
 
 export function parseReleaseNotes(notes: string): ReleaseNotesSection[] {
-  if (!notes.trim()) return [{ kind: 'other', items: [t('commands.release.noNotes')] }]
+  if (!notes.trim())
+    return [{ kind: 'other', items: [{ label: '', description: t('commands.release.noNotes') }] }]
 
   const lines = notes
     .split('\n')
@@ -186,12 +179,13 @@ export function parseReleaseNotes(notes: string): ReleaseNotesSection[] {
     .flatMap((section) => section.items)
     .filter((item) => !isMetadataItem(item))
 
-  const grouped = new Map<ReleaseNoteKind, string[]>()
+  const grouped = new Map<ReleaseNoteKind, ChangelogItem[]>()
   for (const item of items) {
     const kind = classifyChange(item)
+    const parsedItem = parseCommitMessage(item)
     const bucket = grouped.get(kind)
-    if (bucket) bucket.push(item)
-    else grouped.set(kind, [item])
+    if (bucket) bucket.push(parsedItem)
+    else grouped.set(kind, [parsedItem])
   }
 
   const sections = kindOrder.flatMap((kind) => {
@@ -201,23 +195,43 @@ export function parseReleaseNotes(notes: string): ReleaseNotesSection[] {
 
   return sections.length > 0
     ? sections
-    : [{ kind: 'other', items: [t('commands.release.noNotes')] }]
+    : [{ kind: 'other', items: [{ label: '', description: t('commands.release.noNotes') }] }]
 }
 
 export function formatReleaseDate(publishedAt: string): string | null {
   if (!publishedAt) return null
-  const date = new Date(publishedAt)
-  if (Number.isNaN(date.getTime())) return null
-  const month = monthKeys[date.getUTCMonth()]
-  if (!month) return null
-  return t('commands.release.dateFormat', {
-    month: t(month),
-    day: date.getUTCDate(),
-    year: date.getUTCFullYear(),
+
+  return new Date(publishedAt).toLocaleDateString(t('commands.release.dateFormat'), {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
   })
 }
 
 function classifyChange(text: string): ReleaseNoteKind {
+  // Check for conventional commit type prefix: type(scope)!: subject
+  const typeMatch = text.match(/^([a-z]+)(\([^)]+\))?(!)?:\s*/u)
+  if (typeMatch && typeMatch[1]) {
+    const type = typeMatch[1].toLowerCase()
+    // Map conventional commit types to release note kinds
+    if (type === 'feat' || type === 'feature') return 'new'
+    if (type === 'fix') return 'fixed'
+    if (type === 'perf' || type === 'improvement') return 'improved'
+    if (type === 'refactor') return 'improved'
+    if (type === 'docs') return 'docs'
+    if (
+      type === 'chore' ||
+      type === 'build' ||
+      type === 'ci' ||
+      type === 'style' ||
+      type === 'test'
+    )
+      return 'other'
+    if (type === 'revert') return 'removed'
+    if (type === 'remove') return 'removed'
+  }
+
+  // Fallback: classify by first verb
   const firstWord = text.match(/^[a-z]+/iu)?.[0].toLowerCase() ?? ''
   const stems = new Set([firstWord])
   const base = firstWord.replace(/(?:ing|ed|es|s)$/u, '')
@@ -237,6 +251,156 @@ function classifyChange(text: string): ReleaseNoteKind {
 
 function isMetadataItem(item: string): boolean {
   return /^(backend image|full changelog|source):/iu.test(item)
+}
+
+function parseCommitMessage(message: string): ChangelogItem {
+  // Parse conventional commit format: type(scope)!: subject
+  // e.g., "feat(desktop/chat) close chat tabs with middle click"
+  const commitMatch = message.match(/^[a-z]+(\([^)]+\))?(!)?:\s*(.+)$/u)
+  if (commitMatch) {
+    const subject = commitMatch[4] ?? message
+    const label = generateLabel(subject)
+    return { label, description: subject }
+  }
+  // Fallback: use first phrase as label, full text as description
+  const label = generateLabel(message)
+  return { label, description: message }
+}
+
+function generateLabel(text: string): string {
+  // Convert verb phrase to gerund for label: "close chat tabs" -> "Closing chat tabs"
+  // "add new feature" -> "Adding new feature"
+  // "fix bug in renderer" -> "Fixing bug in renderer"
+  const firstVerb = text.match(/^[a-z]+/iu)?.[0].toLowerCase() ?? ''
+  const rest = text.slice(firstVerb.length).trim()
+  const baseVerb = verbToBaseForm(firstVerb)
+  const gerund = verbToGerund(baseVerb)
+  // If no recognized verb, just return the original text
+  return gerund ? `${gerund} ${rest}`.trim() : text
+}
+
+function verbToBaseForm(verb: string): string {
+  // Convert past tense / participles to base form
+  const pastToBase: Record<string, string> = {
+    added: 'add',
+    browsed: 'browse',
+    created: 'create',
+    displayed: 'display',
+    enabled: 'enable',
+    exposed: 'expose',
+    featured: 'feature',
+    implemented: 'implement',
+    introduced: 'introduce',
+    made: 'make',
+    provided: 'provide',
+    shown: 'show',
+    supported: 'support',
+    avoided: 'avoid',
+    cached: 'cache',
+    improved: 'improve',
+    laid: 'lay',
+    optimised: 'optimise',
+    optimized: 'optimize',
+    parallelized: 'parallelize',
+    reduced: 'reduce',
+    refactored: 'refactor',
+    reused: 'reuse',
+    simplified: 'simplify',
+    sped: 'speed',
+    streamlined: 'streamline',
+    updated: 'update',
+    clamped: 'clamp',
+    closed: 'close',
+    corrected: 'correct',
+    deduplicated: 'deduplicate',
+    ensured: 'ensure',
+    escaped: 'escape',
+    fixed: 'fix',
+    guarded: 'guard',
+    handled: 'handle',
+    hid: 'hide',
+    kept: 'keep',
+    preserved: 'preserve',
+    prevented: 'prevent',
+    repaired: 'repair',
+    resolved: 'resolve',
+    restored: 'restore',
+    stabilized: 'stabilize',
+    stopped: 'stop',
+    deleted: 'delete',
+    deprecated: 'deprecate',
+    dropped: 'drop',
+    removed: 'remove',
+    documented: 'document',
+  }
+  if (pastToBase[verb]) return pastToBase[verb]
+  // Only strip "ed" or "d" if not a double consonant ending (add, fix, etc.)
+  if (/[aeiou][bcdfghjklmnpqrstvwxyz]{2}$/u.test(verb)) return verb
+  return verb.replace(/(?:ed|d)$/u, '').replace(/ied$/u, 'y')
+}
+
+function verbToGerund(verb: string): string {
+  const gerunds: Record<string, string> = {
+    add: 'Adding',
+    browse: 'Browsing',
+    create: 'Creating',
+    display: 'Displaying',
+    enable: 'Enabling',
+    expose: 'Exposing',
+    feature: 'Featuring',
+    implement: 'Implementing',
+    introduce: 'Introducing',
+    make: 'Making',
+    new: 'Adding',
+    provide: 'Providing',
+    show: 'Showing',
+    support: 'Supporting',
+    avoid: 'Avoiding',
+    cache: 'Caching',
+    improve: 'Improving',
+    lay: 'Laying out',
+    optimise: 'Optimising',
+    optimize: 'Optimizing',
+    parallelize: 'Parallelizing',
+    performance: 'Improving performance',
+    perf: 'Improving performance',
+    reduce: 'Reducing',
+    refactor: 'Refactoring',
+    reuse: 'Reusing',
+    simplify: 'Simplifying',
+    speed: 'Speeding up',
+    streamline: 'Streamlining',
+    update: 'Updating',
+    chore: 'Updating',
+    clamp: 'Clamping',
+    close: 'Closing',
+    correct: 'Correcting',
+    deduplicate: 'Deduplicating',
+    ensure: 'Ensuring',
+    escape: 'Escaping',
+    fix: 'Fixing',
+    guard: 'Guarding',
+    handle: 'Handling',
+    hide: 'Hiding',
+    keep: 'Keeping',
+    preserve: 'Preserving',
+    prevent: 'Preventing',
+    repair: 'Repairing',
+    resolve: 'Resolving',
+    restore: 'Restoring',
+    stabilize: 'Stabilizing',
+    stop: 'Stopping',
+    delete: 'Deleting',
+    deprecate: 'Deprecating',
+    drop: 'Dropping',
+    remove: 'Removing',
+    doc: 'Documenting',
+    docs: 'Documenting',
+    document: 'Documenting',
+    documentation: 'Documenting',
+    readme: 'Updating readme',
+  }
+  return gerunds[verb] ?? `${verb.charAt(0).toUpperCase() + verb.slice(1)}ing`
 }
 
 function cleanMarkdown(text: string): string {

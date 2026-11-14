@@ -2,7 +2,7 @@ export const userCard = {
   'userCard.alias.pill': 'Alias: {alias}',
   'userCard.alias.title': 'Display alias',
   'userCard.alias.hint': 'Replaces the displayed name in chat. Leave empty to remove alias.',
-  'userCard.alias.remove': 'Remove alias',  
+  'userCard.alias.remove': 'Remove alias',
   'userCard.opening': 'Opening…',
   'userCard.openChannel': 'Open channel',
   'userCard.openInWindow': 'Open in window',

@@ -72,7 +72,7 @@ import { ActionButton } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
-import { UpdateChangelogModal } from './UpdateChangelogModal'
+import { UpdateChangelogModal } from './update-changelog'
 import { WatchedView } from './WatchedView'
 
 /** Transient top-center toast (port of ChatNotice.vue). */

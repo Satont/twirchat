@@ -1,0 +1,10 @@
+export const SECTION_GAP = 20
+export const ITEM_GAP = 8
+export const BADGE_WIDTH = 72
+export const MODAL_WIDTH = 720
+export const HEADER_AVATAR_SIZE = 48
+export const HEADER_AVATAR_RADIUS = 14
+export const HEADER_PADDING = 24
+export const CONTENT_PADDING = 20
+export const ACTIONS_PADDING = 16
+export const ACTIONS_PADDING_TOP = 8

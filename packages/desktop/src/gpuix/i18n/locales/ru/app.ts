@@ -149,7 +149,7 @@ export const ruApp = {
 
   'app.changelog.defaultGreet': 'Что нового в этом обновлении',
   'app.changelog.title': 'Что нового в TwirChat',
-  'app.changelog.released': 'Выпущено {date}',
+  'app.changelog.released': 'Версия {version} - {date}',
   'app.changelog.kind.new': 'Новые возможности',
   'app.changelog.kind.improved': 'Улучшения',
   'app.changelog.kind.fixed': 'Исправления',

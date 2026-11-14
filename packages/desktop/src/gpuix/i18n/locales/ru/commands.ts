@@ -79,7 +79,7 @@ export const ruCommands = {
   'commands.release.badge.removed': 'УДАЛЕНО',
   'commands.release.badge.docs': 'ДОКИ',
   'commands.release.badge.other': 'ДРУГОЕ',
-  'commands.release.dateFormat': '{day} {month} {year}',
+  'commands.release.dateFormat': 'ru-RU',
   'commands.release.month.1': 'января',
   'commands.release.month.2': 'февраля',
   'commands.release.month.3': 'марта',

@@ -144,8 +144,8 @@ export const app = {
   'app.stream.saved': 'Saved!',
 
   'app.changelog.defaultGreet': "Here's what's new in this update",
-  'app.changelog.title': 'What news in TwirChat',
-  'app.changelog.released': 'Released {date}',
+  'app.changelog.title': "What's news in TwirChat?",
+  'app.changelog.released': 'Version {version} - {date}',
   'app.changelog.kind.new': 'New features',
   'app.changelog.kind.improved': 'Improvements',
   'app.changelog.kind.fixed': 'Fixes',
