@@ -6,6 +6,7 @@ import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
+
 import { UserCardPanel } from './UserCardUI'
 
 export function UserNotes({ target }: { target: UserCardTarget }) {
@@ -55,26 +56,32 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
     }
   }
   return (
-    <UserCardPanel style={{}} >
+    <UserCardPanel style={{}}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'row',
-        }}>
-          <div style={{
-            flexGrow: 1,
-            whiteSpace: 'normal',
-            minWidth: 0,
-            fontSize: 18,
-            fontWeight: 700,
-            color: theme.text2,
-          }}>
-              {t('userCard.notes.hint')}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+          }}
+        >
+          <div
+            style={{
+              flexGrow: 1,
+              whiteSpace: 'normal',
+              minWidth: 0,
+              fontSize: 18,
+              fontWeight: 700,
+              color: theme.text2,
+            }}
+          >
+            {t('userCard.notes.hint')}
           </div>
         </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' , gap: 8 }}>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 6, }} >
+
+        <div
+          style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
             <ActionButton onClick={() => setPreview(!preview)}>
               {preview ? t('userCard.notes.edit') : t('userCard.notes.preview')}
             </ActionButton>
@@ -86,18 +93,51 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
               {saving ? t('common.saving') : t('userCard.notes.save')}
             </ActionButton>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: "center"}}>
-            {loading
-              ? t('common.loading')
-              : text === saved
-                ? <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: "center", gap: 6, }}>
-                    <div style={{ color: theme.accent.primary, fontSize: 14, fontWeight: 500 }}>{t('common.saved')}</div>
-                    <div style={{ display: 'flex', borderRadius: 999, padding: 6, background: 'green' }}></div>
-                  </div>
-                : <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: "center", gap: 6, }}>
-                    <div style={{ color: theme.accent.primary, fontSize: 14, fontWeight: 500 }}>{t('common.unsavedChanges')}</div>
-                    <div style={{ display: 'flex', borderRadius: 999, padding: 6, background: 'red' }}></div>
-                  </div>}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {loading ? (
+              t('common.loading')
+            ) : text === saved ? (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <div style={{ color: theme.accent.primary, fontSize: 14, fontWeight: 500 }}>
+                  {t('common.saved')}
+                </div>
+                <div
+                  style={{ display: 'flex', borderRadius: 999, padding: 6, background: 'green' }}
+                ></div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <div style={{ color: theme.accent.primary, fontSize: 14, fontWeight: 500 }}>
+                  {t('common.unsavedChanges')}
+                </div>
+                <div
+                  style={{ display: 'flex', borderRadius: 999, padding: 6, background: 'red' }}
+                ></div>
+              </div>
+            )}
           </div>
         </div>
         {error ? <Text style={{ color: theme.dangerText, fontSize: 12 }}>{error}</Text> : null}
@@ -169,7 +209,6 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
           />
         )}
       </div>
-        
     </UserCardPanel>
   )
 }
