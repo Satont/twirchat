@@ -59,6 +59,7 @@ export function SectionHeader({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         gap: 12,
         marginBottom: 14,
