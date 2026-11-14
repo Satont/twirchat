@@ -49,6 +49,14 @@ highest CPU in the matrix. An isolated follow-up at the same settings measured 6
 follow-up processed 4,996 and 4,982 msg/s, with p95 event-loop lag of 13.48 and 13.89 ms,
 respectively.
 
+## Grouped notices
+
+The follow-up groups IRC membership events in one-second windows and wraps long notice rows. The
+measured workload injects ordinary text through DesktopEvents and bypasses the IRC reader and
+membership renderer. The rebase added emote tooltip changes on `main`. The measured workload
+uses plain text with empty emote lists and no emote hover interactions. The results above retain
+the original source and native artifact provenance.
+
 ## Functional verification
 
 Isolated native GUI checks at 460 and 760 px confirmed that the muted JOIN and PART rows appear
@@ -56,7 +64,9 @@ in order between chat messages, remain inside the pane, and are scoped to the se
 Disabling the setting hid existing rows immediately, skipped incoming membership notices, and
 allowed ordinary chat to continue updating. Native pointer and keyboard input verified that the
 switch is searchable and that Save persists the disabled value. The My Channels pane displayed
-a Russian PART notice and excluded events from the watched-channel route.
+a Russian PART notice and excluded events from the watched-channel route. The grouping follow-up
+was verified at both widths with IRC JOIN/PART input through the adapter, including duplicate
+logins and a 20-name row that wrapped within the chat pane.
 
 ## Provenance
 
