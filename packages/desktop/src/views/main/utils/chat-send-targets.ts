@@ -73,6 +73,15 @@ export function createChatMessageTargets(
   })
 }
 
+/**
+ * Chat platforms deliver one line per message, so a manual soft wrap in the
+ * composer becomes a space. Without this the platform drops the newline and
+ * glues the words on both sides together.
+ */
+export function singleLineChatText(text: string): string {
+  return text.replace(/[\r\n]+/gu, ' ')
+}
+
 /** Per-platform chat message limits, in characters (Unicode code points). */
 const MESSAGE_LENGTH_LIMITS: Record<Platform, number> = {
   twitch: 500,
