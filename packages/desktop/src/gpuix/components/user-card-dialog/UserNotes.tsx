@@ -79,9 +79,16 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
         </div>
 
         <div
-          style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            gap: 8,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
         >
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
             <ActionButton onClick={() => setPreview(!preview)}>
               {preview ? t('userCard.notes.edit') : t('userCard.notes.preview')}
             </ActionButton>
