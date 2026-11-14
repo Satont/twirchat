@@ -84,7 +84,6 @@ function DisconnectButton({ onClick }: { onClick: () => void }) {
           fontSize: 13,
           fontWeight: 600,
           color: hovered ? '#ef4444' : theme.text2,
-          whiteSpace: 'nowrap',
         }}
       >
         {t('common.disconnect')}
@@ -132,6 +131,7 @@ function PlatformCard({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
+          flexWrap: 'wrap',
           gap: 14,
           paddingTop: 18,
           paddingBottom: 18,
@@ -193,69 +193,88 @@ function PlatformCard({
             flexDirection: 'row',
             alignItems: 'center',
             gap: 10,
-            flexShrink: 0,
-            minWidth: 160,
+            flexWrap: 'wrap',
+            minWidth: 0,
             justifyContent: 'flex-end',
           }}
         >
           {account ? (
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: 10, minWidth: 0 }}>
               <div
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  borderWidth: 2,
-                  borderColor: pColor,
-                  overflow: 'hidden',
-                  flexShrink: 0,
                   display: 'flex',
+                  flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: pColor,
+                  gap: 10,
+                  minWidth: 0,
                 }}
               >
-                {account.avatarUrl ? (
-                  <RemoteImage
-                    url={account.avatarUrl}
-                    thumbnailSize={32}
-                    objectFit="cover"
-                    // GPUI clips overflow to a rectangle, so the image needs
-                    // its own radius to stay inside the round frame.
-                    style={{ width: '100%', height: '100%', borderRadius: 16 }}
-                  />
-                ) : (
-                  <Text style={{ fontSize: 15, fontWeight: 700, color: '#ffffff' }}>
-                    {initialsOf(account.displayName)}
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    borderWidth: 2,
+                    borderColor: pColor,
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pColor,
+                  }}
+                >
+                  {account.avatarUrl ? (
+                    <RemoteImage
+                      url={account.avatarUrl}
+                      thumbnailSize={32}
+                      objectFit="cover"
+                      // GPUI clips overflow to a rectangle, so the image needs
+                      // its own radius to stay inside the round frame.
+                      style={{ width: '100%', height: '100%', borderRadius: 16 }}
+                    />
+                  ) : (
+                    <Text style={{ fontSize: 15, fontWeight: 700, color: '#ffffff' }}>
+                      {initialsOf(account.displayName)}
+                    </Text>
+                  )}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    gap: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: theme.text,
+                      maxWidth: 110,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {account.displayName}
                   </Text>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: theme.text,
-                    maxWidth: 110,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {account.displayName}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: theme.text2,
-                    maxWidth: 110,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {`@${account.username}`}
-                </Text>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: theme.text2,
+                      maxWidth: 110,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {`@${account.username}`}
+                  </Text>
+                </div>
               </div>
               <DisconnectButton onClick={onLogout} />
             </div>
