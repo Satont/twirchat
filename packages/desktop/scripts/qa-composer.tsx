@@ -112,20 +112,18 @@ root.render(
           },
         },
         React.createElement(ChatInput, {
-          accounts: emoteCompletionOnly
-            ? [
-                {
-                  id: 'qa-account',
-                  platform: 'twitch',
-                  platformUserId: 'qa-user',
-                  username: 'qa',
-                  displayName: 'QA',
-                  scopes: [],
-                  createdAt: 0,
-                  updatedAt: 0,
-                },
-              ]
-            : [],
+          accounts: [
+            {
+              id: 'qa-account',
+              platform: 'twitch',
+              platformUserId: 'qa-user',
+              username: 'qa',
+              displayName: 'QA',
+              scopes: [],
+              createdAt: 0,
+              updatedAt: 0,
+            },
+          ],
           settings: DEFAULT_SETTINGS,
           statuses: {},
           composerKey: key,
@@ -428,6 +426,11 @@ async function checkEmoteCompletion() {
     'colon emote completion opens',
   )
   assert(JSON.stringify(find('autocomplete-selected')).includes('Paa'), 'exact alias ranks first')
+  const beforeCtrlEnter = sent.length
+  pressNativeKeys('ctrl+Return')
+  await until(() => sent.length === beforeCtrlEnter + 1, 'Ctrl+Enter sends with autocomplete open')
+  assert.equal(sent.at(-1).text, 'hi :Paa')
+  assert.equal(state().text, 'hi :Paa', 'Ctrl+Enter keeps the draft with the uncompleted token')
   pressNativeKeys('Tab')
   await until(() => state().text === 'hi Paa ', 'colon Tab replaces token and keeps earlier text')
   await draft('')
@@ -500,14 +503,23 @@ async function checkComposer() {
   await runner('/copy')
   assert.equal(state().text, 'keep this')
 
-  await draft('native Enter sends once')
+  const repeatedMessage = 'send this again'
+  await draft(repeatedMessage)
   await focus()
-  const beforeEnter = sent.length
-  renderer.simulateKeystrokes('enter')
-  await until(() => sent.length === beforeEnter + 1, 'native Enter submits')
+  const beforeSend = sent.length
+  pressNativeKeys('ctrl+Return')
+  await until(() => sent.length === beforeSend + 1, 'native Ctrl+Enter submits')
+  assert.equal(state().text, repeatedMessage, 'Ctrl+Enter keeps the sent draft')
+  pressNativeKeys('ctrl+Return')
+  await until(() => sent.length === beforeSend + 2, 'native Ctrl+Enter submits again')
+  assert.equal(state().text, repeatedMessage, 'repeated Ctrl+Enter keeps the sent draft')
+  pressNativeKeys('Return')
+  await until(() => sent.length === beforeSend + 3, 'native Enter submits')
   await Bun.sleep(100)
-  assert.equal(sent.length, beforeEnter + 1, 'native Enter sends exactly once')
-  assert.equal(sent.at(-1).text, 'native Enter sends once')
+  assert.deepEqual(
+    sent.slice(beforeSend).map(({ text }) => text),
+    [repeatedMessage, repeatedMessage, repeatedMessage],
+  )
   assert.equal(state().text, '', 'native Enter clears the sent draft')
   assert(has('send-button'), 'composer exposes a Send button')
   await draft('button sends once')
@@ -647,7 +659,9 @@ async function checkComposer() {
   await runner('/translateauto en')
   configureTranslation('off')
   key = 'qa:home-composer'
-  let contextPlatform = 'twitch'
+  const selectContext = (activePlatform) =>
+    updateComposer(key, (current) => ({ ...current, activePlatform }))
+  selectContext('twitch')
   const homeAccounts = ['twitch', 'kick'].map((platform) => ({
     id: platform,
     platform,
@@ -685,11 +699,6 @@ async function checkComposer() {
                   mode: 'authenticated',
                 },
               },
-              activePlatform: contextPlatform ?? undefined,
-              onActivePlatformChange: (platform) => {
-                contextPlatform = platform
-                mountHome()
-              },
               composerKey: key,
               onSend: (targets) => sent.push(...targets),
               onSendWatched: () => {
@@ -725,7 +734,7 @@ async function checkComposer() {
     0,
   )
   await Bun.sleep(100)
-  assert.equal(contextPlatform, null, 'clicking a chip clears the context override')
+  assert.equal(state().activePlatform, undefined, 'clicking a chip clears the context override')
   await focus()
   await assert.rejects(runner('/translateauto off'), /Select one/)
   await draft('both contexts')
@@ -741,15 +750,13 @@ async function checkComposer() {
       ['twitch', 'translated:both contexts'],
     ],
   )
-  contextPlatform = 'kick'
-  mountHome()
+  selectContext('kick')
   await Bun.sleep(100)
   await runner('kick context command')
   assert.equal(sent.at(-1).platform, 'kick')
   assert.equal(sent.at(-1).text, 'kick context command')
   assert(!lookup('auto-translation-status'), 'another channel has no auto translation')
-  contextPlatform = 'twitch'
-  mountHome()
+  selectContext('twitch')
   await until(() => lookup('auto-translation-status'), 'returning to an enabled channel')
   await draft('/translateauto OFF')
   await focus()
@@ -762,8 +769,7 @@ async function checkComposer() {
   assert.equal(sent.length, beforeOff, 'disabling auto translation is local')
   await runner('normal after off')
   assert.equal(sent.at(-1).text, 'normal after off')
-  contextPlatform = 'youtube'
-  mountHome()
+  selectContext('youtube')
   await Bun.sleep(100)
   beforeContext = sent.length
   await assert.rejects(runner('unavailable selected platform'), /Connect|Select/)

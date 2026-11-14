@@ -54,6 +54,7 @@ import {
   TWIR_RELOAD_COMMAND_NAME,
   type CommandContext,
 } from '../commands'
+import { runUiTask } from '../hooks/run-ui-task'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
 import { t as translate, useT } from '../i18n'
 import { nativeWindow, type NativeTextAction } from '../native-window'
@@ -1854,6 +1855,17 @@ export function ChatInput(props: ChatInputProps) {
             {...composerFocus}
             onSubmit={autocompleteSelects ? undefined : () => void send()}
             onKeyDown={(event) => {
+              if (
+                event.key === 'enter' &&
+                event.modifiers?.ctrl &&
+                !event.modifiers.alt &&
+                !event.modifiers.cmd &&
+                !event.modifiers.shift
+              ) {
+                event.preventDefault()
+                runUiTask(send(false, { keepInput: true }))
+                return
+              }
               if (
                 (event.key === 'up' || event.key === 'down') &&
                 event.modifiers?.alt &&
