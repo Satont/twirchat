@@ -7,7 +7,9 @@ import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
 
-import { UserCardPanel } from './UserCardUI'
+import { SectionHeader, UserCardPanel } from './UserCardUI'
+import { Icon } from '../ui'
+import { accentGlow } from './utils'
 
 export function UserNotes({ target }: { target: UserCardTarget }) {
   const backend = useBackend()
@@ -64,18 +66,11 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
             flexDirection: 'row',
           }}
         >
-          <div
-            style={{
-              flexGrow: 1,
-              whiteSpace: 'normal',
-              minWidth: 0,
-              fontSize: 18,
-              fontWeight: 700,
-              color: theme.text2,
-            }}
-          >
-            {t('userCard.notes.hint')}
-          </div>
+          <SectionHeader
+            icon="pencil"
+            title={t('userCard.note.title')}
+            hint={t('userCard.note.description')}
+          />
         </div>
 
         <div

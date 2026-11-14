@@ -7,6 +7,8 @@ export const ruUserCard = {
     'Заменяет отображаемое имя в чате. Оставьте пустым, чтобы удалить псевдоним.',
   'userCard.alias.remove': 'Удалить псевдоним',
 
+  'userCard.note.title': 'Создать запись',
+  
   'userCard.opening': 'Открытие…',
   'userCard.openChannel': 'Открыть канал',
   'userCard.openInWindow': 'Открыть в окне',

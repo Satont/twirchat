@@ -4,6 +4,9 @@ export const userCard = {
   'userCard.alias.hint': 'Replaces the displayed name in chat. Leave empty to remove alias.',
   'userCard.alias.remove': 'Remove alias',
 
+  'userCard.note.title': 'Make note',
+  'userCard.note.description': 'asd',
+
   'userCard.opening': 'Opening…',
   'userCard.openChannel': 'Open channel',
   'userCard.openInWindow': 'Open in window',
