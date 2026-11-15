@@ -16,15 +16,17 @@ import { PlatformIcon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
-const platforms = new Map<Platform, string>([
-  ['twitch', 'Twitch'],
-  ['youtube', 'YouTube'],
-  ['vkplay', 'Vkplay'],
-  ['kick', 'Kick'],
-])
+const platformNames = {
+  twitch: 'Twitch',
+  youtube: 'YouTube',
+  vkplay: 'VK Play Live',
+  kick: 'Kick',
+} satisfies Record<Platform, string>
+
+const platformOrder: readonly Platform[] = ['twitch', 'youtube', 'vkplay', 'kick']
 
 function platformName(platform: Platform): string {
-  return platforms.get(platform)!
+  return platformNames[platform]
 }
 
 function statusLabel(s: PlatformStatusInfo | undefined, t: (key: MessageKey) => string): string {
@@ -386,7 +388,7 @@ export function PlatformsPanel() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {Array.from(platforms.keys()).map((platform) => (
+        {platformOrder.map((platform) => (
           <PlatformCard
             key={platform}
             platform={platform}
