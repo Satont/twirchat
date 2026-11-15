@@ -1,5 +1,3 @@
-import { setTimeout as wait } from 'node:timers/promises'
-
 import { logger } from '@twirchat/shared'
 import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
 import { z } from 'zod'
@@ -7,9 +5,9 @@ import { z } from 'zod'
 import { t } from '../gpuix/i18n'
 import { AccountStore } from '../store/account-store'
 import { getTwitchDesktopClientId } from './client-config'
-import { postOAuthForm } from './oauth-form'
 import { createOAuthRefresher, OAuthRefreshError } from './refresh-token'
 import { expiresAt, oauthTokenSchema } from './response-schemas'
+import { pollDeviceToken, requestDeviceCode, type TwitchDeviceAttempt } from './twitch-device-code'
 import { TwitchTokenValidationError, validateTwitchUserToken } from './twitch-user-token'
 
 const log = logger('auth-twitch')
@@ -62,80 +60,21 @@ export const TWITCH_SCOPES: readonly string[] = [
 ]
 
 const scopes = TWITCH_SCOPES.join(' ')
-const deviceGrant = 'urn:ietf:params:oauth:grant-type:device_code'
-
-const deviceCodeSchema = z.object({
-  device_code: z.string().min(1),
-  expires_in: z.number().int().positive().max(7200),
-  interval: z.number().int().positive().max(120),
-  user_code: z.string().regex(/^[A-Za-z0-9-]{1,32}$/u),
-  verification_uri: z.url().refine((value) => {
-    const url = new URL(value)
-    return url.origin === 'https://www.twitch.tv' || url.origin === 'https://twitch.tv'
-  }),
-})
-const deviceErrorSchema = z.object({
-  error: z.string().optional(),
-  message: z.string().optional(),
-})
 
 export async function requestTwitchDeviceCode(signal: AbortSignal, fetcher: typeof fetch = fetch) {
-  const clientId = getTwitchDesktopClientId()
-  const res = await postOAuthForm(
-    'https://id.twitch.tv/oauth2/device',
-    { client_id: clientId, scopes },
-    signal,
-    fetcher,
-  )
-  if (!res.ok) throw new Error(t('runtime.auth.startTwitchFailed', { status: res.status }))
-  const code = deviceCodeSchema.parse(await res.json())
-  return {
-    clientId,
-    code,
-    deadline: Date.now() + code.expires_in * 1000,
-  }
+  return requestDeviceCode({ clientId: getTwitchDesktopClientId(), scopes, signal, fetcher })
 }
 
 export async function waitForTwitchDeviceToken(
-  { clientId, code, deadline }: Awaited<ReturnType<typeof requestTwitchDeviceCode>>,
+  attempt: TwitchDeviceAttempt,
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
 ) {
-  let interval = code.interval * 1000
-  const body = {
-    client_id: clientId,
-    scopes,
-    device_code: code.device_code,
-    grant_type: deviceGrant,
-  }
-  while (Date.now() < deadline) {
-    // Twitch requires sequential polling with at least the advertised interval.
-    // eslint-disable-next-line no-await-in-loop
-    await wait(Math.min(interval, deadline - Date.now()), undefined, { signal })
-    if (Date.now() >= deadline) break
-    // eslint-disable-next-line no-await-in-loop
-    const res = await postOAuthForm(TWITCH_TOKEN_URL, body, signal, fetcher)
-    // eslint-disable-next-line no-await-in-loop
-    const payload: unknown = await res.json().catch(() => null)
-    if (res.ok) return oauthTokenSchema.required({ refresh_token: true }).parse(payload)
-    const parsed = deviceErrorSchema.safeParse(payload)
-    const reason = parsed.success ? (parsed.data.message ?? parsed.data.error) : undefined
-    if (reason === 'authorization_pending') continue
-    if (reason === 'slow_down' || res.status === 429) {
-      interval += 5000
-      continue
-    }
-    if (reason === 'access_denied') throw new Error(t('runtime.auth.twitchDeclined'))
-    if (reason === 'expired_token' || reason === 'invalid device code') break
-    throw new Error(t('runtime.auth.twitchFailed', { status: res.status }))
-  }
-  throw new Error(t('runtime.auth.twitchExpired'))
+  const tokens = await pollDeviceToken({ attempt, signal, fetcher, scopes })
+  return oauthTokenSchema.required({ refresh_token: true }).parse(tokens)
 }
 
-export async function connectTwitchDevice(
-  attempt: Awaited<ReturnType<typeof requestTwitchDeviceCode>>,
-  signal: AbortSignal,
-) {
+export async function connectTwitchDevice(attempt: TwitchDeviceAttempt, signal: AbortSignal) {
   const tokens = await waitForTwitchDeviceToken(attempt, signal)
   const validation = await validateTwitchUserToken(tokens.access_token)
   if (validation.clientId !== attempt.clientId)

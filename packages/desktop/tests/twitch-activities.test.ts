@@ -328,6 +328,73 @@ describe('Twitch activities public API', () => {
 })
 
 describe('Twitch web session operations from pinned Leafyrino contracts', () => {
+  test('refreshes an unauthorized points read without replaying a redemption', async () => {
+    const { service, calls } = fixture((_, init) => {
+      if (new Headers(init.headers).get('authorization') !== 'OAuth rotated-points')
+        return new Response(null, { status: 401 })
+      return Response.json([
+        {
+          data: {
+            community: {
+              channel: {
+                self: { communityPoints: { balance: 1900 } },
+                communityPointsSettings: { customRewards: [] },
+              },
+            },
+          },
+        },
+      ])
+    })
+    const pointsSession = { ...required(account.webSession), token: 'rejected-points' }
+    const credentials = {
+      ...account,
+      pointsSession,
+      refreshPointsSession: async () => ({ ...pointsSession, token: 'rotated-points' }),
+    }
+    const snapshot = await service.snapshot(credentials, 'other', ['pointsBalance'])
+    expect(snapshot.pointsBalance).toBe(1900)
+    expect(calls).toHaveLength(2)
+
+    await expect(
+      service.execute(credentials, {
+        channelSlug: 'other',
+        action: 'redeem_reward',
+        rewardId: 'reward',
+        rewardTitle: 'Reward',
+        cost: 100,
+      }),
+    ).rejects.toThrow('HTTP 401')
+    expect(calls).toHaveLength(3)
+  })
+
+  test('uses the device session for spending points and the web session for other activities', async () => {
+    const { service, calls } = fixture((_, init) => {
+      const field =
+        new Headers(init.headers).get('authorization') === 'OAuth points-secret'
+          ? 'redeemCommunityPointsCustomReward'
+          : 'followUser'
+      return Response.json([{ data: { [field]: { error: null } } }])
+    })
+    const credentials = {
+      ...account,
+      pointsSession: { ...required(account.webSession), token: 'points-secret' },
+    }
+
+    await service.execute(credentials, {
+      channelSlug: 'creator',
+      action: 'redeem_reward',
+      rewardId: 'reward',
+      rewardTitle: 'Reward',
+      cost: 100,
+    })
+    await service.execute(credentials, { channelSlug: 'creator', action: 'follow' })
+
+    expect(calls.map(({ init }) => new Headers(init.headers).get('authorization'))).toEqual([
+      'OAuth points-secret',
+      'OAuth web-secret',
+    ])
+  })
+
   for (const action of literal(['vote_poll', 'place_bet', 'redeem_reward', 'follow', 'unfollow']))
     test(action, async () => {
       const payload = {

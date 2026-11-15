@@ -67,7 +67,12 @@ export type DesktopEventMap = {
   twitch_web_session_changed: undefined
   platform_status: PlatformStatusInfo
   auth_url: { platform: Platform; url: string }
-  twitch_device_code: { url: string; userCode: string; windowScope: string } | null
+  twitch_device_code: {
+    url: string
+    userCode: string
+    windowScope: string
+    purpose?: 'channel-points'
+  } | null
   auth_success: { platform: Platform; username: string; displayName: string }
   auth_error: { platform: Platform; error: string }
   update_status: { status: string; message: string; progress?: number; hash?: string }

@@ -28,21 +28,27 @@ const { useGpuixRequired } = await import('@gpuix/react')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { BackendConnection } = await import('../src/backend-connection')
 const { ChatAggregator } = await import('../src/chat/aggregator')
-const { createDesktopApi } = await import('../src/gpuix/backend/api')
+const { createDesktopApi, planTwitchActivitySnapshot, requestTwitchActivitiesSnapshot } =
+  await import('../src/gpuix/backend/api')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
+const { TwitchDeviceDialog } = await import('../src/gpuix/components/TwitchDeviceDialog')
+const { TwitchSessionSettings } = await import('../src/gpuix/components/TwitchSessionSettings')
 const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const app = await import('../src/gpuix/state/app')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
 const { wireTwitchActivities } = await import('../src/gpuix/state/twitch-activities')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
+const { TwitchActivityRefreshClient } = await import('../src/services/twitch-activity-refresh')
+const { AccountStore } = await import('../src/store/account-store')
 const { initDb } = await import('../src/store/db')
 const { WatchedChannelManager } = await import('../src/watched-channels/manager')
 const sharp = (await import('sharp')).default
 
 const session = z.string().min(1).parse(process.env.TWIRCHAT_QA_SESSION_DIR)
 const db = initDb()
+const deviceAuth = process.argv.includes('--device-auth')
 const title = 'TwirChat'
 const channel: WatchedChannel = {
   id: 'qa-twitch-channel',
@@ -140,30 +146,140 @@ const redemptions: Redemption[] = []
 const approval = Promise.withResolvers<void>()
 let rejectRedemption = false
 const events = createDesktopEvents()
+const activationUrl = 'https://www.twitch.tv/activate'
+const standardToken = 'qa-ordinary-login'
+const pointsToken = 'qa-device-access'
+const tvClient = 'ue6666qo983tsx6so1t0vnawi233wa'
+const openedUrls: string[] = []
+const originalFetch = globalThis.fetch
+let deviceRequests = 0
+let tokenPolls = 0
+let clipboardReads = 0
+let confirmDevice = false
+let authenticatedSnapshots = 0
+
+async function mockTwitch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  const request = new Request(input, init)
+  const url = new URL(request.url)
+  const auth = request.headers.get('Authorization')
+  if (url.hostname === 'id.twitch.tv') {
+    if (url.pathname === '/oauth2/device') {
+      const body = new URLSearchParams(await request.text())
+      assert.equal(body.get('client_id'), tvClient)
+      deviceRequests++
+      return Response.json({
+        device_code: `test-device-${deviceRequests}`,
+        user_code: `ABCD000${deviceRequests}`,
+        verification_uri: activationUrl,
+        expires_in: 60,
+        interval: 1,
+      })
+    }
+    if (url.pathname === '/oauth2/token') {
+      const body = new URLSearchParams(await request.text())
+      assert.equal(body.get('client_id'), tvClient)
+      assert.equal(body.get('device_code'), `test-device-${deviceRequests}`)
+      assert.equal(body.get('grant_type'), 'urn:ietf:params:oauth:grant-type:device_code')
+      tokenPolls++
+      return confirmDevice
+        ? Response.json({
+            access_token: pointsToken,
+            refresh_token: 'qa-device-refresh',
+            expires_in: 14400,
+          })
+        : Response.json({ message: 'authorization_pending' }, { status: 400 })
+    }
+    if (url.pathname === '/oauth2/validate') {
+      assert(auth === `OAuth ${pointsToken}` || auth === `OAuth ${standardToken}`)
+      return Response.json({
+        client_id: auth === `OAuth ${pointsToken}` ? tvClient : 'qa-ordinary-client',
+        user_id: primary.platformUserId,
+        login: primary.username,
+        scopes: [],
+        expires_in: 14400,
+      })
+    }
+  }
+  if (url.hostname === 'api.twitch.tv' && url.pathname === '/helix/users') {
+    assert.equal(auth, `Bearer ${standardToken}`)
+    return Response.json({ data: [{ id: snapshot.channelId }] })
+  }
+  if (url.href === 'https://gql.twitch.tv/gql') {
+    const operations = z.array(z.object({ operationName: z.string() })).parse(await request.json())
+    if (operations[0]?.operationName === 'ChannelPointsContext') {
+      assert(confirmDevice, 'Balance request follows approval.')
+      assert.equal(auth, `OAuth ${pointsToken}`)
+      authenticatedSnapshots++
+      return Response.json([
+        {
+          data: {
+            community: {
+              channel: {
+                self: { communityPoints: { balance: snapshot.pointsBalance } },
+                communityPointsSettings: { customRewards: rewards },
+              },
+            },
+          },
+        },
+      ])
+    }
+    if (operations[0]?.operationName === 'GetPinnedChat') {
+      assert.equal(auth, null, 'Points credentials stay out of unrelated requests.')
+      return Response.json([{ data: { channel: {} } }])
+    }
+  }
+  return Response.json({ message: 'Unavailable in isolated QA' }, { status: 404 })
+}
+
+if (deviceAuth) {
+  AccountStore.upsert({ ...primary, accessToken: standardToken })
+  AccountStore.setActive('twitch', primary.id)
+  globalThis.fetch = Object.assign(mockTwitch, { preconnect: originalFetch.preconnect })
+}
+const activityRefresh = deviceAuth
+  ? new TwitchActivityRefreshClient({
+      plan: (slug) => planTwitchActivitySnapshot(slug, false),
+      snapshot: (channelSlug, sections) =>
+        requestTwitchActivitiesSnapshot({ channelSlug, sections }),
+      publish: (update) => events.emit('twitch_activity_snapshot', update),
+      capability: (capability) => events.emit('twitch_activity_capability', capability),
+    })
+  : undefined
+const api = createDesktopApi({
+  events,
+  aggregator: new ChatAggregator(),
+  backendConn: new BackendConnection('isolated-channel-points'),
+  watchedChannelManager: new WatchedChannelManager(),
+  currentStatuses: new Map(),
+  twitchActivityRefresh: activityRefresh,
+  openBrowser(url) {
+    assert(deviceAuth && url === activationUrl, 'Only the simulated Twitch activation page opens.')
+    openedUrls.push(url)
+  },
+})
 const backend: DesktopBackend = {
   events,
   api: {
-    ...createDesktopApi({
-      events,
-      aggregator: new ChatAggregator(),
-      backendConn: new BackendConnection('isolated-channel-points'),
-      watchedChannelManager: new WatchedChannelManager(),
-      currentStatuses: new Map(),
-      openBrowser() {
-        throw new Error('Channel Points QA must not open external applications.')
-      },
-    }),
+    ...api,
     async getChannelRoomState({ platform }) {
       return { platform, channelId: snapshot.channelId }
     },
     async getChannelEmotes() {
       return []
     },
-    async getTwitchActivities({ channelSlug }) {
-      assert.equal(channelSlug, channel.channelSlug)
-      return structuredClone(snapshot)
+    getTwitchActivities: deviceAuth
+      ? (params) => api.getTwitchActivities(params)
+      : async ({ channelSlug }) => {
+          assert.equal(channelSlug, channel.channelSlug)
+          return structuredClone(snapshot)
+        },
+    async watchTwitchActivities({ channelSlug, watch }) {
+      await activityRefresh?.watch(channelSlug, watch)
     },
-    async watchTwitchActivities() {},
+    async readClipboard() {
+      clipboardReads++
+      throw new Error('The device authorization flow must not read a clipboard token.')
+    },
     async executeTwitchActivityAction(action, accountId) {
       assert.equal(action.action, 'redeem_reward')
       redemptions.push({ action, accountId })
@@ -273,6 +389,8 @@ function Content() {
       },
     },
     React.createElement(ChatView, { watchedChannel: selected, paneId: 'qa-points' }),
+    deviceAuth ? React.createElement(TwitchSessionSettings) : null,
+    deviceAuth ? React.createElement(TwitchDeviceDialog) : null,
   )
 }
 const manager = new DesktopWindowManager(
@@ -403,9 +521,52 @@ async function closePicker(): Promise<void> {
   await until(() => !find(popup), 'Escape closes picker')
 }
 
+async function checkDeviceAuth(): Promise<void> {
+  const connect = 'connect-channel-points'
+  const dialog = 'twitch-device-sign-in'
+  const disconnect = 'disconnect-channel-points'
+  await until(() => Boolean(renderer && find(connect)), 'session settings open')
+  await nativeWindow(current()).setWindowBounds({ x: 20, y: 20, width: 580, height: 530 })
+  await focusNativeQaWindow(title)
+  assert(!(await api.getTwitchPointsSessionStatus()).configured)
+  assert(!find(button), 'An ordinary Twitch login does not show a viewer balance.')
+
+  click(connect)
+  await until(() => painted('ABCD0001') && openedUrls.length === 1, 'Twitch shows the first code')
+  click('twitch-device-cancel')
+  await until(() => !find(dialog), 'Cancel closes the code dialog')
+  assert(!(await api.getTwitchPointsSessionStatus()).configured)
+  assert(!find(button), 'Cancel leaves the balance hidden.')
+
+  const pollsBeforeRetry = tokenPolls
+  await until(() => painted('Connect Channel Points'), 'connect is available after cancellation')
+  click(connect)
+  await until(() => painted('ABCD0002') && openedUrls.length === 2, 'Twitch shows a new code')
+  await until(() => tokenPolls > pollsBeforeRetry, 'Twitch waits for confirmation')
+  assert(!find(button), 'A pending code keeps the balance hidden.')
+  confirmDevice = true
+  await until(
+    () => Boolean(!find(dialog) && find(disconnect) && find(button)),
+    'confirmed authorization updates the open chat balance and session settings',
+  )
+  assert(authenticatedSnapshots > 0)
+  assert.equal(clipboardReads, 0)
+  assert.deepEqual(openedUrls, [activationUrl, activationUrl])
+  assert.equal((await api.getTwitchPointsSessionStatus()).userId, primary.platformUserId)
+  assert.equal(AccountStore.getTokens(primary.id)?.accessToken, standardToken)
+  assert(!(await api.getTwitchWebSessionStatus()).configured)
+
+  click(button)
+  await until(() => Boolean(find(popup)) && painted('1,900'), 'reward picker displays the balance')
+  await closePicker()
+  click(disconnect)
+  await until(() => !find(button) && !find(disconnect), 'disconnect removes the visible balance')
+  assert(!(await api.getTwitchPointsSessionStatus()).configured)
+  console.log('Channel Points device authorization QA passed.')
+}
+
 const screenshots: string[] = []
-try {
-  await manager.start()
+async function checkRewards(): Promise<void> {
   await until(() => Boolean(renderer && find(button)), 'points button loads')
   const window = nativeWindow(current())
   await window.setWindowBounds({ x: 20, y: 20, width: 580, height: 530 })
@@ -510,6 +671,12 @@ try {
   target.set(kick)
   await until(() => !find(button), 'button hides on a non-Twitch channel')
   console.log(JSON.stringify({ screenshots, redemptions: redemptions.length }, null, 2))
+}
+
+try {
+  await manager.start()
+  if (deviceAuth) await checkDeviceAuth()
+  else await checkRewards()
 } catch (error) {
   if (renderer) {
     console.error(current().getPaintedText())
@@ -518,6 +685,8 @@ try {
   throw error
 } finally {
   approval.resolve()
+  activityRefresh?.stop()
+  globalThis.fetch = originalFetch
   stopHotkeys()
   stopMessages()
   stopActivity()

@@ -73,6 +73,8 @@ export const ruApp = {
   'app.platforms.twitchDevice.title': 'Подключить Twitch',
   'app.platforms.twitchDevice.description':
     'Подтвердите код на Twitch и разрешите доступ TwirChat в браузере.',
+  'app.platforms.twitchDevice.pointsDescription':
+    'Введите код на Twitch и подтвердите подключение под тем же аккаунтом, что и в TwirChat.',
   'app.platforms.twitchDevice.open': 'Открыть Twitch',
   'app.platforms.twitchDevice.copyCode': 'Скопировать код',
 

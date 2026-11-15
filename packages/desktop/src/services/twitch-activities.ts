@@ -13,6 +13,7 @@ import type {
 } from '@twirchat/shared/twitch-activities'
 import { z } from 'zod'
 
+import { TWITCH_TV_CLIENT_ID } from '../auth/twitch-points'
 import { ChatToolsError } from './chat-tools'
 import { isModerator } from './moderation/twitch'
 import { hasChannelModerationScopes } from './moderation/twitch-eventsub'
@@ -22,6 +23,8 @@ export interface TwitchActivitiesCredentials extends TwitchUserCredentials {
   platformUserId: string
   scopes: readonly string[]
   webSession?: TwitchWebSession | null
+  pointsSession?: TwitchWebSession | null
+  refreshPointsSession?(): Promise<TwitchWebSession | null>
 }
 
 const rowSchema = z.record(z.string(), z.unknown())
@@ -36,7 +39,6 @@ const POLL_QUERY =
 const PREDICTION_QUERY =
   'query ChannelPointsPredictionContext($channelLogin:String!){channel(name:$channelLogin){id activePredictionEvents{id title status predictionWindowSeconds createdAt lockedAt outcomes{id title totalUsers totalPoints color}} lockedPredictionEvents{id title status predictionWindowSeconds createdAt lockedAt outcomes{id title totalUsers totalPoints color}}}}'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
-const TV_CLIENT_ID = 'ue6666qo983tsx6so1t0vnawi233wa'
 const sessionId = crypto.randomUUID().replaceAll('-', '')
 const deviceId = crypto.randomUUID().replaceAll('-', '')
 
@@ -67,6 +69,12 @@ function webSession(credentials: TwitchActivitiesCredentials): TwitchWebSession 
       403,
     )
   return session
+}
+
+function pointsCredentials(credentials: TwitchActivitiesCredentials): TwitchActivitiesCredentials {
+  return credentials.pointsSession
+    ? { ...credentials, webSession: credentials.pointsSession }
+    : credentials
 }
 function poll(value: Row): TwitchPoll {
   return {
@@ -204,7 +212,7 @@ export function createTwitchActivitiesService(
       redirect: 'error',
       headers: {
         ...(session ? { Authorization: `OAuth ${session.token}` } : {}),
-        'Client-Id': tv ? TV_CLIENT_ID : WEB_CLIENT_ID,
+        'Client-Id': tv ? TWITCH_TV_CLIENT_ID : WEB_CLIENT_ID,
         'Content-Type': 'application/json',
         'Client-Session-Id': sessionId,
         'X-Device-Id': deviceId,
@@ -391,15 +399,24 @@ export function createTwitchActivitiesService(
           ).map(prediction)
         }),
         capture('rewards', async () => {
-          if (credentials.webSession) {
-            const data = await gql(
-              credentials,
-              {
-                operationName: 'ChannelPointsContext',
-                hash: '7fe050e3761eb2cf258d70ee1a21cbd76fa8cf3d7e7b12fc437e7029d446b5e3',
-                variables: { channelLogin: channelSlug, includeGoalTypes: ['CREATOR', 'BOOST'] },
+          if (credentials.pointsSession || credentials.webSession) {
+            const operation = {
+              operationName: 'ChannelPointsContext',
+              hash: '7fe050e3761eb2cf258d70ee1a21cbd76fa8cf3d7e7b12fc437e7029d446b5e3',
+              variables: { channelLogin: channelSlug, includeGoalTypes: ['CREATOR', 'BOOST'] },
+            }
+            const data = await gql(pointsCredentials(credentials), operation, true).catch(
+              async (error: unknown) => {
+                if (
+                  !(error instanceof ChatToolsError) ||
+                  error.status !== 401 ||
+                  !credentials.pointsSession
+                )
+                  throw error
+                const refreshed = await credentials.refreshPointsSession?.()
+                if (!refreshed) throw error
+                return gql({ ...credentials, webSession: refreshed }, operation, true)
               },
-              true,
             )
             if (!data.community) throw new ChatToolsError('Twitch did not return channel rewards.')
             const channel = row(row(data.community).channel)
@@ -751,7 +768,7 @@ export function createTwitchActivitiesService(
           break
         case 'redeem_reward':
           await gql(
-            credentials,
+            pointsCredentials(credentials),
             {
               operationName: 'RedeemCustomReward',
               hash: 'd56249a7adb4978898ea3412e196688d4ac3cea1c0c2dfd65561d229ea5dcc42',
