@@ -20,6 +20,7 @@ import type {
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
@@ -742,6 +743,9 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   if (isSystem) {
     const notice = message.metadata?.twitchNotice
     if (message.platform === 'twitch' && notice) {
+      // Membership notices are single-line events: the feed chip belongs in the
+      // row, not on a line of its own above it.
+      const inlineSource = isTwitchMembershipNoticeKind(notice.kind) ? sourceLabel : null
       const row = (
         <TwitchChatNotice
           id={message.id}
@@ -751,6 +755,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           detail={notice.detail}
           chatTheme={props.chatTheme}
           timestampFormat={props.timestampFormat}
+          sourceLabel={inlineSource}
           time={
             props.showTimestamp
               ? formatMessageTime(message.timestamp, props.timestampFormat)
@@ -758,7 +763,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           }
         />
       )
-      return sourceLabel ? (
+      return sourceLabel && !inlineSource ? (
         <div>
           <div style={{ paddingTop: 4, paddingLeft: 12 }}>{sourceLabel}</div>
           {row}
