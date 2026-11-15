@@ -36,9 +36,11 @@ export interface TwitchReward {
   prompt?: string
   isEnabled: boolean
   isPaused: boolean
+  isInStock?: boolean
   isInputRequired?: boolean
   manageable?: boolean
   imageUrl?: string
+  backgroundColor?: string
 }
 export interface TwitchPinnedMessage {
   id: string
@@ -159,7 +161,14 @@ export type TwitchActivityAction = { channelSlug: string } & (
       ids: string[]
       status: 'FULFILLED' | 'CANCELED'
     }
-  | { action: 'redeem_reward'; rewardId: string; rewardTitle: string; cost: number; input?: string }
+  | {
+      action: 'redeem_reward'
+      rewardId: string
+      rewardTitle: string
+      rewardPrompt?: string
+      cost: number
+      input?: string
+    }
   | { action: 'follow' | 'unfollow' }
   | { action: 'add_editor' | 'remove_editor'; username: string }
   | { action: 'assign_lead_moderator' | 'unassign_lead_moderator'; userId: string }

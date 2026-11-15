@@ -316,7 +316,7 @@ function boot(): DesktopBackend {
       const sections: TwitchActivitySnapshotPart[] = ['pinnedMessage']
       if ((hasWeb || polls) && !(eventsub && polls)) sections.push('polls')
       if ((hasWeb || predictions) && !(eventsub && predictions)) sections.push('predictions')
-      if ((hasWeb || rewards) && !(eventsub && rewards)) sections.push('rewards')
+      if (hasWeb || (rewards && !eventsub)) sections.push('rewards')
       if (hasWeb) sections.push('pointsBalance')
       return {
         mode: eventsub && (polls || predictions || rewards) ? 'eventsub' : 'snapshot',

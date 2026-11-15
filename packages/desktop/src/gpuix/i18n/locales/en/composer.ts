@@ -10,6 +10,16 @@ export const composer = {
   'composer.placeholder.connectAccount': 'Connect an account…',
   'composer.send': 'Send message',
 
+  'composer.rewards.open': 'Open channel rewards · {balance}',
+  'composer.rewards.title': 'Channel Points',
+  'composer.rewards.paused': 'This reward is paused.',
+  'composer.rewards.outOfStock': 'This reward is sold out.',
+  'composer.rewards.insufficient': 'You need more points for this reward.',
+  'composer.rewards.inputLimit': 'Enter up to {limit} characters.',
+  'composer.rewards.redeem': 'Redeem for {cost}',
+  'composer.rewards.redeeming': 'Redeeming…',
+  'composer.rewards.success': 'Reward redeemed · {reward}',
+
   'composer.history.hint': 'Search sent messages · Enter or Esc keeps the result',
   'composer.history.placeholder': 'Search message history…',
   'composer.history.typeToSearch': 'Type to search your sent messages',

@@ -103,6 +103,7 @@ export const icons = {
   gift: stroke(
     '<rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v9h14v-9M12 8v13m0-13H8a2.5 2.5 0 1 1 2.5-2.5L12 8Zm0 0h4a2.5 2.5 0 1 0-2.5-2.5L12 8Z" />',
   ),
+  channelPoints: stroke('<circle cx="12" cy="12" r="9" /><path d="m12 7 4 5-4 5-4-5 4-5Z" />'),
 
   // ── Platform logos (monochrome paths tinted with the platform color) ────
   twitch: fill(

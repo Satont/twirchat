@@ -102,6 +102,10 @@ function prediction(value: Row): TwitchPrediction {
   }
 }
 function reward(value: Row): TwitchReward {
+  const inStock = value.is_in_stock ?? value.isInStock
+  const color = text(
+    value.background_color ?? value.backgroundColor ?? value.defaultBackgroundColor,
+  )
   return {
     id: text(value.id),
     title: text(value.title),
@@ -109,13 +113,17 @@ function reward(value: Row): TwitchReward {
     prompt: text(value.prompt),
     isEnabled: value.is_enabled === true || value.isEnabled === true,
     isPaused: value.is_paused === true || value.isPaused === true,
+    isInStock: typeof inStock === 'boolean' ? inStock : undefined,
     isInputRequired: value.is_user_input_required === true || value.isUserInputRequired === true,
     imageUrl:
       text(row(value.image).url_2x) ||
       text(row(value.image).url2x) ||
+      text(row(value.image).url) ||
       text(row(value.default_image).url_2x) ||
       text(row(value.defaultImage).url2x) ||
+      text(row(value.defaultImage).url) ||
       undefined,
+    backgroundColor: /^#[\da-f]{6}$/iu.test(color) ? color : undefined,
   }
 }
 
@@ -395,9 +403,15 @@ export function createTwitchActivitiesService(
             )
             if (!data.community) throw new ChatToolsError('Twitch did not return channel rewards.')
             const channel = row(row(data.community).channel)
-            snapshot.rewards = rows(row(channel.communityPointsSettings).customRewards).map(reward)
+            snapshot.rewards = rows(row(channel.communityPointsSettings).customRewards)
+              .filter((entry) => (entry.pricingType ?? 'POINTS') === 'POINTS')
+              .map(reward)
+              .filter(
+                ({ id, title, cost }) => id && title && Number.isSafeInteger(cost) && cost > 0,
+              )
             const balance = row(row(channel.self).communityPoints).balance
-            if (typeof balance === 'number') snapshot.pointsBalance = balance
+            if (typeof balance === 'number' && Number.isSafeInteger(balance) && balance >= 0)
+              snapshot.pointsBalance = balance
           } else {
             scope(credentials, 'channel:read:redemptions', 'channel:manage:redemptions')
             snapshot.rewards = rows(
@@ -749,7 +763,9 @@ export function createTwitchActivitiesService(
                   rewardID: string(action.rewardId, 'Reward ID', 100),
                   title: string(action.rewardTitle, 'Reward title', 100),
                   transactionID: crypto.randomUUID().replaceAll('-', ''),
-                  prompt: null,
+                  prompt: action.rewardPrompt?.trim()
+                    ? string(action.rewardPrompt, 'Reward prompt', 200)
+                    : null,
                   ...(action.input ? { textInput: string(action.input, 'Reward input', 500) } : {}),
                 },
               },

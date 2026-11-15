@@ -341,7 +341,10 @@ export interface DesktopApi {
   }): Promise<TwitchActivitiesSnapshot>
   getTwitchActivityCapability(params: { channelSlug: string }): Promise<TwitchActivityCapability>
   getTwitchRewardQueueSummary(params: { channelSlug: string }): Promise<TwitchRewardQueueSummary>
-  executeTwitchActivityAction(params: TwitchActivityAction): Promise<{ message?: string }>
+  executeTwitchActivityAction(
+    params: TwitchActivityAction,
+    expectedAccountId?: string,
+  ): Promise<{ message?: string }>
   getTwitchRewardRedemptions(params: {
     channelSlug: string
     rewardId?: string
@@ -580,6 +583,7 @@ export interface DesktopApiContext {
 }
 
 const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+let webSessionRevision = 0
 
 const twitchActivities = createTwitchActivitiesService()
 const twitchChatTools = createChatToolsService()
@@ -662,8 +666,9 @@ export async function requestTwitchActivitiesSnapshot(params: {
   channelSlug: string
   sections?: TwitchActivitySnapshotPart[]
 }): Promise<TwitchActivitiesSnapshot> {
+  const sessionRevision = webSessionRevision
   const { credentials, run } = await prepareTwitchActivitiesRequest()
-  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${credentials.webSession ? 'web' : 'oauth'}`
+  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${sessionRevision}`
   return activitySnapshots.request(key, params.sections, () =>
     run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
   )
@@ -1009,8 +1014,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         throw new Error(t('runtime.api.twitchActivitiesNotInitialized'))
       return ctx.twitchActivityRefresh.capability(channelSlug)
     },
-    executeTwitchActivityAction: (action) =>
-      twitchActivity((credentials) => twitchActivities.execute(credentials, action)),
+    executeTwitchActivityAction: async (action, expectedAccountId) => {
+      if (expectedAccountId && AccountStore.findByPlatform('twitch')?.id !== expectedAccountId)
+        throw new Error(t('runtime.api.activeTwitchAccountChanged'))
+      return twitchActivity((credentials) => twitchActivities.execute(credentials, action))
+    },
     getTwitchRewardRedemptions: (params) =>
       twitchActivity((credentials) => twitchActivities.redemptions(credentials, params)),
     getTwitchFollowing: (params = {}) =>
@@ -1024,11 +1032,15 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (account && account.platformUserId !== session.userId)
         throw new Error(t('runtime.api.twitchWebSessionMismatch'))
       await TwitchWebSessionStore.set(session)
+      webSessionRevision++
+      ctx.events.emit('twitch_web_session_changed', undefined)
       ctx.twitchActivityRefresh?.restart()
       return TwitchWebSessionStore.status()
     },
     clearTwitchWebSession: async () => {
       await TwitchWebSessionStore.clear()
+      webSessionRevision++
+      ctx.events.emit('twitch_web_session_changed', undefined)
       ctx.twitchActivityRefresh?.restart()
     },
     watchTwitchActivities: async ({ channelSlug, watch }) => {

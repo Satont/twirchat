@@ -340,6 +340,7 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
         points: 100,
         rewardId: 'reward',
         rewardTitle: 'Reward',
+        rewardPrompt: 'Tell us what to play',
         cost: 100,
         input: 'Text',
         votes: 3,
@@ -392,7 +393,7 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
           rewardID: 'reward',
           title: 'Reward',
           textInput: 'Text',
-          prompt: null,
+          prompt: 'Tell us what to play',
         })
       else
         expect(request.variables.input).toEqual(
@@ -479,7 +480,18 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
                   self: { communityPoints: { balance: 1234 } },
                   communityPointsSettings: {
                     customRewards: [
-                      { id: 'reward', title: 'Hi', cost: 50, isEnabled: true, isPaused: false },
+                      {
+                        id: 'reward',
+                        title: 'Hi',
+                        cost: 50,
+                        isEnabled: true,
+                        isPaused: false,
+                        isInStock: false,
+                        defaultBackgroundColor: '#9147ff',
+                        defaultImage: { url: 'https://example.test/reward.png' },
+                      },
+                      { id: 'bits', title: 'Bits', cost: 10, pricingType: 'BITS' },
+                      { id: 'invalid', title: 'Missing cost' },
                     ],
                   },
                 },
@@ -494,7 +506,13 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
     expect(result.errors).toEqual({})
     expect(required(required(result.polls[0]).choices[0]).votes).toBe(4)
     expect(required(required(result.predictions[0]).outcomes[0]).points).toBe(100)
-    expect(required(result.rewards[0]).cost).toBe(50)
+    expect(result.rewards).toHaveLength(1)
+    expect(required(result.rewards[0])).toMatchObject({
+      cost: 50,
+      isInStock: false,
+      backgroundColor: '#9147ff',
+      imageUrl: 'https://example.test/reward.png',
+    })
     expect(result.pointsBalance).toBe(1234)
   })
 })
