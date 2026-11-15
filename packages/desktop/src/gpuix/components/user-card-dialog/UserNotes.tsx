@@ -74,7 +74,7 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
             alignItems: 'center',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', backgroundColor: theme.accent.tint20, padding: 6, borderRadius: 6, gap: 6, flexWrap: 'wrap' }}>
             <ActionButton onClick={() => setPreview(!preview)}>
               {preview ? t('userCard.notes.edit') : t('userCard.notes.preview')}
             </ActionButton>
@@ -142,6 +142,8 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
               gap: 6,
               padding: 12,
               backgroundColor: theme.surface2,
+              borderWidth: 1,
+              borderColor: theme.accent.tint20,
               borderRadius: 6,
             }}
           >
