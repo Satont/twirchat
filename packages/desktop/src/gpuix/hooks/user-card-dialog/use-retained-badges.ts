@@ -1,38 +1,34 @@
-import { useMemo, useCallback } from 'react'
-import { watchedMessagesStore, homeMessagesStore } from '@gpuix/state/app'
 import { collectUserBadges } from '@gpuix/components/user-card-dialog/utils'
-import type { Platform } from '@twirchat/shared/types'
+import { watchedMessagesStore, homeMessagesStore } from '@gpuix/state/app'
+import type { Platform, NormalizedChatMessage, Badge } from '@twirchat/shared/types'
+import { useMemo, useCallback } from 'react'
 
-const cache = new Map<string, { badges: ReturnType<typeof collectUserBadges>; timestamp: number }>()
+const cache = new Map<string, { badges: Badge[]; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-export function useRetainedBadges(
-  platform: Platform,
-  platformUserId: string,
-  channelId?: string,
-) {
-  const key = `${platform}:${platformUserId}:${channelId ?? 'global'}`
-
+export function useRetainedBadges(platform: Platform, platformUserId: string, channelId?: string) {
   const getBadges = useCallback(() => {
     const limit = 500
+    const cacheKey = `${platform}:${platformUserId}:${channelId ?? 'global'}`
 
     // Check memory cache first
-    const cached = cache.get(`${platform}:${platformUserId}:${channelId ?? 'global'}`)
+    const cached = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return cached.badges
     }
 
-    const watchedMessages = watchedMessagesStore.get()
-    const homeMessages = homeMessagesStore.get()
-
-    const newestFirst: Array<{ author: { id: string; badges?: Array<{ id: string; type: string; text: string; imageUrl?: string }> }; platform: string }> = []
-
     // Collect from current channel's messages
-    const currentChannelMessages = channelId ? (watchedMessagesStore.get().get(channelId) ?? []) : []
+    const currentChannelMessages = channelId
+      ? (watchedMessagesStore.get().get(channelId) ?? [])
+      : []
 
-    for (let index = currentChannelMessages.length - 1, count = 0;
+    const newestFirst: NormalizedChatMessage[] = []
+
+    for (
+      let index = currentChannelMessages.length - 1, count = 0;
       index >= 0 && count < limit;
-      index -= 1, count += 1) {
+      index -= 1, count += 1
+    ) {
       const message = currentChannelMessages[index]
       if (message) newestFirst.push(message)
     }
@@ -41,17 +37,17 @@ export function useRetainedBadges(
     if (newestFirst.length < limit) {
       const home = Array.from(homeMessagesStore.get().values()).flat()
       const remaining = limit - newestFirst.length
-      for (let index = home.length - 1, count = 0;
+      for (
+        let index = home.length - 1, count = 0;
         index >= 0 && count < remaining;
-        index -= 1, count += 1) {
-      const message = home[index]
-      if (message) newestFirst.push(message)
-    }
+        index -= 1, count += 1
+      ) {
+        const message = home[index]
+        if (message) newestFirst.push(message)
+      }
     }
 
-    // We need to cast because collectUserBadges expects a specific internal type
-    // but our structure matches the required structure
-    const badges = collectUserBadges(newestFirst as unknown as Parameters<typeof collectUserBadges>[0], platform, platformUserId)
+    const badges = collectUserBadges(newestFirst, platform, platformUserId)
 
     // Update cache
     const cachedValue = { badges, timestamp: Date.now() }

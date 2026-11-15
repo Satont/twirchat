@@ -34,7 +34,7 @@ import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
 import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
-import { collectUserBadges, mergeBadges } from './user-card-dialog/utils'
+import { mergeBadges } from './user-card-dialog/utils'
 import {
   accountAgeText,
   followAgeText,
@@ -101,19 +101,19 @@ export function UserCardDialog({
   const [aliasFocused, setAliasFocused] = useState(false)
   const aliasFocus = useTextInputFocusTracking(setAliasFocused)
 
-  const openPicture = () => {
+  const openPicture = useCallback(() => {
     if (!hideAvatar && avatarUrl) {
       renderer.blur?.()
       setAvatarMenuOpen(true)
     }
-  }
+  }, [hideAvatar, avatarUrl, renderer])
   useEffect(() => {
     if (hideAvatar) setAvatarMenuOpen(false)
   }, [hideAvatar])
 
   const effectiveAlias = currentAlias ?? target.currentAlias
   const [openingWindow, setOpeningWindow] = useState(false)
-  const openInWindow = async () => {
+  const openInWindow = useCallback(async () => {
     if (!windows) return
     setOpeningWindow(true)
     try {
@@ -122,7 +122,7 @@ export function UserCardDialog({
     } finally {
       setOpeningWindow(false)
     }
-  }
+  }, [windows, target, effectiveAlias, onClose])
 
   /**
    * Twitch only reports chat badges with messages, so collect every badge the
@@ -305,7 +305,7 @@ export function UserCardDialog({
       openInWindow,
       hideAvatar,
       channelUrl,
-      publicChannel.isOpening,
+      publicChannel,
       openPicture,
       effectiveAlias,
       headerAccent,
