@@ -59,7 +59,7 @@ export function ChangelogActions({ version, onClose }: ChangelogActionsProps) {
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            color: 'lightgray',
+            color: theme.text,
             gap: 4,
           }}
         >
