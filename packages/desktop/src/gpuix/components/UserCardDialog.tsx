@@ -159,7 +159,7 @@ export function UserCardDialog({
 
   // Fetch Twitch user badge catalog from backend (global + role badges)
   // Used as a lookup to enrich retainedBadges with imageUrl/description
-  const userBadgeCatalogRef = useRef<Map<string, Badge>>(new Map())
+  const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
   useEffect(() => {
     if (target.platform !== 'twitch' || !target.username) return
     const controller = new AbortController()
@@ -185,7 +185,7 @@ export function UserCardDialog({
           // Also index by setId/version for matching with retained badges
           catalog.set(`${setId}/${version}`, badge)
         }
-        userBadgeCatalogRef.current = catalog
+        setUserBadgeCatalog(catalog)
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return
@@ -198,9 +198,8 @@ export function UserCardDialog({
 
   // Enrich retainedBadges with catalog data (imageUrl, description)
   const enrichedRetainedBadges = useMemo(() => {
-    const catalog = userBadgeCatalogRef.current
     return retainedBadges.map((badge) => {
-      const catalogBadge = catalog.get(badge.id)
+      const catalogBadge = userBadgeCatalog.get(badge.id)
       if (catalogBadge) {
         return {
           ...badge,
@@ -210,7 +209,7 @@ export function UserCardDialog({
       }
       return badge
     })
-  }, [retainedBadges])
+  }, [retainedBadges, userBadgeCatalog])
 
   // retainedBadges now contains badges from current channel + home (global)
   // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
