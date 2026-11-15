@@ -76,11 +76,15 @@ export function UserCardDialog({
     hideAvatar,
     onAvatarChange: updateProfileAvatar,
   })
-  const headerAccent = userCardHeaderAccent(
-    profileState.profile?.color,
-    target.color,
-    profileState.cosmetics,
-    profileState.paintsEnabled,
+  const headerAccent = useMemo(
+    () =>
+      userCardHeaderAccent(
+        profileState.profile?.color,
+        target.color,
+        profileState.cosmetics,
+        profileState.paintsEnabled,
+      ),
+    [profileState.profile?.color, target.color, profileState.cosmetics, profileState.paintsEnabled],
   )
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [localPinned, setLocalPinned] = useState(false)
@@ -213,11 +217,21 @@ export function UserCardDialog({
 
   // retainedBadges now contains badges from current channel + home (global)
   // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
-  const extraBadges = mergeBadges(
-    enrichedRetainedBadges,
-    target.badges,
-    profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
-    profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
+  const extraBadges = useMemo(
+    () =>
+      mergeBadges(
+        enrichedRetainedBadges,
+        target.badges,
+        profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
+        profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
+      ),
+    [
+      enrichedRetainedBadges,
+      target.badges,
+      profileState.badgesEnabled,
+      profileState.cosmetics?.badges,
+      profileState.cosmetics?.inventoryBadges,
+    ],
   )
   const channelUrl = target.username
     ? publicChannelURL(target.platform, target.username)
@@ -232,30 +246,34 @@ export function UserCardDialog({
 
   const [tab, setTab] = useState<UserCardTab>('profile')
 
-  const metadataItems: MetadataItem[] = metadata.metadata
-    ? [
-        {
-          label: t('userCard.metadata.accountAge'),
-          value: accountAgeText(metadata.metadata),
-          icon: 'calendar',
-        },
-        {
-          label: t('userCard.metadata.followAge'),
-          value: followAgeText(metadata.metadata),
-          icon: 'users',
-        },
-        {
-          label: t('userCard.metadata.subscriptionDuration'),
-          value: subscriptionDurationText(metadata.metadata),
-          icon: 'gift',
-        },
-        {
-          label: t('userCard.metadata.subAge'),
-          value: subAgeText(metadata.metadata),
-          icon: 'clock',
-        },
-      ]
-    : []
+  const metadataItems = useMemo<MetadataItem[]>(
+    () =>
+      metadata.metadata
+        ? [
+            {
+              label: t('userCard.metadata.accountAge'),
+              value: accountAgeText(metadata.metadata),
+              icon: 'calendar',
+            },
+            {
+              label: t('userCard.metadata.followAge'),
+              value: followAgeText(metadata.metadata),
+              icon: 'users',
+            },
+            {
+              label: t('userCard.metadata.subscriptionDuration'),
+              value: subscriptionDurationText(metadata.metadata),
+              icon: 'gift',
+            },
+            {
+              label: t('userCard.metadata.subAge'),
+              value: subAgeText(metadata.metadata),
+              icon: 'clock',
+            },
+          ]
+        : [],
+    [metadata.metadata, t],
+  )
 
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,
@@ -275,29 +293,50 @@ export function UserCardDialog({
       : null,
   })
 
-  const header = (
-    <UserCardHeader
-      target={{
-        platform: target.platform,
-        platformUserId: target.platformUserId,
-        displayName: target.displayName,
-        username: target.username,
-        avatarUrl,
-        badges: target.badges,
-      }}
-      extraBadges={extraBadges}
-      windows={windows}
-      standalone={standalone}
-      openingWindow={openingWindow}
-      openWindow={() => runUiTask(openInWindow())}
-      hideAvatar={hideAvatar}
-      channelUrl={channelUrl}
-      openingPublicChannel={publicChannel.isOpening}
-      openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
-      onAvatarClick={openPicture}
-      effectiveAlias={effectiveAlias}
-      accent={headerAccent}
-    />
+  const header = useMemo(
+    () => (
+      <UserCardHeader
+        target={{
+          platform: target.platform,
+          platformUserId: target.platformUserId,
+          displayName: target.displayName,
+          username: target.username,
+          avatarUrl,
+          badges: target.badges,
+        }}
+        extraBadges={extraBadges}
+        windows={windows}
+        standalone={standalone}
+        openingWindow={openingWindow}
+        openWindow={() => runUiTask(openInWindow())}
+        hideAvatar={hideAvatar}
+        channelUrl={channelUrl}
+        openingPublicChannel={publicChannel.isOpening}
+        openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
+        onAvatarClick={openPicture}
+        effectiveAlias={effectiveAlias}
+        accent={headerAccent}
+      />
+    ),
+    [
+      extraBadges,
+      target.platform,
+      target.platformUserId,
+      target.displayName,
+      target.username,
+      avatarUrl,
+      target.badges,
+      windows,
+      standalone,
+      openingWindow,
+      openInWindow,
+      hideAvatar,
+      channelUrl,
+      publicChannel.isOpening,
+      openPicture,
+      effectiveAlias,
+      headerAccent,
+    ],
   )
 
   return (
