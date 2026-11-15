@@ -66,6 +66,7 @@ import { createStreamerModeService } from '../../services/streamer-mode'
 import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { createTwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
+import { parseTwitchRewardNotice } from '../../services/twitch-reward-notice'
 import { sevenTVService } from '../../seventv'
 import { AccountStore, ChannelStore, SettingsStore } from '../../store'
 import { getClientSecret } from '../../store/client-secret'
@@ -271,6 +272,14 @@ function boot(): DesktopBackend {
               event.eventType === 'stream.online',
             )
           events.emit('twitch_activity', event)
+          if (event.type === 'redemption' && event.channelId === account.platformUserId) {
+            const message = parseTwitchRewardNotice(event)
+            if (message)
+              emitTwitchNotice(message, {
+                home: primary && isHomeTwitchChannel(message.channelId),
+                watched: ownsChannel(message.channelId),
+              })
+          }
         },
         autoMod: (event) => {
           if (event.channelSlug && ownsChannel(event.channelSlug))

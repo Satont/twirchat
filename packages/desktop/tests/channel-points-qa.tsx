@@ -9,6 +9,7 @@ import type {
 } from '@twirchat/shared/twitch-activities'
 import type {
   Account,
+  AppSettings,
   NormalizedChatMessage,
   PlatformStatusInfo,
   WatchedChannel,
@@ -34,6 +35,7 @@ const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { TwitchDeviceDialog } = await import('../src/gpuix/components/TwitchDeviceDialog')
 const { TwitchSessionSettings } = await import('../src/gpuix/components/TwitchSessionSettings')
+const { setLanguage } = await import('../src/gpuix/i18n')
 const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const app = await import('../src/gpuix/state/app')
@@ -49,12 +51,13 @@ const sharp = (await import('sharp')).default
 const session = z.string().min(1).parse(process.env.TWIRCHAT_QA_SESSION_DIR)
 const db = initDb()
 const deviceAuth = process.argv.includes('--device-auth')
+const rewardFeed = process.argv.includes('--reward-feed')
 const title = 'TwirChat'
 const channel: WatchedChannel = {
   id: 'qa-twitch-channel',
   platform: 'twitch',
   channelSlug: 'northstararcade',
-  displayName: 'NorthstarArcade',
+  displayName: rewardFeed ? 'Northstar' : 'NorthstarArcade',
   createdAt: 0,
 }
 const kick: WatchedChannel = { ...channel, id: 'qa-kick-channel', platform: 'kick' }
@@ -134,7 +137,7 @@ let snapshot: TwitchActivitiesSnapshot = {
   polls: [],
   predictions: [],
   pinnedMessage: null,
-  rewards,
+  rewards: rewardFeed ? [] : rewards,
   pointsBalance: 1900,
   errors: {},
 }
@@ -292,10 +295,12 @@ const backend: DesktopBackend = {
 }
 app.settingsStore.set({
   ...DEFAULT_SETTINGS,
+  language: rewardFeed ? 'ru' : 'en',
   theme: 'dark',
   showAvatars: false,
   showTimestamp: true,
 })
+if (rewardFeed) setLanguage('ru')
 app.accountsStore.set([
   primary,
   { ...primary, id: 'kick', platform: 'kick', platformUserId: '4001' },
@@ -353,21 +358,34 @@ const chat: Array<[name: string, color: string, text: string]> = [
   ['CedarFox', '#F7AB7C', 'I have just enough points for that'],
   ['SunlitMoss', '#84CD82', 'one more day before the festival!'],
 ]
-function incoming(id: string, name: string, color: string, text: string, index = chat.length) {
-  const message: NormalizedChatMessage = {
+function fixtureMessage(
+  id: string,
+  name: string,
+  color: string,
+  text: string,
+  index = chat.length,
+): NormalizedChatMessage {
+  return {
     id,
-    channelId: snapshot.channelId,
+    channelId: rewardFeed ? channel.channelSlug : snapshot.channelId,
     platform: 'twitch',
-    author: { id: name.toLowerCase(), displayName: name, color, badges: [] },
+    author: {
+      id: name === primary.displayName ? primary.platformUserId : name.toLowerCase(),
+      displayName: name,
+      color,
+      badges: [],
+    },
     timestamp: new Date(Date.UTC(2026, 10, 15, 19, 30, index * 2)),
     type: 'message',
     text,
     emotes: [],
   }
+}
+function emitChat(message: NormalizedChatMessage): void {
   events.emit('watched_channel_message', { channelId: channel.id, message })
 }
 for (const [index, [name, color, text]] of chat.entries())
-  incoming(`chat-${index}`, name, color, text, index)
+  emitChat(fixtureMessage(`chat-${index}`, name, color, text, index))
 
 const target = createStore<WatchedChannel>(channel)
 let renderer: GpuixRenderer | undefined
@@ -565,6 +583,125 @@ async function checkDeviceAuth(): Promise<void> {
   console.log('Channel Points device authorization QA passed.')
 }
 
+async function checkRewardFeed(): Promise<void> {
+  await until(() => Boolean(renderer), 'reward feed renderer starts')
+  const window = nativeWindow(current())
+  await window.setWindowBounds({ x: 20, y: 20, width: 580, height: 530 })
+  await focusNativeQaWindow(title)
+  await until(() => painted('festival!'), 'the chat timeline finishes loading')
+  app.streamStatusStore.set(new Map())
+  click('chat-input')
+  xdotool('type', 'Nice!')
+  await until(() => painted('Nice!'), 'short chat draft keeps the narrow composer on one line')
+
+  const ordinary = fixtureMessage('plain', 'PixelLark', '#F99BBA', 'Ждём фестиваль!', 15)
+  const unknown = {
+    ...fixtureMessage('unlisted', 'CedarFox', '#F7AB7C', 'Награда из старого списка', 16),
+    metadata: { rewardId: 'retired-reward-id' },
+  }
+  const origin = {
+    ...fixtureMessage('shared-reward', 'JuniperJam', '#E9CB73', 'Ночная мелодия', 17),
+    metadata: { rewardId: 'track', sharedChat: { sourceChannelId: '765' } },
+  }
+  const viewer = {
+    ...fixtureMessage('viewer-reward', 'ViolaSkies', '#C0A1FF', 'Давайте сменим тему', 18),
+    metadata: { rewardId: 'theme' },
+  }
+  const own = {
+    ...fixtureMessage('own-reward', primary.displayName, '#7BC8F4', 'ConcernedApe — Spring', 19),
+    metadata: { rewardId: 'track' },
+  }
+  const textless: NormalizedChatMessage = {
+    ...fixtureMessage('empty-reward', 'KiteString', '#7BD7CF', '', 20),
+    type: 'system',
+    metadata: { rewardId: 'timer', rewardTitle: 'Добавить пять минут', rewardCost: 750 },
+  }
+  for (const message of [ordinary, unknown, origin, viewer, own, own]) emitChat(message)
+  const notice = { message: textless, watchedChannelId: channel.id }
+  events.emit('twitch_chat_notice', notice)
+  events.emit('twitch_chat_notice', notice)
+
+  const notices = [unknown, origin, viewer, own, textless].map(({ id }) => `twitch-notice-${id}`)
+  await until(() => notices.every((id) => !!find(id)), 'all reward rows appear before catalog')
+  assert(find(`twitch-notice-header-${unknown.id}`), 'An unknown reward keeps its icon header.')
+  assert(!painted('Награда за баллы') && !painted('retired-reward-id'))
+  assert(!painted('Запросить песню'), 'The catalog has not arrived yet.')
+  assert(find('chat-author-twitch-plain'), 'The ordinary neighbor stays visible.')
+  assert(!find('twitch-notice-plain'), 'Ordinary messages keep their ordinary row.')
+  assert(painted('KiteString') && painted('Добавить пять минут') && painted('750 баллов'))
+
+  const trackReward: TwitchReward = {
+    id: 'track',
+    title: 'Запросить песню',
+    cost: 300,
+    isEnabled: true,
+    isPaused: false,
+  }
+  publish({
+    rewards: [trackReward, { ...trackReward, id: 'theme', title: 'Сменить тему', cost: 500 }],
+  })
+  events.emit('twitch_activity_snapshot', {
+    channelSlug: 'moonlightarcade',
+    snapshot: {
+      ...snapshot,
+      channelId: '765',
+      channelSlug: 'moonlightarcade',
+      rewards: [{ ...trackReward, title: 'Выбрать трек на бис', cost: 275 }],
+    },
+  })
+  await until(
+    () => painted('Запросить песню') && painted('Сменить тему') && painted('Выбрать трек на бис'),
+    'the live catalog supplies reward titles, including the Shared Chat source',
+  )
+
+  const captured: string[] = []
+  const modes = ['modern', 'compact'] satisfies AppSettings['chatTheme'][]
+  for (const mode of modes) {
+    app.settingsStore.modify((settings) => settings && { ...settings, chatTheme: mode })
+    // eslint-disable-next-line no-await-in-loop
+    await window.setWindowBounds({ x: 20, y: 20, width: 580, height: 530 })
+    // eslint-disable-next-line no-await-in-loop
+    await until(
+      () =>
+        notices.every((id) => !!find(id)) &&
+        painted('трек на бис') &&
+        Boolean(find('chat-timestamp-own-reward')) === (mode === 'compact'),
+      `wide reward timeline switches to ${mode}`,
+    )
+    const text = current().getPaintedText().join(' ').replace(/\s+/gu, ' ')
+    assert(!text.includes('Награда за баллы'), 'Reward headers omit the generic label.')
+    assert.equal(text.split('ConcernedApe').length - 1, 1, 'The own reward message appears once.')
+    assert.equal(text.split('Давайте сменим').length - 1, 1, 'The viewer reward appears once.')
+    assert.equal(text.split('Добавить пять минут').length - 1, 1, 'The Twitch notice appears once.')
+    for (const cost of [300, 500, 275, 750]) assert(text.includes(`${cost} баллов`))
+    assert(text.includes('OrbitLane') && text.includes('ViolaSkies') && text.includes('KiteString'))
+
+    for (const width of [580, 320]) {
+      // eslint-disable-next-line no-await-in-loop
+      await window.setWindowBounds({ x: 20, y: 20, width, height: width === 580 ? 530 : 240 })
+      // eslint-disable-next-line no-await-in-loop
+      await until(
+        () =>
+          getNativeQaWindowGeometry(title).width === width &&
+          painted('KiteString') &&
+          painted('ConcernedApe'),
+        `reward actors visible at ${width}px in ${mode} mode`,
+      )
+      const chatBox = bounds('chat-messages')
+      for (const { id } of [own, textless]) {
+        const box = bounds(`twitch-notice-${id}`)
+        const header = bounds(`twitch-notice-header-${id}`)
+        assert(box.x >= chatBox.x && box.x + box.width <= chatBox.x + chatBox.width + 1)
+        assert(header.x >= box.x && header.x + header.width <= box.x + box.width + 1)
+        assert(box.y + box.height <= chatBox.y + chatBox.height + 1, 'Reward stays above composer.')
+      }
+      // eslint-disable-next-line no-await-in-loop
+      captured.push(await capture(`reward-feed-${mode}-${width}`))
+    }
+  }
+  console.log(JSON.stringify({ screenshots: captured }, null, 2))
+}
+
 const screenshots: string[] = []
 async function checkRewards(): Promise<void> {
   await until(() => Boolean(renderer && find(button)), 'points button loads')
@@ -578,7 +715,7 @@ async function checkRewards(): Promise<void> {
   checkLayout()
   assert(painted('1,900'), 'Picker shows the full balance.')
   screenshots.push(await capture('channel-points-picker'))
-  incoming('live-message', 'OrbitLane', '#7BC8F4', 'The farm chat is moving.')
+  emitChat(fixtureMessage('live-message', 'OrbitLane', '#7BC8F4', 'The farm chat is moving.'))
   await until(() => painted('moving.'), 'live chat updates while picker is open')
 
   click(track)
@@ -676,6 +813,7 @@ async function checkRewards(): Promise<void> {
 try {
   await manager.start()
   if (deviceAuth) await checkDeviceAuth()
+  else if (rewardFeed) await checkRewardFeed()
   else await checkRewards()
 } catch (error) {
   if (renderer) {
