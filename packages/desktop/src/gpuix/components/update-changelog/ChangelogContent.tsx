@@ -25,7 +25,7 @@ export function ChangelogContent({ releaseNotes, viewportRef }: ChangelogContent
         display: 'flex',
         flexDirection: 'column',
         gap: SECTION_GAP,
-        overflowY: 'auto',
+        overflowY: 'scroll',
         overflowX: 'hidden',
         scrollbarWidth: 0,
         scrollbarColor: 'transparent transparent',
