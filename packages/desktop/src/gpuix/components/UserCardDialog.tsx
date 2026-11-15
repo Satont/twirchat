@@ -3,14 +3,14 @@ import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
 import { useGpuixRequired, useWindowSize, motion, type PublicInstance } from '@gpuix/react'
-import { showNotice, homeMessagesStore, watchedMessagesStore } from '@gpuix/state/app'
+import { showNotice } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
 import { logger } from '@twirchat/shared/logger'
-import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Badge } from '@twirchat/shared/types'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -28,6 +28,7 @@ import {
   useUserCardMetadata,
   useUserCardProfile,
   useUserCardPublicChannel,
+  useRetainedBadges,
 } from './user-card-dialog'
 import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
@@ -129,37 +130,9 @@ export function UserCardDialog({
    * when the card is opened from chatters, search, or history.
    *
    * PERF: Limit to last 500 messages to avoid blocking on open with large histories.
+   * Cached per (platform, userId, channelId) with 5min TTL.
    */
-  const retainedBadges = useMemo(() => {
-    const LIMIT = 500
-    const newestFirst: NormalizedChatMessage[] = []
-    // Collect from current channel's messages (if available) for channel-specific badges
-    const currentChannelMessages = target.channelId
-      ? (watchedMessagesStore.get().get(target.channelId) ?? [])
-      : []
-    for (
-      let index = currentChannelMessages.length - 1, count = 0;
-      index >= 0 && count < LIMIT;
-      index -= 1, count += 1
-    ) {
-      const message = currentChannelMessages[index]
-      if (message) newestFirst.push(message)
-    }
-    // Also include home messages for global badges (up to remaining limit)
-    if (newestFirst.length < LIMIT) {
-      const home = homeMessagesStore.get()
-      const remaining = LIMIT - newestFirst.length
-      for (
-        let index = home.length - 1, count = 0;
-        index >= 0 && count < remaining;
-        index -= 1, count += 1
-      ) {
-        const message = home[index]
-        if (message) newestFirst.push(message)
-      }
-    }
-    return collectUserBadges(newestFirst, target.platform, target.platformUserId)
-  }, [target.platform, target.platformUserId, target.channelId])
+  const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
 
   // Fetch Twitch user badge catalog from backend (global + role badges)
   // Used as a lookup to enrich retainedBadges with imageUrl/description
