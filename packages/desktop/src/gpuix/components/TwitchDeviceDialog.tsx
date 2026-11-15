@@ -22,7 +22,8 @@ export function TwitchDeviceDialog() {
   })
 
   if (!prompt) return null
-  const { url, userCode } = prompt
+  const { url, userCode, purpose } = prompt
+  const channelPoints = purpose === 'channel-points'
   const cancel = () => runUiTask(api.cancelTwitchAuth({ userCode, windowScope }))
   const copy = () => runUiTask(api.copyText({ text: userCode }).then(() => setCopiedCode(userCode)))
 
@@ -33,10 +34,18 @@ export function TwitchDeviceDialog() {
         style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}
       >
         <Text style={{ color: theme.text, fontSize: 18, fontWeight: 700 }}>
-          {t('app.platforms.twitchDevice.title')}
+          {t(
+            channelPoints
+              ? 'twitchSessionSettings.connectPoints'
+              : 'app.platforms.twitchDevice.title',
+          )}
         </Text>
         <Text style={{ color: theme.text2, fontSize: 13 }}>
-          {t('app.platforms.twitchDevice.description')}
+          {t(
+            channelPoints
+              ? 'app.platforms.twitchDevice.pointsDescription'
+              : 'app.platforms.twitchDevice.description',
+          )}
         </Text>
         <Text
           testId="twitch-device-code"
