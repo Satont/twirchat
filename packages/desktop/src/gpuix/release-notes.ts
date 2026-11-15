@@ -205,6 +205,7 @@ export function formatReleaseDate(publishedAt: string): string | null {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
+    timeZone: 'UTC',
   })
 }
 
