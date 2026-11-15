@@ -2,7 +2,7 @@ import type { ModerationPlatform } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
-import { useGpuixRequired, useWindowSize, motion, type PublicInstance } from '@gpuix/react'
+import { useGpuixRequired, motion, type PublicInstance } from '@gpuix/react'
 import { showNotice, homeMessagesStore, watchedMessagesStore } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
@@ -58,7 +58,6 @@ export function UserCardDialog({
   const { t } = useT()
   const windows = useDesktopWindows()
   const renderer = useGpuixRequired()
-  const scrollHeader = useWindowSize().height < 500
   const streamer = useStore(streamerModeStore)
   const hideAvatar = streamer.effectiveEnabled && streamer.settings.hideUsercardAvatars
   const avatarKey = `${target.platform}:${target.platformUserId}`
@@ -106,101 +105,88 @@ export function UserCardDialog({
     if (hideAvatar) setAvatarMenuOpen(false)
   }, [hideAvatar])
 
-  const effectiveAlias = currentAlias ?? target.currentAlias
   const [openingWindow, setOpeningWindow] = useState(false)
   const openInWindow = async () => {
     if (!windows) return
     setOpeningWindow(true)
     try {
-      await windows.openUser({ ...target, currentAlias: effectiveAlias })
+      await windows.openUser(target)
       onClose()
+    } catch (e) {
+      console.log(e)
     } finally {
       setOpeningWindow(false)
     }
   }
 
+  const effectiveAlias = currentAlias ?? target.currentAlias
   /**
    * Twitch only reports chat badges with messages, so collect every badge the
    * user displayed in the retained buffers. This also fills in platform badges
    * when the card is opened from chatters, search, or history.
-   *
-   * PERF: Limit to last 500 messages to avoid blocking on open with large histories.
    */
   const retainedBadges = useMemo(() => {
-    const LIMIT = 500
     const newestFirst: NormalizedChatMessage[] = []
     // Collect from current channel's messages (if available) for channel-specific badges
     const currentChannelMessages = target.channelId
       ? (watchedMessagesStore.get().get(target.channelId) ?? [])
       : []
-    for (
-      let index = currentChannelMessages.length - 1, count = 0;
-      index >= 0 && count < LIMIT;
-      index -= 1, count += 1
-    ) {
+    for (let index = currentChannelMessages.length - 1; index >= 0; index -= 1) {
       const message = currentChannelMessages[index]
       if (message) newestFirst.push(message)
     }
-    // Also include home messages for global badges (up to remaining limit)
-    if (newestFirst.length < LIMIT) {
-      const home = homeMessagesStore.get()
-      const remaining = LIMIT - newestFirst.length
-      for (
-        let index = home.length - 1, count = 0;
-        index >= 0 && count < remaining;
-        index -= 1, count += 1
-      ) {
-        const message = home[index]
-        if (message) newestFirst.push(message)
-      }
+    // Also include home messages for global badges
+    const home = homeMessagesStore.get()
+    for (let index = home.length - 1; index >= 0; index -= 1) {
+      const message = home[index]
+      if (message) newestFirst.push(message)
     }
     return collectUserBadges(newestFirst, target.platform, target.platformUserId)
   }, [target.platform, target.platformUserId, target.channelId])
 
   // Fetch Twitch user badge catalog from backend (global + role badges)
   // Used as a lookup to enrich retainedBadges with imageUrl/description
-  const userBadgeCatalogRef = useRef<Map<string, Badge>>(new Map())
+  const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
   useEffect(() => {
     if (target.platform !== 'twitch' || !target.username) return
-    const controller = new AbortController()
+    let cancelled = false
     const url = new URL(`${getBackendUrl()}/api/twitch/user-badges`)
     url.searchParams.set('broadcasterLogin', target.username)
-    fetch(url.toString(), { signal: controller.signal })
+    fetch(url.toString())
       .then((res) => res.json())
       .then((data) => {
-        if (controller.signal.aborted) return
-        const catalog = new Map<string, Badge>()
-        for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
-          if (typeof imageUrl !== 'string') continue
-          const [setId, version] = key.split('/')
-          const meta = data.badgeMetadata?.[key]
-          const badge: Badge = {
-            id: `twitch:${key}`,
-            type: 'twitch',
-            text: meta?.title ?? setId,
-            ...(meta?.description ? { description: meta.description } : {}),
-            imageUrl,
+        if (!cancelled) {
+          const catalog = new Map<string, Badge>()
+          for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
+            if (typeof imageUrl !== 'string') continue
+            const [setId, version] = key.split('/')
+            const meta = data.badgeMetadata?.[key]
+            const badge: Badge = {
+              id: `twitch:${key}`,
+              type: 'twitch',
+              text: meta?.title ?? setId,
+              ...(meta?.description ? { description: meta.description } : {}),
+              imageUrl,
+            }
+            catalog.set(badge.id, badge)
+            // Also index by setId/version for matching with retained badges
+            catalog.set(`${setId}/${version}`, badge)
           }
-          catalog.set(badge.id, badge)
-          // Also index by setId/version for matching with retained badges
-          catalog.set(`${setId}/${version}`, badge)
+          setUserBadgeCatalog(catalog)
         }
-        userBadgeCatalogRef.current = catalog
       })
       .catch((err) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return
         log.warn('Failed to fetch user badge catalog', { error: String(err) })
       })
     return () => {
-      controller.abort()
+      cancelled = true
     }
   }, [target.platform, target.username])
 
   // Enrich retainedBadges with catalog data (imageUrl, description)
   const enrichedRetainedBadges = useMemo(() => {
-    const catalog = userBadgeCatalogRef.current
     return retainedBadges.map((badge) => {
-      const catalogBadge = catalog.get(badge.id)
+      const catalogBadge = userBadgeCatalog.get(badge.id)
       if (catalogBadge) {
         return {
           ...badge,
@@ -210,7 +196,7 @@ export function UserCardDialog({
       }
       return badge
     })
-  }, [retainedBadges])
+  }, [retainedBadges, userBadgeCatalog])
 
   // retainedBadges now contains badges from current channel + home (global)
   // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
@@ -276,31 +262,6 @@ export function UserCardDialog({
       : null,
   })
 
-  const header = (
-    <UserCardHeader
-      target={{
-        platform: target.platform,
-        platformUserId: target.platformUserId,
-        displayName: target.displayName,
-        username: target.username,
-        avatarUrl,
-        badges: target.badges,
-      }}
-      extraBadges={extraBadges}
-      windows={windows}
-      standalone={standalone}
-      openingWindow={openingWindow}
-      openWindow={() => runUiTask(openInWindow())}
-      hideAvatar={hideAvatar}
-      channelUrl={channelUrl}
-      openingPublicChannel={publicChannel.isOpening}
-      openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
-      onAvatarClick={openPicture}
-      effectiveAlias={effectiveAlias}
-      accent={headerAccent}
-    />
-  )
-
   return (
     <Modal
       hotkeyContextId={popupContextId}
@@ -317,7 +278,29 @@ export function UserCardDialog({
           minHeight: 0,
         }}
       >
-        {scrollHeader ? null : header}
+        {/* Keep the header out of the scroll area so long tab content never hides it. */}
+        <UserCardHeader
+          target={{
+            platform: target.platform,
+            platformUserId: target.platformUserId,
+            displayName: target.displayName,
+            username: target.username,
+            avatarUrl,
+            badges: target.badges,
+          }}
+          extraBadges={extraBadges}
+          windows={windows}
+          standalone={standalone}
+          openingWindow={openingWindow}
+          openWindow={() => runUiTask(openInWindow())}
+          hideAvatar={hideAvatar}
+          channelUrl={channelUrl}
+          openingPublicChannel={publicChannel.isOpening}
+          openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
+          onAvatarClick={openPicture}
+          effectiveAlias={effectiveAlias}
+          accent={headerAccent}
+        />
 
         <div
           tabIndex={-1}
@@ -331,7 +314,6 @@ export function UserCardDialog({
             scrollbarWidth: 4,
           }}
         >
-          {scrollHeader ? header : null}
           <div
             style={{
               paddingLeft: 16,
