@@ -31,12 +31,17 @@ const notices = {
   raid: { label: 'chatMessages.notice.raid', icon: 'users', tone: 'raid' },
   reward_gift: { label: 'chatMessages.notice.cheerGift', icon: 'gift', tone: 'bits' },
   cheer: { label: 'chatMessages.notice.cheer', icon: 'sparkle', tone: 'bits' },
+  reward_redemption: {
+    label: null,
+    icon: 'channelPoints',
+    tone: 'subscription',
+  },
   moderation: { label: 'chatMessages.notice.moderation', icon: 'lock', tone: 'moderation' },
   modiversary: { label: 'chatMessages.notice.modiversary', icon: 'calendar', tone: 'subscription' },
   watch_streak: { label: 'chatMessages.notice.watchStreak', icon: 'eye', tone: 'bits' },
 } satisfies Record<
-  Exclude<TwitchNoticeKind, TwitchMembershipNoticeKind> | 'cheer',
-  { label: MessageKey; icon: IconName; tone: keyof typeof palette }
+  Exclude<TwitchNoticeKind, TwitchMembershipNoticeKind> | 'cheer' | 'reward_redemption',
+  { label: MessageKey | null; icon: IconName; tone: keyof typeof palette }
 >
 
 export function TwitchChatNotice({
@@ -52,14 +57,14 @@ export function TwitchChatNotice({
   children,
 }: {
   id: string
-  kind: TwitchNoticeKind | 'cheer'
+  kind: TwitchNoticeKind | 'cheer' | 'reward_redemption'
   fontSize: number
   summary: string
   detail?: string
   time?: string
   chatTheme?: 'modern' | 'compact'
   timestampFormat?: TimestampFormat
-  /** Feed source chip for combined feeds; membership notices keep it on their single line. */
+  /** Feed source chip for notices that display it inline. */
   sourceLabel?: ReactNode
   children?: ReactNode
 }) {
@@ -139,6 +144,7 @@ export function TwitchChatNotice({
       >
         {timestamp}
         <div
+          testId={`twitch-notice-header-${id}`}
           style={{
             display: 'flex',
             flexDirection: 'row',
@@ -162,10 +168,15 @@ export function TwitchChatNotice({
                 minWidth: 0,
               }}
             >
-              <Text style={{ color, fontWeight: 700, fontSize: labelSize }}>{t(label)}</Text>
-              <Text style={{ color: theme.text, fontSize, minWidth: 0, flexShrink: 1 }}>
-                {sanitizeDisplayText(summary)}
-              </Text>
+              {sourceLabel}
+              {label ? (
+                <Text style={{ color, fontWeight: 700, fontSize: labelSize }}>{t(label)}</Text>
+              ) : null}
+              {summary ? (
+                <Text style={{ color: theme.text, fontSize, minWidth: 0, flexShrink: 1 }}>
+                  {sanitizeDisplayText(summary)}
+                </Text>
+              ) : null}
             </div>
             {detail ? (
               <Text style={{ color: theme.text, fontSize, paddingTop: 2, minWidth: 0 }}>

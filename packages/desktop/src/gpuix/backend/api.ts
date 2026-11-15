@@ -12,6 +12,7 @@ import type {
   ShareableDonationProvider,
 } from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
+import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type {
   ChannelStatusRequest,
   ChannelsStatusResponse,
@@ -146,6 +147,7 @@ import type { TwitchActivityRefreshClient } from '../../services/twitch-activity
 import { TwitchChattersError } from '../../services/twitch-chatters'
 import type { TwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
 import { currentTwitchPointsSession } from '../../services/twitch-points-session'
+import { buildTwitchRewardNotice } from '../../services/twitch-reward-notice'
 import {
   getTwitchUserBadges,
   type TwitchUserBadgesRequest,
@@ -1109,13 +1111,45 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return ctx.twitchActivityRefresh.capability(channelSlug)
     },
     executeTwitchActivityAction: async (action, expectedAccountId) => {
-      if (expectedAccountId && AccountStore.findByPlatform('twitch')?.id !== expectedAccountId)
+      const account = AccountStore.findByPlatform('twitch')
+      if (expectedAccountId && account?.id !== expectedAccountId)
         throw new Error(t('runtime.api.activeTwitchAccountChanged'))
-      return twitchActivity(
+      const result = await twitchActivity(
         (credentials) => twitchActivities.execute(credentials, action),
         undefined,
         action.action === 'redeem_reward',
       )
+      if (action.action !== 'redeem_reward' || action.input || !account) return result
+      if (AccountStore.findByPlatform('twitch')?.id !== account.id) return result
+
+      const channelId = normalizeMessageChannel('twitch', action.channelSlug)
+      if (channelId === account.username.toLowerCase()) return result
+      const watchedChannelId = watchedChannelManager.findActiveChannelId('twitch', channelId)
+      if (!watchedChannelId) return result
+
+      const broadcaster = channelAccount('twitch', channelId)
+      if (
+        broadcaster?.username.toLowerCase() === channelId &&
+        ctx.twitchEventSub?.ownsChannel(broadcaster.id, channelId) &&
+        broadcaster.scopes.some(
+          (scope) => scope === 'channel:read:redemptions' || scope === 'channel:manage:redemptions',
+        )
+      )
+        return result
+
+      const message = buildTwitchRewardNotice({
+        id: `local:${crypto.randomUUID()}`,
+        channelId,
+        actor: {
+          id: account.platformUserId,
+          username: account.username,
+          displayName: account.displayName,
+        },
+        timestamp: new Date(),
+        reward: { id: action.rewardId, title: action.rewardTitle, cost: action.cost },
+      })
+      ctx.events.emit('twitch_chat_notice', { message, watchedChannelId })
+      return result
     },
     getTwitchRewardRedemptions: (params) =>
       twitchActivity((credentials) => twitchActivities.redemptions(credentials, params)),
