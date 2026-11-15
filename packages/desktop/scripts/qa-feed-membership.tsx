@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import type { GpuixRenderer } from '@gpuix/native'
 import type { NormalizedChatMessage, TimestampFormat, WatchedChannel } from '@twirchat/shared/types'
+import { z } from 'zod'
 
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 import { buildTwitchSystemMessage } from '../src/services/twitch-system-message'
@@ -145,10 +146,22 @@ interface AutomationNode {
   id: number
   testId?: string
   text?: string
-  children?: AutomationNode[]
+  children: AutomationNode[]
 }
-function nodes(node = JSON.parse(current().getAutomationTree())): AutomationNode[] {
-  return [node, ...(node.children ?? []).flatMap((child: unknown) => nodes(child))]
+const automationNodeSchema: z.ZodType<AutomationNode> = z.lazy(() =>
+  z.object({
+    id: z.number(),
+    testId: z.string().optional(),
+    text: z.string().optional(),
+    children: z.array(automationNodeSchema).default([]),
+  }),
+)
+function automationTree(): AutomationNode {
+  const raw: unknown = JSON.parse(current().getAutomationTree())
+  return automationNodeSchema.parse(raw)
+}
+function nodes(node = automationTree()): AutomationNode[] {
+  return [node, ...node.children.flatMap((child) => nodes(child))]
 }
 function bounds(testId: string): Bounds {
   const node = nodes().find((entry) => entry.testId === testId)
@@ -159,7 +172,7 @@ function bounds(testId: string): Bounds {
 }
 function findText(node: AutomationNode, text: string): AutomationNode | undefined {
   if (node.text?.includes(text)) return node
-  for (const child of node.children ?? []) {
+  for (const child of node.children) {
     const found = findText(child, text)
     if (found) return found
   }
