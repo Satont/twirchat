@@ -16,7 +16,7 @@ export function ChangelogItem({ item, theme }: ChangelogItemProps) {
         paddingLeft: 15,
         paddingBottom: 8,
         borderRadius: 8,
-        backgroundColor: theme.accent.deep02,
+        backgroundColor: theme.accent.tint06,
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, minWidth: 0 }}>

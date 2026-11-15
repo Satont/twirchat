@@ -99,6 +99,7 @@ export const userCard = {
   'userCard.history.loadingOlder': 'Loading older messages…',
   'userCard.history.loadOlder': 'Load older messages',
 
+  'userCard.notes.title': 'Notes',
   'userCard.notes.hint':
     'Private notes saved on this device. Supports Markdown headings, lists, quotes and code blocks.',
   'userCard.notes.edit': 'Edit notes',

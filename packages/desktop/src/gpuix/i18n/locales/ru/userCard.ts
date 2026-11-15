@@ -102,6 +102,7 @@ export const ruUserCard = {
   'userCard.history.loadingOlder': 'Загрузка старых сообщений…',
   'userCard.history.loadOlder': 'Загрузить старые сообщения',
 
+  'userCard.notes.title': 'Заметки',
   'userCard.notes.hint':
     'Личные заметки, сохранённые на этом устройстве. Поддерживаются заголовки Markdown, списки, цитаты и блоки кода.',
   'userCard.notes.edit': 'Редактировать заметки',
