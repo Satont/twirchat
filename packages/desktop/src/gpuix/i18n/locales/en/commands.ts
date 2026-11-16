@@ -72,7 +72,7 @@ export const commands = {
   'commands.release.badge.removed': 'REMOVED',
   'commands.release.badge.docs': 'DOCS',
   'commands.release.badge.other': 'OTHER',
-  'commands.release.dateFormat': '{month} {day}, {year}',
+  'commands.release.dateFormat': 'en-US',
   'commands.release.month.1': 'Jan',
   'commands.release.month.2': 'Feb',
   'commands.release.month.3': 'Mar',

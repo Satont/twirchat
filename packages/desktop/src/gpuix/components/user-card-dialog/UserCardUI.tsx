@@ -79,7 +79,11 @@ export function SectionHeader({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>{title}</Text>
           {hint ? (
-            <Text style={{ fontSize: 11, lineHeight: 16, color: theme.text2 }}>{hint}</Text>
+            <Text
+              style={{ fontSize: 11, lineHeight: 16, color: theme.text2, whiteSpace: 'normal' }}
+            >
+              {hint}
+            </Text>
           ) : null}
         </div>
       </div>

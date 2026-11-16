@@ -7,7 +7,7 @@ import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
 
-import { UserCardPanel } from './UserCardUI'
+import { SectionHeader, UserCardPanel } from './UserCardUI'
 
 export function UserNotes({ target }: { target: UserCardTarget }) {
   const backend = useBackend()
@@ -56,27 +56,13 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
     }
   }
   return (
-    <UserCardPanel style={{}}>
+    <UserCardPanel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-          }}
-        >
-          <div
-            style={{
-              flexGrow: 1,
-              whiteSpace: 'normal',
-              minWidth: 0,
-              fontSize: 18,
-              fontWeight: 700,
-              color: theme.text2,
-            }}
-          >
-            {t('userCard.notes.hint')}
-          </div>
-        </div>
+        <SectionHeader
+          icon="pencil"
+          title={t('userCard.notes.title')}
+          hint={t('userCard.notes.hint')}
+        />
 
         <div
           style={{
@@ -88,7 +74,17 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
             alignItems: 'center',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              backgroundColor: theme.accent.tint20,
+              padding: 6,
+              borderRadius: 6,
+              gap: 6,
+              flexWrap: 'wrap',
+            }}
+          >
             <ActionButton onClick={() => setPreview(!preview)}>
               {preview ? t('userCard.notes.edit') : t('userCard.notes.preview')}
             </ActionButton>
@@ -156,6 +152,8 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
               gap: 6,
               padding: 12,
               backgroundColor: theme.surface2,
+              borderWidth: 1,
+              borderColor: theme.accent.tint20,
               borderRadius: 6,
             }}
           >

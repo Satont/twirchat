@@ -3,14 +3,14 @@ import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
 import { useGpuixRequired, useWindowSize, motion, type PublicInstance } from '@gpuix/react'
-import { showNotice, homeMessagesStore, watchedMessagesStore } from '@gpuix/state/app'
+import { showNotice } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
 import { logger } from '@twirchat/shared/logger'
-import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Badge } from '@twirchat/shared/types'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -28,12 +28,13 @@ import {
   useUserCardMetadata,
   useUserCardProfile,
   useUserCardPublicChannel,
+  useRetainedBadges,
 } from './user-card-dialog'
 import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
 import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
-import { collectUserBadges, mergeBadges } from './user-card-dialog/utils'
+import { mergeBadges } from './user-card-dialog/utils'
 import {
   accountAgeText,
   followAgeText,
@@ -76,11 +77,15 @@ export function UserCardDialog({
     hideAvatar,
     onAvatarChange: updateProfileAvatar,
   })
-  const headerAccent = userCardHeaderAccent(
-    profileState.profile?.color,
-    target.color,
-    profileState.cosmetics,
-    profileState.paintsEnabled,
+  const headerAccent = useMemo(
+    () =>
+      userCardHeaderAccent(
+        profileState.profile?.color,
+        target.color,
+        profileState.cosmetics,
+        profileState.paintsEnabled,
+      ),
+    [profileState.profile?.color, target.color, profileState.cosmetics, profileState.paintsEnabled],
   )
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [localPinned, setLocalPinned] = useState(false)
@@ -96,19 +101,19 @@ export function UserCardDialog({
   const [aliasFocused, setAliasFocused] = useState(false)
   const aliasFocus = useTextInputFocusTracking(setAliasFocused)
 
-  const openPicture = () => {
+  const openPicture = useCallback(() => {
     if (!hideAvatar && avatarUrl) {
       renderer.blur?.()
       setAvatarMenuOpen(true)
     }
-  }
+  }, [hideAvatar, avatarUrl, renderer])
   useEffect(() => {
     if (hideAvatar) setAvatarMenuOpen(false)
   }, [hideAvatar])
 
   const effectiveAlias = currentAlias ?? target.currentAlias
   const [openingWindow, setOpeningWindow] = useState(false)
-  const openInWindow = async () => {
+  const openInWindow = useCallback(async () => {
     if (!windows) return
     setOpeningWindow(true)
     try {
@@ -117,68 +122,54 @@ export function UserCardDialog({
     } finally {
       setOpeningWindow(false)
     }
-  }
+  }, [windows, target, effectiveAlias, onClose])
 
   /**
    * Twitch only reports chat badges with messages, so collect every badge the
    * user displayed in the retained buffers. This also fills in platform badges
    * when the card is opened from chatters, search, or history.
+   *
+   * PERF: Limit to last 500 messages to avoid blocking on open with large histories.
+   * Cached per (platform, userId, channelId) with 5min TTL.
    */
-  const retainedBadges = useMemo(() => {
-    const newestFirst: NormalizedChatMessage[] = []
-    // Collect from current channel's messages (if available) for channel-specific badges
-    const currentChannelMessages = target.channelId
-      ? (watchedMessagesStore.get().get(target.channelId) ?? [])
-      : []
-    for (let index = currentChannelMessages.length - 1; index >= 0; index -= 1) {
-      const message = currentChannelMessages[index]
-      if (message) newestFirst.push(message)
-    }
-    // Also include home messages for global badges
-    const home = homeMessagesStore.get()
-    for (let index = home.length - 1; index >= 0; index -= 1) {
-      const message = home[index]
-      if (message) newestFirst.push(message)
-    }
-    return collectUserBadges(newestFirst, target.platform, target.platformUserId)
-  }, [target.platform, target.platformUserId, target.channelId])
+  const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
 
   // Fetch Twitch user badge catalog from backend (global + role badges)
   // Used as a lookup to enrich retainedBadges with imageUrl/description
   const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
   useEffect(() => {
     if (target.platform !== 'twitch' || !target.username) return
-    let cancelled = false
+    const controller = new AbortController()
     const url = new URL(`${getBackendUrl()}/api/twitch/user-badges`)
     url.searchParams.set('broadcasterLogin', target.username)
-    fetch(url.toString())
+    fetch(url.toString(), { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) {
-          const catalog = new Map<string, Badge>()
-          for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
-            if (typeof imageUrl !== 'string') continue
-            const [setId, version] = key.split('/')
-            const meta = data.badgeMetadata?.[key]
-            const badge: Badge = {
-              id: `twitch:${key}`,
-              type: 'twitch',
-              text: meta?.title ?? setId,
-              ...(meta?.description ? { description: meta.description } : {}),
-              imageUrl,
-            }
-            catalog.set(badge.id, badge)
-            // Also index by setId/version for matching with retained badges
-            catalog.set(`${setId}/${version}`, badge)
+        if (controller.signal.aborted) return
+        const catalog = new Map<string, Badge>()
+        for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
+          if (typeof imageUrl !== 'string') continue
+          const [setId, version] = key.split('/')
+          const meta = data.badgeMetadata?.[key]
+          const badge: Badge = {
+            id: `twitch:${key}`,
+            type: 'twitch',
+            text: meta?.title ?? setId,
+            ...(meta?.description ? { description: meta.description } : {}),
+            imageUrl,
           }
-          setUserBadgeCatalog(catalog)
+          catalog.set(badge.id, badge)
+          // Also index by setId/version for matching with retained badges
+          catalog.set(`${setId}/${version}`, badge)
         }
+        setUserBadgeCatalog(catalog)
       })
       .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
         log.warn('Failed to fetch user badge catalog', { error: String(err) })
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [target.platform, target.username])
 
@@ -199,11 +190,21 @@ export function UserCardDialog({
 
   // retainedBadges now contains badges from current channel + home (global)
   // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
-  const extraBadges = mergeBadges(
-    enrichedRetainedBadges,
-    target.badges,
-    profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
-    profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
+  const extraBadges = useMemo(
+    () =>
+      mergeBadges(
+        enrichedRetainedBadges,
+        target.badges,
+        profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
+        profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
+      ),
+    [
+      enrichedRetainedBadges,
+      target.badges,
+      profileState.badgesEnabled,
+      profileState.cosmetics?.badges,
+      profileState.cosmetics?.inventoryBadges,
+    ],
   )
   const channelUrl = target.username
     ? publicChannelURL(target.platform, target.username)
@@ -218,30 +219,34 @@ export function UserCardDialog({
 
   const [tab, setTab] = useState<UserCardTab>('profile')
 
-  const metadataItems: MetadataItem[] = metadata.metadata
-    ? [
-        {
-          label: t('userCard.metadata.accountAge'),
-          value: accountAgeText(metadata.metadata),
-          icon: 'calendar',
-        },
-        {
-          label: t('userCard.metadata.followAge'),
-          value: followAgeText(metadata.metadata),
-          icon: 'users',
-        },
-        {
-          label: t('userCard.metadata.subscriptionDuration'),
-          value: subscriptionDurationText(metadata.metadata),
-          icon: 'gift',
-        },
-        {
-          label: t('userCard.metadata.subAge'),
-          value: subAgeText(metadata.metadata),
-          icon: 'clock',
-        },
-      ]
-    : []
+  const metadataItems = useMemo<MetadataItem[]>(
+    () =>
+      metadata.metadata
+        ? [
+            {
+              label: t('userCard.metadata.accountAge'),
+              value: accountAgeText(metadata.metadata),
+              icon: 'calendar',
+            },
+            {
+              label: t('userCard.metadata.followAge'),
+              value: followAgeText(metadata.metadata),
+              icon: 'users',
+            },
+            {
+              label: t('userCard.metadata.subscriptionDuration'),
+              value: subscriptionDurationText(metadata.metadata),
+              icon: 'gift',
+            },
+            {
+              label: t('userCard.metadata.subAge'),
+              value: subAgeText(metadata.metadata),
+              icon: 'clock',
+            },
+          ]
+        : [],
+    [metadata.metadata, t],
+  )
 
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,
@@ -261,29 +266,50 @@ export function UserCardDialog({
       : null,
   })
 
-  const header = (
-    <UserCardHeader
-      target={{
-        platform: target.platform,
-        platformUserId: target.platformUserId,
-        displayName: target.displayName,
-        username: target.username,
-        avatarUrl,
-        badges: target.badges,
-      }}
-      extraBadges={extraBadges}
-      windows={windows}
-      standalone={standalone}
-      openingWindow={openingWindow}
-      openWindow={() => runUiTask(openInWindow())}
-      hideAvatar={hideAvatar}
-      channelUrl={channelUrl}
-      openingPublicChannel={publicChannel.isOpening}
-      openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
-      onAvatarClick={openPicture}
-      effectiveAlias={effectiveAlias}
-      accent={headerAccent}
-    />
+  const header = useMemo(
+    () => (
+      <UserCardHeader
+        target={{
+          platform: target.platform,
+          platformUserId: target.platformUserId,
+          displayName: target.displayName,
+          username: target.username,
+          avatarUrl,
+          badges: target.badges,
+        }}
+        extraBadges={extraBadges}
+        windows={windows}
+        standalone={standalone}
+        openingWindow={openingWindow}
+        openWindow={() => runUiTask(openInWindow())}
+        hideAvatar={hideAvatar}
+        channelUrl={channelUrl}
+        openingPublicChannel={publicChannel.isOpening}
+        openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
+        onAvatarClick={openPicture}
+        effectiveAlias={effectiveAlias}
+        accent={headerAccent}
+      />
+    ),
+    [
+      extraBadges,
+      target.platform,
+      target.platformUserId,
+      target.displayName,
+      target.username,
+      avatarUrl,
+      target.badges,
+      windows,
+      standalone,
+      openingWindow,
+      openInWindow,
+      hideAvatar,
+      channelUrl,
+      publicChannel,
+      openPicture,
+      effectiveAlias,
+      headerAccent,
+    ],
   )
 
   return (
