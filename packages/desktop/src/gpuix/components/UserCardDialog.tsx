@@ -64,8 +64,9 @@ export const UserCardDialog = memo(function UserCardDialog({
 
   // Initialize scrollHeaderRef once on mount - avoids useWindowSize re-renders on every resize
   useEffect(() => {
+    if (typeof window === 'undefined') return
     const update = () => {
-      scrollHeaderRef.current = typeof window !== 'undefined' && window.innerHeight < 500
+      scrollHeaderRef.current = window.innerHeight < 500
     }
     update()
     window.addEventListener('resize', update)
