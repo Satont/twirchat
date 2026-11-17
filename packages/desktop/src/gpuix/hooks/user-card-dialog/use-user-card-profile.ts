@@ -172,6 +172,15 @@ export function useUserCardProfile({
     await copyText(resolvedAvatarUrl)
   }, [copyText, resolvedAvatarUrl])
 
+  const openAvatarUrl = useCallback(async (): Promise<void> => {
+    if (!resolvedAvatarUrl) return
+    try {
+      await backend.api.openExternalUrl({ url: resolvedAvatarUrl })
+    } catch (cause) {
+      setError(errorText(cause))
+    }
+  }, [backend, resolvedAvatarUrl])
+
   const openSevenTvProfile = useCallback(async (): Promise<void> => {
     const sevenTvUserId = cosmetics?.sevenTvUserId
     if (!sevenTvUserId) return
@@ -193,6 +202,7 @@ export function useUserCardProfile({
       error,
       copyText,
       copyAvatarUrl,
+      openAvatarUrl,
       openSevenTvProfile,
     }),
     [
@@ -205,6 +215,7 @@ export function useUserCardProfile({
       error,
       copyText,
       copyAvatarUrl,
+      openAvatarUrl,
       openSevenTvProfile,
     ],
   )

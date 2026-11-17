@@ -149,7 +149,7 @@ import {
   type TwitchUserBadgesRequest,
 } from '../../services/twitch-user-badges'
 import { loadTwitchUserCardDetails } from '../../services/twitch-user-card'
-import { enrichTwitchUserProfile } from '../../services/twitch-user-profile'
+import { enrichTwitchUserProfile, getTwitchUserBanner } from '../../services/twitch-user-profile'
 import type { TwitchUserCredentials } from '../../services/twitch-users'
 import { getTwitchViewerList, type TwitchViewerRole } from '../../services/twitch-viewer-list'
 import { updateTwitchStream } from '../../services/update-stream'
@@ -1392,9 +1392,15 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (!response.ok)
         throw await backendFailure(t('runtime.api.action.loadUserProfile'), response)
       const profile = userProfileSnapshotSchema.parse(await response.json())
-      return accessToken
-        ? enrichTwitchUserProfile(request, profile, accessToken).catch(() => profile)
-        : profile
+      const [enriched, bannerUrl] = await Promise.all([
+        accessToken
+          ? enrichTwitchUserProfile(request, profile, accessToken).catch(() => profile)
+          : Promise.resolve(profile),
+        platform === 'twitch'
+          ? getTwitchUserBanner(profile.login ?? params.username).catch(() => undefined)
+          : Promise.resolve(undefined),
+      ])
+      return bannerUrl ? { ...enriched, bannerUrl } : enriched
     },
     getTwitchUserBadges: (params) => getTwitchUserBadges(params),
     getUserNotes: async (params) => getUserNotes(params),

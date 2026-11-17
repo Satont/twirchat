@@ -40,6 +40,17 @@ function headerGradient(
   }
 }
 
+function bannerOverlay(): LinearGradientBackground {
+  return {
+    type: 'linear-gradient',
+    angle: 90,
+    stops: [
+      { color: 'rgba(0, 0, 0, 0.72)', position: 0 },
+      { color: 'rgba(0, 0, 0, 0.46)', position: 1 },
+    ],
+  }
+}
+
 function AvatarFallback({
   name,
   size,
@@ -158,10 +169,10 @@ const UserCardBadges = memo(function UserCardBadges({
 export function UserCardHeader({
   target,
   hideAvatar,
+  bannerUrl,
   channelUrl,
   openingPublicChannel,
   openPublicChannel,
-  onAvatarClick,
   effectiveAlias,
   accent,
   extraBadges,
@@ -170,15 +181,38 @@ export function UserCardHeader({
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
   const userBadges = mergeBadges(target.badges, extraBadges)
-  const headerText = theme.isLight ? theme.text : '#ffffff'
-  const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
-  const headerBorder = theme.isLight
-    ? withAlpha(theme.accent.deep, 0.18)
-    : withAlpha('#ffffff', 0.14)
-  const headerButtonBg = theme.isLight ? withAlpha('#ffffff', 0.6) : withAlpha('#000000', 0.2)
-  const headerButtonHover = theme.isLight ? withAlpha('#ffffff', 0.82) : withAlpha('#000000', 0.3)
-  const avatarBorder = theme.isLight ? withAlpha('#ffffff', 0.85) : withAlpha('#ffffff', 0.6)
-  const avatarBackground = theme.isLight ? withAlpha('#ffffff', 0.55) : withAlpha('#000000', 0.24)
+  const showBanner = !hideAvatar && Boolean(bannerUrl)
+  const headerText = showBanner || !theme.isLight ? '#ffffff' : theme.text
+  const headerMuted = showBanner
+    ? 'rgba(255, 255, 255, 0.86)'
+    : theme.isLight
+      ? withAlpha(theme.text, 0.72)
+      : 'rgba(255, 255, 255, 0.88)'
+  const headerBorder = showBanner
+    ? withAlpha('#ffffff', 0.16)
+    : theme.isLight
+      ? withAlpha(theme.accent.deep, 0.18)
+      : withAlpha('#ffffff', 0.14)
+  const headerButtonBg = showBanner
+    ? withAlpha('#000000', 0.34)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.6)
+      : withAlpha('#000000', 0.2)
+  const headerButtonHover = showBanner
+    ? withAlpha('#000000', 0.48)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.82)
+      : withAlpha('#000000', 0.3)
+  const avatarBorder = showBanner
+    ? withAlpha('#ffffff', 0.6)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.85)
+      : withAlpha('#ffffff', 0.6)
+  const avatarBackground = showBanner
+    ? withAlpha('#000000', 0.28)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.55)
+      : withAlpha('#000000', 0.24)
   const avatarGlow = accent?.from ?? theme.accent.primary
   const showAvatar = !hideAvatar && Boolean(target.avatarUrl)
 
@@ -211,6 +245,34 @@ export function UserCardHeader({
         },
       }}
     >
+      {showBanner ? (
+        <>
+          <RemoteImage
+            url={bannerUrl}
+            thumbnailSize={800}
+            objectFit="cover"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              background: bannerOverlay(),
+              pointerEvents: 'none',
+            }}
+          />
+        </>
+      ) : null}
       {/* Subtle background glows - reduced size and opacity */}
       <div
         style={{
@@ -254,14 +316,6 @@ export function UserCardHeader({
       >
         <div
           testId="user-card-avatar"
-          tabIndex={showAvatar ? 0 : undefined}
-          onClick={onAvatarClick}
-          onKeyDown={(event) => {
-            if (event.key === 'enter' || event.key === 'space') {
-              event.preventDefault()
-              onAvatarClick()
-            }
-          }}
           style={{
             flexShrink: 0,
             width: 70,
@@ -271,7 +325,6 @@ export function UserCardHeader({
             borderColor: avatarBorder,
             backgroundColor: avatarBackground,
             overflow: 'hidden',
-            cursor: showAvatar ? 'pointer' : 'default',
             boxShadow: {
               offsetX: 0,
               offsetY: 0,
@@ -405,7 +458,7 @@ export function UserCardHeader({
             backgroundColor={headerButtonBg}
             hoverBackgroundColor={headerButtonHover}
             borderColor={headerBorder}
-            color={theme.text2}
+            color={showBanner ? '#ffffff' : theme.text2}
           />
         </div>
       ) : null}

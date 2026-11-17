@@ -30,7 +30,6 @@ import {
   useRetainedBadges,
 } from './user-card-dialog'
 import { UserChatHistoryPanel } from './user-card-dialog/history-panel'
-import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
 import { UserNotes } from './user-card-dialog/UserNotes'
 import { mergeBadges } from './user-card-dialog/utils'
@@ -96,7 +95,6 @@ export const UserCardDialog = memo(function UserCardDialog({
       ),
     [profileState.profile?.color, target.color, profileState.cosmetics, profileState.paintsEnabled],
   )
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [localPinned, setLocalPinned] = useState(false)
   const nativeUserWindow = standalone && windows?.descriptor.kind === 'user'
   const pinned = nativeUserWindow ? windows.pinned : localPinned
@@ -108,20 +106,6 @@ export const UserCardDialog = memo(function UserCardDialog({
   const moderation = useUserCardModeration(target)
 
   const effectiveAlias = useUserCardAliasValue(target, currentAlias)
-
-  const openPictureRef = useRef<() => void>(() => {})
-
-  const openPicture = useCallback(() => {
-    if (!hideAvatar && avatarUrl) {
-      renderer.blur?.()
-      setAvatarMenuOpen(true)
-    }
-  }, [hideAvatar, avatarUrl, renderer])
-  useEffect(() => {
-    if (hideAvatar) setAvatarMenuOpen(false)
-  }, [hideAvatar])
-
-  openPictureRef.current = openPicture
 
   const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
 
@@ -308,7 +292,6 @@ export const UserCardDialog = memo(function UserCardDialog({
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,
     pin: togglePin,
-    openProfilePictureMenu: !hideAvatar && avatarUrl ? openPicture : null,
     scrollPage:
       tab === 'history'
         ? ([direction]) => {
@@ -336,10 +319,10 @@ export const UserCardDialog = memo(function UserCardDialog({
         }}
         extraBadges={extraBadgesRef.current}
         hideAvatar={hideAvatar}
+        bannerUrl={profileState.profile?.bannerUrl}
         channelUrl={channelUrl}
         openingPublicChannel={openingPublicChannel}
         openPublicChannel={() => runUiTask(openPublicChannel())}
-        onAvatarClick={openPictureRef.current}
         effectiveAlias={effectiveAlias}
         accent={headerAccent}
       />
@@ -353,10 +336,10 @@ export const UserCardDialog = memo(function UserCardDialog({
       avatarUrl,
       target.badges,
       hideAvatar,
+      profileState.profile?.bannerUrl,
       channelUrl,
       openingPublicChannel,
       openPublicChannel,
-      openPictureRef,
       effectiveAlias,
       headerAccent,
     ],
@@ -459,9 +442,6 @@ export const UserCardDialog = memo(function UserCardDialog({
           </div>
         </div>
       </div>
-      {avatarMenuOpen && !hideAvatar && avatarUrl ? (
-        <ProfilePictureMenu url={avatarUrl} onClose={() => setAvatarMenuOpen(false)} />
-      ) : null}
     </Modal>
   )
 })

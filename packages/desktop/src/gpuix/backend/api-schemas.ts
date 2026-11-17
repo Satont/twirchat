@@ -79,6 +79,7 @@ export const userProfileSnapshotSchema = z.toZod<UserProfileSnapshot>()(
     login: z.string().optional(),
     displayName: z.string().optional(),
     avatarUrl: z.string().optional(),
+    bannerUrl: z.string().optional(),
     description: z.string().optional(),
     color: z.string().optional(),
     broadcasterType: z.string().optional(),

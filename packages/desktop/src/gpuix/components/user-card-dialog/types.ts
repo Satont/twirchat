@@ -32,10 +32,10 @@ export interface UserCardHeaderTarget {
 export interface UserCardHeaderProps {
   target: UserCardHeaderTarget
   hideAvatar: boolean
+  bannerUrl?: string
   channelUrl: string | undefined
   openingPublicChannel: boolean
   openPublicChannel: () => void
-  onAvatarClick: () => void
   effectiveAlias?: string
   accent?: UserCardHeaderAccent
   extraBadges?: BadgeData[]

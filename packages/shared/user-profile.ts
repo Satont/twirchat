@@ -12,6 +12,7 @@ export interface UserProfileSnapshot {
   login?: string
   displayName?: string
   avatarUrl?: string
+  bannerUrl?: string
   description?: string
   color?: string
   broadcasterType?: string

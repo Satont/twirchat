@@ -14,6 +14,7 @@ export const ProfileHeading = memo(function ProfileHeading({
   loading,
   showCopyAvatar,
   copyAvatarUrl,
+  openAvatarUrl,
 }: ProfileHeadingProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -77,10 +78,23 @@ export const ProfileHeading = memo(function ProfileHeading({
           </>
         )}
       </div>
+
       {showCopyAvatar ? (
-        <GhostButton icon="copy" onClick={() => runUiTask(copyAvatarUrl())}>
-          {t('userCard.profile.copyAvatar')}
-        </GhostButton>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <GhostButton icon="externalLink" onClick={() => runUiTask(openAvatarUrl())}>
+            {t('userCard.picture.openFull')}
+          </GhostButton>
+          <GhostButton icon="copy" onClick={() => runUiTask(copyAvatarUrl())}>
+            {t('userCard.profile.copyAvatar')}
+          </GhostButton>
+        </div>
       ) : null}
     </div>
   )

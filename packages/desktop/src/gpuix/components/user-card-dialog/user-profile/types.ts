@@ -29,6 +29,7 @@ export interface ProfileHeadingProps {
   loading: boolean
   showCopyAvatar: boolean
   copyAvatarUrl: () => Promise<void>
+  openAvatarUrl: () => Promise<void>
 }
 
 export interface ProfileDescriptionBlockProps {

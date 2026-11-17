@@ -24,6 +24,7 @@ export const UserProfileView = memo(function UserProfileView({
     error,
     copyText,
     copyAvatarUrl,
+    openAvatarUrl,
     openSevenTvProfile,
   } = state
 
@@ -65,6 +66,7 @@ export const UserProfileView = memo(function UserProfileView({
             loading={loading}
             showCopyAvatar={Boolean(avatarUrl)}
             copyAvatarUrl={copyAvatarUrl}
+            openAvatarUrl={openAvatarUrl}
           />
           <ProfileDescriptionBlock description={profile?.description} loading={loading} />
           <ProfileDetails profile={profile} loading={loading} error={error} copyText={copyText} />
