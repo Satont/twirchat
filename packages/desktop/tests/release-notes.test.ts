@@ -37,8 +37,8 @@ Backend image: \`ghcr.io/satont/twirchat/backend@sha256:07a1\`
       {
         kind: 'other',
         items: [
-          { label: 'Iteming one', description: 'Item one' },
-          { label: 'Iteming two', description: 'Item two' },
+          { label: 'Item one', description: 'Item one' },
+          { label: 'Item two', description: 'Item two' },
         ],
       },
     ])

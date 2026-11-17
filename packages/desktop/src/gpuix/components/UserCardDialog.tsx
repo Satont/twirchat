@@ -56,7 +56,7 @@ export function UserCardDialog({
   const { t } = useT()
   const windows = useDesktopWindows()
   const renderer = useGpuixRequired()
-  const scrollHeader = useWindowSize().height < 500
+  const windowSize = useWindowSize()
   const streamer = useStore(streamerModeStore)
   const hideAvatar = streamer.effectiveEnabled && streamer.settings.hideUsercardAvatars
   const avatarKey = `${target.platform}:${target.platformUserId}`
@@ -298,7 +298,7 @@ export function UserCardDialog({
           minHeight: 0,
         }}
       >
-        {scrollHeader ? null : header}
+        {windowSize.height < 500 ? null : header}
 
         <div
           tabIndex={-1}
@@ -312,7 +312,7 @@ export function UserCardDialog({
             scrollbarWidth: 4,
           }}
         >
-          {scrollHeader ? header : null}
+          {windowSize.height < 500 ? header : null}
           <div
             style={{
               paddingLeft: 16,

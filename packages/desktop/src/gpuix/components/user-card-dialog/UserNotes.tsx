@@ -5,6 +5,7 @@ import { Text } from '@gpuix/components/ui/Text'
 import { parseNoteMarkdown } from '@gpuix/components/user-card/note-markdown'
 import { useUserCardAlias } from '@gpuix/hooks/user-card-dialog/use-user-card-alias'
 import { useT } from '@gpuix/i18n'
+import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
@@ -75,6 +76,7 @@ export function UserNotes({
     handleSaveAlias,
     handleRemoveAlias,
   } = useUserCardAlias({ target, currentAlias, onClose })
+  const aliasFocus = useTextInputFocusTracking()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -106,6 +108,7 @@ export function UserNotes({
                   if (event.key === 'escape') onClose?.()
                 }}
                 theme={{ caret: theme.link }}
+                {...aliasFocus}
                 style={{
                   flexGrow: 8,
                   flexBasis: 180,
