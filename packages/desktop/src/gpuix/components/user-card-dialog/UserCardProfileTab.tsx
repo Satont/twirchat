@@ -1,10 +1,11 @@
 import type { UserCardProfileState } from '@gpuix/hooks/user-card-dialog/use-user-card-profile'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
+import { memo } from 'react'
 
+import { UserCardMetadataSection } from './metadata-section'
 import { TwitchBadgeCollection } from './TwitchBadgeCollection'
 import type { MetadataItem } from './types'
-import { UserCardMetadataSection } from './UserCardMetadataSection'
-import { UserProfileView } from './UserProfile'
+import { UserProfileView } from './user-profile'
 
 interface UserCardProfileTabProps {
   target: UserCardTarget
@@ -13,11 +14,11 @@ interface UserCardProfileTabProps {
   supportedByCard: boolean
   metadataLoading: boolean
   metadataError: string | null
-  metadata: MetadataItem[] | null
+  metadata: MetadataItem[]
   reloadMetadata: () => void
 }
 
-export function UserCardProfileTab({
+export const UserCardProfileTab = memo(function UserCardProfileTab({
   target,
   hideAvatar,
   profileState,
@@ -37,12 +38,12 @@ export function UserCardProfileTab({
       <UserProfileView target={target} hideAvatar={hideAvatar} state={profileState} />
       {platform === 'twitch' && username ? (
         <TwitchBadgeCollection
-          key={JSON.stringify([username, channelSlug, channelId])}
           username={username}
           channelId={channelId}
           channelSlug={channelSlug}
         />
       ) : null}
+
       <UserCardMetadataSection
         supportedByCard={supportedByCard}
         metadataLoading={metadataLoading}
@@ -52,4 +53,4 @@ export function UserCardProfileTab({
       />
     </div>
   )
-}
+})

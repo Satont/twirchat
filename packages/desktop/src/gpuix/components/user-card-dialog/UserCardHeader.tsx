@@ -1,3 +1,4 @@
+import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
@@ -6,7 +7,9 @@ import { useT } from '@gpuix/i18n'
 import type { LinearGradientBackground } from '@gpuix/react'
 import { platformColor, withAlpha, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
+import { memo, useMemo } from 'react'
 
+import { Badge } from './Badge'
 import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
 import { GhostButton, HeaderPill as HeaderPillUI } from './UserCardUI'
 import { formatDisplayUsername, initials, mergeBadges } from './utils'
@@ -66,6 +69,34 @@ function AvatarFallback({
     </div>
   )
 }
+
+const UserCardBadges = memo(function UserCardBadges({
+  badges,
+  size = 20,
+}: {
+  badges: ReturnType<typeof mergeBadges>
+  size?: number
+}) {
+  const theme = useTheme()
+  const headerText = theme.isLight ? theme.text : '#ffffff'
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
+        alignItems: 'center',
+        minWidth: 0,
+      }}
+    >
+      {badges.map((badge, index) => (
+        <Badge key={`${badge.type}:${badge.id}:${index}`} badge={badge} size={size} />
+      ))}
+    </div>
+  )
+})
 
 export function UserCardHeader({
   target,
@@ -252,42 +283,7 @@ export function UserCardHeader({
               >
                 {formatDisplayUsername(target.displayName)}
               </Text>
-              {userBadges.map((badge, index) => (
-                <div
-                  key={`${badge.type}:${badge.id}:${index}`}
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 5,
-                    overflow: 'hidden',
-                    flexShrink: 0,
-                  }}
-                >
-                  {badge.imageUrl ? (
-                    <RemoteImage
-                      url={badge.imageUrl}
-                      objectFit="cover"
-                      style={{ width: 18, height: 18 }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: 18,
-                        height: 18,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        backgroundColor: withAlpha('#000000', 0.2),
-                        color: headerText,
-                      }}
-                    >
-                      {badge.text[0]?.toUpperCase() ?? '?'}
-                    </div>
-                  )}
-                </div>
-              ))}
+              <UserCardBadges badges={userBadges} size={20} />
             </div>
             <div
               style={{
@@ -366,25 +362,6 @@ export function UserCardHeader({
               }}
             >
               {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-            </GhostButton>
-          ) : null}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {windows && !standalone ? (
-            <GhostButton
-              disabled={openingWindow}
-              onClick={openWindow}
-              icon="externalLink"
-              style={{
-                backgroundColor: headerButtonBg,
-                borderColor: headerBorder,
-                borderRadius: 10,
-                paddingLeft: 14,
-                paddingRight: 14,
-                hover: { backgroundColor: headerButtonHover },
-              }}
-            >
-              {openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
             </GhostButton>
           ) : null}
         </div>

@@ -1015,6 +1015,7 @@ export function ChatView({
     [paneKey],
   )
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
+  const closeUserCard = useCallback(() => setUserCardTarget(null), [])
   const [chattersOpen, setChattersOpen] = useState(false)
   const [chatSettingsOpen, setChatSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1530,6 +1531,18 @@ export function ChatView({
   useHotkeyRoute(
     [splitContextId, 'window'],
     activePane?.tabId === layoutTabId && activePane.paneId === paneIdentity,
+  )
+
+  const currentAlias = useMemo(
+    () =>
+      userCardTarget
+        ? (aliases.find(
+            (a) =>
+              a.platform === userCardTarget.platform &&
+              a.platformUserId === userCardTarget.platformUserId,
+          )?.alias ?? userCardTarget.currentAlias)
+        : undefined,
+    [aliases, userCardTarget],
   )
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -2657,14 +2670,8 @@ export function ChatView({
         {userCardTarget ? (
           <UserCardDialog
             target={userCardTarget}
-            currentAlias={
-              aliases.find(
-                (a) =>
-                  a.platform === userCardTarget.platform &&
-                  a.platformUserId === userCardTarget.platformUserId,
-              )?.alias ?? userCardTarget.currentAlias
-            }
-            onClose={() => setUserCardTarget(null)}
+            currentAlias={currentAlias}
+            onClose={closeUserCard}
           />
         ) : null}
       </div>

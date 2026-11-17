@@ -73,7 +73,7 @@ export interface UserCardMetadataSectionProps {
   supportedByCard: boolean
   metadataLoading: boolean
   metadataError: string | null
-  metadata: MetadataItem[] | null
+  metadata: MetadataItem[]
   reloadMetadata: () => void
 }
 

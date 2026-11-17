@@ -1,8 +1,8 @@
 export { UserCardHeader } from './UserCardHeader'
 export { UserCardAliasSection } from './UserCardAliasSection'
 export { UserCardTabs } from './UserCardTabs'
-export { UserCardMetadataSection } from './UserCardMetadataSection'
 export { UserCardProfileTab } from './UserCardProfileTab'
+export { Badge } from './Badge'
 export { UserBadges } from './UserBadges'
 export type { UserBadgesProps } from './UserBadges'
 export {

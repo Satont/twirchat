@@ -13,7 +13,7 @@ import { logger } from '@twirchat/shared/logger'
 import type { Badge } from '@twirchat/shared/types'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { getBackendUrl } from '../../runtime-config'
 import { Modal } from './ui/Modal'
@@ -44,7 +44,7 @@ import {
 
 const log = logger('user-card')
 
-export function UserCardDialog({
+export const UserCardDialog = memo(function UserCardDialog({
   target,
   currentAlias,
   onClose,
@@ -124,19 +124,10 @@ export function UserCardDialog({
     }
   }, [windows, target, effectiveAlias, onClose])
 
-  /**
-   * Twitch only reports chat badges with messages, so collect every badge the
-   * user displayed in the retained buffers. This also fills in platform badges
-   * when the card is opened from chatters, search, or history.
-   *
-   * PERF: Limit to last 500 messages to avoid blocking on open with large histories.
-   * Cached per (platform, userId, channelId) with 5min TTL.
-   */
   const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
 
-  // Fetch Twitch user badge catalog from backend (global + role badges)
-  // Used as a lookup to enrich retainedBadges with imageUrl/description
   const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
+
   useEffect(() => {
     if (target.platform !== 'twitch' || !target.username) return
     const controller = new AbortController()
@@ -189,21 +180,20 @@ export function UserCardDialog({
   }, [retainedBadges, userBadgeCatalog])
 
   // retainedBadges now contains badges from current channel + home (global)
-  // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + cosmetics
+  // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + active cosmetics.
+  // The 7TV inventory is user-card-only and is rendered in the profile tab, not next to the name.
   const extraBadges = useMemo(
     () =>
       mergeBadges(
         enrichedRetainedBadges,
         target.badges,
         profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
-        profileState.badgesEnabled ? profileState.cosmetics?.inventoryBadges : undefined,
       ),
     [
       enrichedRetainedBadges,
       target.badges,
       profileState.badgesEnabled,
       profileState.cosmetics?.badges,
-      profileState.cosmetics?.inventoryBadges,
     ],
   )
   const channelUrl = target.username
@@ -215,9 +205,16 @@ export function UserCardDialog({
 
   const alias = useUserCardAlias({ target, currentAlias, onClose })
   const metadata = useUserCardMetadata({ target, moderationPlatform })
-  const publicChannel = useUserCardPublicChannel({ channelUrl })
+  const {
+    isOpening: openingPublicChannel,
+    openError: publicChannelError,
+    openPublicChannel,
+  } = useUserCardPublicChannel({ channelUrl })
 
   const [tab, setTab] = useState<UserCardTab>('profile')
+
+  const reloadMetadataAsync = metadata.reloadMetadata
+  const reloadMetadata = useCallback(() => runUiTask(reloadMetadataAsync()), [reloadMetadataAsync])
 
   const metadataItems = useMemo<MetadataItem[]>(
     () =>
@@ -284,8 +281,8 @@ export function UserCardDialog({
         openWindow={() => runUiTask(openInWindow())}
         hideAvatar={hideAvatar}
         channelUrl={channelUrl}
-        openingPublicChannel={publicChannel.isOpening}
-        openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
+        openingPublicChannel={openingPublicChannel}
+        openPublicChannel={() => runUiTask(openPublicChannel())}
         onAvatarClick={openPicture}
         effectiveAlias={effectiveAlias}
         accent={headerAccent}
@@ -305,7 +302,8 @@ export function UserCardDialog({
       openInWindow,
       hideAvatar,
       channelUrl,
-      publicChannel,
+      openingPublicChannel,
+      openPublicChannel,
       openPicture,
       effectiveAlias,
       headerAccent,
@@ -370,60 +368,72 @@ export function UserCardDialog({
               openingWindow={openingWindow}
               setOpeningWindow={setOpeningWindow}
               showNotice={showNotice}
-              publicChannelError={publicChannel.openError}
-              openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
+              publicChannelError={publicChannelError}
+              openPublicChannel={() => runUiTask(openPublicChannel())}
             />
 
             <UserCardTabs tab={tab} setTab={setTab} />
 
             <motion.div
-              key={tab}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.16, ease: 'easeOut' }}
-              style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+              style={{
+                display: tab === 'profile' ? 'flex' : 'none',
+                flexDirection: 'column',
+                minHeight: 0,
+              }}
             >
-              {tab === 'actions' ? (
-                <UserCardActions
-                  key={`${target.platform}:${target.platformUserId}`}
-                  target={target}
-                  moderation={moderation}
-                  avatarUrl={avatarUrl}
-                  hideAvatar={hideAvatar}
-                />
-              ) : null}
-              {tab === 'notes' ? (
-                <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
-              ) : null}
-              {tab === 'profile' ? (
-                <UserCardProfileTab
-                  key={`${target.platform}:${target.platformUserId}`}
-                  target={target}
-                  hideAvatar={hideAvatar}
-                  profileState={profileState}
-                  supportedByCard={metadata.supportedByCard}
-                  metadataLoading={metadata.metadataLoading}
-                  metadataError={metadata.metadataError}
-                  metadata={metadataItems}
-                  reloadMetadata={() => runUiTask(metadata.reloadMetadata())}
-                />
-              ) : null}
-              {tab === 'history' ? (
-                <UserChatHistoryPanel
-                  onViewport={(viewport) => {
-                    historyViewport.current = viewport
-                  }}
-                  platform={target.platform}
-                  platformUserId={target.platformUserId}
-                  channelId={
-                    target.platform === 'youtube'
-                      ? target.channelId
-                      : (target.channelSlug ?? target.channelId)
-                  }
-                  username={target.username}
-                />
-              ) : null}
+              <UserCardProfileTab
+                key={`${target.platform}:${target.platformUserId}`}
+                target={target}
+                hideAvatar={hideAvatar}
+                profileState={profileState}
+                supportedByCard={metadata.supportedByCard}
+                metadataLoading={metadata.metadataLoading}
+                metadataError={metadata.metadataError}
+                metadata={metadataItems}
+                reloadMetadata={reloadMetadata}
+              />
             </motion.div>
+
+            {tab !== 'profile' ? (
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+              >
+                {tab === 'actions' ? (
+                  <UserCardActions
+                    key={`${target.platform}:${target.platformUserId}`}
+                    target={target}
+                    moderation={moderation}
+                    avatarUrl={avatarUrl}
+                    hideAvatar={hideAvatar}
+                  />
+                ) : null}
+                {tab === 'notes' ? (
+                  <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
+                ) : null}
+                {tab === 'history' ? (
+                  <UserChatHistoryPanel
+                    onViewport={(viewport) => {
+                      historyViewport.current = viewport
+                    }}
+                    platform={target.platform}
+                    platformUserId={target.platformUserId}
+                    channelId={
+                      target.platform === 'youtube'
+                        ? target.channelId
+                        : (target.channelSlug ?? target.channelId)
+                    }
+                    username={target.username}
+                  />
+                ) : null}
+              </motion.div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -432,4 +442,4 @@ export function UserCardDialog({
       ) : null}
     </Modal>
   )
-}
+})

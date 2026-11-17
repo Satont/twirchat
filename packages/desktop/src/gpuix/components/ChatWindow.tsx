@@ -1,9 +1,10 @@
 import { useGpuixRequired } from '@gpuix/react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DesktopWindowDescriptor } from '../../services/window-session'
 import { useBackend } from '../backend/context'
 import { registerBundledFonts } from '../fonts'
+import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
 import { useT } from '../i18n'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
@@ -40,6 +41,9 @@ export function ChatWindow({
   const { t } = useT()
   const scope = useWindowScope()
   const windows = useDesktopWindows()
+  const closeUserCard = useCallback(() => {
+    if (windows) runUiTask(windows.close())
+  }, [windows])
   const settings = useStore(settingsStore)
   const theme = resolveTheme(settings)
   const [page, setPage] = useState<'chat' | 'settings' | 'accounts'>('chat')
@@ -151,11 +155,7 @@ export function ChatWindow({
           {page === 'settings' ? (
             <SettingsPanel />
           ) : descriptor.kind === 'user' ? (
-            <UserCardDialog
-              target={descriptor.target}
-              standalone
-              onClose={() => void windows?.close()}
-            />
+            <UserCardDialog target={descriptor.target} standalone onClose={closeUserCard} />
           ) : (
             <WatchedView tabId={descriptor.tabId} onGoToPlatforms={() => goToPage('accounts')} />
           )}
