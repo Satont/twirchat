@@ -59,8 +59,15 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
       const filteredMetadata = metadata.filter((el) => {
         const value = el.value?.trim()
         if (value === 'This user is not currently following this channel.') return false
-        if (value === 'Twitch denied follow lookup for this broadcaster token') return false
-        if (value === 'Subscription status is only available for your authenticated Twitch channel')
+        if (
+          value === 'Twitch denied follow lookup for this broadcaster token' ||
+          value === 'Twitch denied follow lookup for this broadcaster token.'
+        )
+          return false
+        if (
+          value === 'Subscription status is only available for your authenticated Twitch channel' ||
+          value === 'Subscription status is only available for your authenticated Twitch channel.'
+        )
           return false
         if (
           value ===
