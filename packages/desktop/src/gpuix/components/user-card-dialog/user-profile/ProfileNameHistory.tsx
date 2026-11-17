@@ -2,12 +2,23 @@ import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
-import { memo } from 'react'
+import { memo, useState } from 'react'
 
 import { getSkeletonColors } from '../metadata-section/skeleton-colors'
 import { userCardWellColor } from '../utils'
 import { NAME_HISTORY_SKELETON_ROWS } from './constants'
 import type { ProfileNameHistoryProps } from './types'
+
+function currentDayKey(): string {
+  return new Date().toDateString()
+}
+
+function formatDate(inputDate: string | undefined, locale: string, today: string): string {
+  if (inputDate === undefined || inputDate === null) return '?'
+  const date = new Date(inputDate)
+  if (date.toDateString() === today) return 'Present'
+  return date.toLocaleDateString(locale)
+}
 
 export const ProfileNameHistory = memo(function ProfileNameHistory({
   profile,
@@ -15,13 +26,7 @@ export const ProfileNameHistory = memo(function ProfileNameHistory({
 }: ProfileNameHistoryProps) {
   const theme = useTheme()
   const { t, language } = useT()
-
-  const formatDate = (inputDate: string | undefined, locale: string) => {
-    if (inputDate === undefined || inputDate === null) return '?'
-    const date = new Date(inputDate)
-    if (date.toDateString() === new Date().toDateString()) return 'Present'
-    return date.toLocaleDateString(locale)
-  }
+  const [today] = useState(currentDayKey)
 
   if (profile?.nameHistory?.length) {
     return (
@@ -45,8 +50,8 @@ export const ProfileNameHistory = memo(function ProfileNameHistory({
           }}
         >
           {profile.nameHistory.map((entry) => {
-            const firstSeen = formatDate(entry.firstSeen, language)
-            const lastSeen = formatDate(entry.lastSeen, language)
+            const firstSeen = formatDate(entry.firstSeen, language, today)
+            const lastSeen = formatDate(entry.lastSeen, language, today)
 
             return (
               <div

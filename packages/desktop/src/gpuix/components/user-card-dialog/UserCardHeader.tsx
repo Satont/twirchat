@@ -3,6 +3,7 @@ import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { hexMix } from '@gpuix/components/user-card/format'
 import { useT } from '@gpuix/i18n'
+import type { IconName } from '@gpuix/icons'
 import type { LinearGradientBackground } from '@gpuix/react'
 import { platformColor, withAlpha, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
@@ -10,7 +11,7 @@ import { memo } from 'react'
 
 import { Badge } from './Badge'
 import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
-import { GhostButton, HeaderPill as HeaderPillUI } from './UserCardUI'
+import { HeaderPill as HeaderPillUI } from './UserCardUI'
 import { formatDisplayUsername, initials, mergeBadges } from './utils'
 
 function headerGradient(
@@ -69,6 +70,66 @@ function AvatarFallback({
   )
 }
 
+interface HeaderActionProps {
+  icon: IconName
+  label: string
+  disabled: boolean
+  onClick: () => void
+  backgroundColor: string
+  hoverBackgroundColor: string
+  borderColor: string
+  color: string
+}
+
+function HeaderAction({
+  icon,
+  label,
+  disabled,
+  onClick,
+  backgroundColor,
+  hoverBackgroundColor,
+  borderColor,
+  color,
+}: HeaderActionProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={disabled ? undefined : 0}
+      onClick={disabled ? undefined : onClick}
+      onKeyDown={(event) => {
+        if (disabled) return
+        if (event.key === 'enter' || event.key === 'space') {
+          event.preventDefault()
+          onClick()
+        }
+      }}
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        cursor: disabled ? 'default' : 'pointer',
+        gap: 4,
+        backgroundColor,
+        borderColor,
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingLeft: 14,
+        paddingRight: 14,
+        paddingTop: 3,
+        paddingBottom: 3,
+        maxHeight: 40,
+        opacity: disabled ? 0.7 : 1,
+        hover: { backgroundColor: hoverBackgroundColor },
+        color,
+      }}
+    >
+      <Icon size={14} name={icon} color={color} />
+      {label}
+    </div>
+  )
+}
+
 const UserCardBadges = memo(function UserCardBadges({
   badges,
   size = 20,
@@ -104,6 +165,10 @@ export function UserCardHeader({
   effectiveAlias,
   accent,
   extraBadges,
+  windows,
+  standalone,
+  openingWindow,
+  openWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -324,30 +389,44 @@ export function UserCardHeader({
           </div>
         </div>
       </div>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-          cursor: 'pointer',
-          gap: 4,
-          backgroundColor: headerButtonBg,
-          borderColor: headerBorder,
-          borderWidth: 1,
-          borderRadius: 10,
-          paddingLeft: 14,
-          paddingRight: 14,
-          paddingTop: 3,
-          paddingBottom: 3,
-          maxHeight: 40,
-          hover: { backgroundColor: headerButtonHover },
-          color: theme.text2,
-        }}
-      >
-        <Icon size={14} name="externalLink" color={theme.text2} />
-        {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-      </div>
+      {/* Compact actions stay inline with the user info instead of adding header height. */}
+      {channelUrl || (windows && !standalone) ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          {channelUrl ? (
+            <HeaderAction
+              icon="externalLink"
+              label={openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
+              disabled={openingPublicChannel}
+              onClick={openPublicChannel}
+              backgroundColor={headerButtonBg}
+              hoverBackgroundColor={headerButtonHover}
+              borderColor={headerBorder}
+              color={theme.text2}
+            />
+          ) : null}
+          {windows && !standalone ? (
+            <HeaderAction
+              icon="monitor"
+              label={openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
+              disabled={openingWindow}
+              onClick={openWindow}
+              backgroundColor={headerButtonBg}
+              hoverBackgroundColor={headerButtonHover}
+              borderColor={headerBorder}
+              color={theme.text2}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

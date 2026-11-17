@@ -2,6 +2,7 @@ import { useBackend } from '@gpuix/backend/context'
 import { ActionButton, FormInput } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
 import { parseNoteMarkdown } from '@gpuix/components/user-card/note-markdown'
+import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useUserCardAlias } from '@gpuix/hooks/user-card-dialog/use-user-card-alias'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
@@ -11,15 +12,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../ui'
 import { SectionHeader, UserCardPanel } from './UserCardUI'
 
-export function UserNotes({
-  target,
-  currentAlias,
-  onClose,
-}: {
-  target: UserCardTarget
-  currentAlias?: string
-  onClose?: () => void
-}) {
+export function UserNotes({ target, onClose }: { target: UserCardTarget; onClose?: () => void }) {
   const backend = useBackend()
   const theme = useTheme()
   const { t } = useT()
@@ -33,22 +26,19 @@ export function UserNotes({
 
   useEffect(() => {
     let active = true
-    setLoading(true)
-    setError('')
-    backend.api
-      .getUserNotes({ platform, platformUserId })
-      .then((value) => {
-        if (active) {
-          setText(value)
-          setSaved(value)
-        }
-      })
-      .catch((cause: unknown) => {
+    async function load(): Promise<void> {
+      try {
+        const value = await backend.api.getUserNotes({ platform, platformUserId })
+        if (!active) return
+        setText(value)
+        setSaved(value)
+      } catch (cause) {
         if (active) setError(String(cause))
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false)
-      })
+      }
+    }
+    runUiTask(load())
     return () => {
       active = false
     }
@@ -76,7 +66,7 @@ export function UserNotes({
     saveError,
     handleSaveAlias,
     handleRemoveAlias,
-  } = useUserCardAlias({ target, currentAlias, onClose })
+  } = useUserCardAlias({ target })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -320,35 +310,38 @@ export function UserNotes({
                       ...(line.kind === 'code' ? { backgroundColor: theme.fill, padding: 4 } : {}),
                     }}
                   >
-                    {line.content.map((part, partIndex) => (
-                      <Text
-                        key={partIndex}
-                        onClick={
-                          part.url
-                            ? () =>
-                                void backend.api
-                                  .openExternalUrl({ url: part.url! })
-                                  .catch((cause: unknown) => setError(String(cause)))
-                            : undefined
-                        }
-                        style={{
-                          fontSize: line.kind === 'heading' ? 20 - (line.level ?? 1) : 13,
-                          fontWeight:
-                            line.kind === 'heading' || part.style === 'strong' ? 700 : 400,
-                          color: part.url
-                            ? theme.text
-                            : line.kind === 'quote'
-                              ? theme.text2
-                              : theme.text,
-                          ...(line.kind === 'code' || part.style === 'code'
-                            ? { fontFamily: 'monospace' }
-                            : {}),
-                          ...(part.style === 'emphasis' ? { fontStyle: 'italic' } : {}),
-                        }}
-                      >
-                        {part.text}
-                      </Text>
-                    ))}
+                    {line.content.map((part, partIndex) => {
+                      const url = part.url
+                      return (
+                        <Text
+                          key={partIndex}
+                          onClick={
+                            url
+                              ? () =>
+                                  void backend.api
+                                    .openExternalUrl({ url })
+                                    .catch((cause: unknown) => setError(String(cause)))
+                              : undefined
+                          }
+                          style={{
+                            fontSize: line.kind === 'heading' ? 20 - (line.level ?? 1) : 13,
+                            fontWeight:
+                              line.kind === 'heading' || part.style === 'strong' ? 700 : 400,
+                            color: part.url
+                              ? theme.text
+                              : line.kind === 'quote'
+                                ? theme.text2
+                                : theme.text,
+                            ...(line.kind === 'code' || part.style === 'code'
+                              ? { fontFamily: 'monospace' }
+                              : {}),
+                            ...(part.style === 'emphasis' ? { fontStyle: 'italic' } : {}),
+                          }}
+                        >
+                          {part.text}
+                        </Text>
+                      )
+                    })}
                   </div>
                 ))
               ) : (

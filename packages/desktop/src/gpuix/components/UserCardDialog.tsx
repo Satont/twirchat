@@ -1,15 +1,12 @@
 import type { ModerationPlatform } from '@gpuix/backend/api'
-import type { UserAlias } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
 import type { IconName } from '@gpuix/icons'
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { showNotice } from '@gpuix/state/app'
-import { aliasesStore } from '@gpuix/state/app'
-import { useStore, useStoreSelector } from '@gpuix/state/create-store'
+import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
-import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
 import { logger } from '@twirchat/shared/logger'
@@ -23,11 +20,10 @@ import { Modal } from './ui/Modal'
 import type { MetadataItem, UserCardTab } from './user-card-dialog'
 import {
   UserCardHeader,
-  UserCardAliasSection,
   UserCardTabs,
   UserCardProfileTab,
   userCardHeaderAccent,
-  useUserCardAlias,
+  useUserCardAliasValue,
   useUserCardMetadata,
   useUserCardProfile,
   useUserCardPublicChannel,
@@ -111,9 +107,6 @@ export const UserCardDialog = memo(function UserCardDialog({
   const historyViewport = useRef<PublicInstance | null>(null)
   const moderation = useUserCardModeration(target)
 
-  const [aliasFocused, setAliasFocused] = useState(false)
-  const aliasFocus = useTextInputFocusTracking(setAliasFocused)
-
   // Track mounted state to avoid state updates after unmount
   const mountedRef = useRef(true)
   useEffect(() => {
@@ -123,15 +116,7 @@ export const UserCardDialog = memo(function UserCardDialog({
     }
   }, [])
 
-  // Get alias from store - this will update when alias is changed in Notes tab
-  const storeAlias = useStoreSelector(aliasesStore, (store) => {
-    const alias = store.find(
-      (a: UserAlias) =>
-        a.platform === target.platform && a.platformUserId === target.platformUserId,
-    )
-    return alias?.alias
-  })
-  const effectiveAlias = currentAlias ?? storeAlias ?? target.currentAlias
+  const effectiveAlias = useUserCardAliasValue(target, currentAlias)
   const [openingWindow, setOpeningWindow] = useState(false)
 
   const openPictureRef = useRef<() => void>(() => {})
@@ -286,13 +271,16 @@ export const UserCardDialog = memo(function UserCardDialog({
   const moderationPlatform: ModerationPlatform | undefined =
     target.platform === 'twitch' || target.platform === 'kick' ? target.platform : undefined
 
-  const alias = useUserCardAlias({ target, currentAlias, onClose })
   const metadata = useUserCardMetadata({ target, moderationPlatform })
   const {
     isOpening: openingPublicChannel,
     openError: publicChannelError,
     openPublicChannel,
   } = useUserCardPublicChannel({ channelUrl })
+
+  useEffect(() => {
+    if (publicChannelError) showNotice('error', publicChannelError)
+  }, [publicChannelError])
 
   const [tab, setTab] = useState<UserCardTab>('profile')
 
@@ -478,7 +466,11 @@ export const UserCardDialog = memo(function UserCardDialog({
               />
             ) : null}
             {tab === 'notes' ? (
-              <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
+              <UserNotes
+                key={`${target.platform}:${target.platformUserId}`}
+                target={target}
+                onClose={onClose}
+              />
             ) : null}
             {tab === 'history' ? (
               <UserChatHistoryPanel

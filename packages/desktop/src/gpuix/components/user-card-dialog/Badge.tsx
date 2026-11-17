@@ -1,5 +1,4 @@
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
-import { Text } from '@gpuix/components/ui/Text'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 import type { Badge as BadgeData } from '@twirchat/shared/types'

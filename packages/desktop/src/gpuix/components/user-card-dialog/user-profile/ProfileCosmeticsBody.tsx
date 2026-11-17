@@ -1,6 +1,5 @@
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useT } from '@gpuix/i18n'
-import { useWindowSize } from '@gpuix/react'
 import { useTheme } from '@gpuix/theme-context'
 import { memo } from 'react'
 

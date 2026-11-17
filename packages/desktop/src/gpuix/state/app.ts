@@ -65,6 +65,8 @@ export const savedAccountsStore = persistentResource('savedAccounts', () =>
   createStore<Account[]>([]),
 )
 export const aliasesStore = persistentResource('aliases', () => createStore<UserAlias[]>([]))
+/** False until the first alias list arrives; snapshots are only a fallback before that. */
+export const aliasesLoadedStore = persistentResource('aliasesLoaded', () => createStore(false))
 /** platform → status */
 export const channelStatusStore = persistentResource('channelStatuses', () =>
   createStore<Partial<Record<Platform, PlatformStatusInfo>>>({}),
@@ -633,6 +635,7 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
     accountsStore.set(accs)
     savedAccountsStore.set(saved)
     aliasesStore.set(aliases)
+    aliasesLoadedStore.set(true)
     settingsStore.set(setts)
     setLanguage(setts.language)
     const statusMap: Partial<Record<Platform, PlatformStatusInfo>> = {}
@@ -936,6 +939,7 @@ declare module './persistent-resources' {
     accounts: Store<Account[]>
     savedAccounts: Store<Account[]>
     aliases: Store<UserAlias[]>
+    aliasesLoaded: Store<boolean>
     channelStatuses: Store<Partial<Record<Platform, PlatformStatusInfo>>>
     watchedChannels: Store<DesktopWatchedChannel[]>
     watchedMessages: Store<Map<string, NormalizedChatMessage[]>>
