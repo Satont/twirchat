@@ -12,14 +12,27 @@ import {
 } from '@views/main/utils/history-display'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const PAGE_SIZE = 50
+import { PAGE_SIZE } from './constants'
+
+export interface ChatHistoryState {
+  messages: NormalizedChatMessage[]
+  loadingInitial: boolean
+  loadingOlder: boolean
+  error: string | null
+  history: UserChatHistoryPage['history']
+  visibleRange: HistoryVisibleRange | null
+  canLoadOlder: boolean
+  loadInitial: () => Promise<void>
+  loadOlder: () => Promise<void>
+  updateVisibleRange: (start: number, end: number) => void
+}
 
 export function useChatHistory(
   platform: Platform,
   platformUserId: string,
   channelId: string | undefined,
   username: string | undefined,
-) {
+): ChatHistoryState {
   const backend = useBackend()
   const [messages, setMessages] = useState<NormalizedChatMessage[]>([])
   const [loadingInitial, setLoadingInitial] = useState(false)
@@ -117,26 +130,32 @@ export function useChatHistory(
     }
   }, [loadInitial])
 
-  const appendLive = (message: NormalizedChatMessage) => {
-    if (!matchesHistoryUser(message, { platform, platformUserId, channelId })) return
-    setMessages((current) => appendLiveHistoryMessage(current, message))
-  }
+  const appendLive = useCallback(
+    (message: NormalizedChatMessage): void => {
+      if (!matchesHistoryUser(message, { platform, platformUserId, channelId })) return
+      setMessages((current) => appendLiveHistoryMessage(current, message))
+    },
+    [platform, platformUserId, channelId],
+  )
   useBackendEvent('chat_message', appendLive)
   useBackendEvent('watched_channel_message', ({ message }) => appendLive(message))
+
+  const updateVisibleRange = useCallback((start: number, end: number): void => {
+    setVisibleRange((current) =>
+      current?.start === start && current.end === end ? current : { start, end },
+    )
+  }, [])
 
   return {
     messages,
     loadingInitial,
     loadingOlder,
     error,
-    hasMore,
     history,
     visibleRange,
-    setVisibleRange,
+    canLoadOlder: hasMore && messages.length < HISTORY_DISPLAY_LIMIT,
     loadInitial,
     loadOlder,
-    canLoadOlder: hasMore && messages.length < HISTORY_DISPLAY_LIMIT,
+    updateVisibleRange,
   }
 }
-
-export { PAGE_SIZE, HISTORY_DISPLAY_LIMIT } from './constants'

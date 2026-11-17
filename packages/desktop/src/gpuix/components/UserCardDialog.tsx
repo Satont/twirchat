@@ -29,9 +29,9 @@ import {
   useUserCardPublicChannel,
   useRetainedBadges,
 } from './user-card-dialog'
+import { UserChatHistoryPanel } from './user-card-dialog/history-panel'
 import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
-import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
 import { mergeBadges } from './user-card-dialog/utils'
 import {

@@ -1,28 +1,43 @@
 import { chatMessageKey } from '@gpuix/chat-tools'
 import { ChatMessage } from '@gpuix/components/ChatMessage'
-import { platformColor } from '@gpuix/theme'
+import { Text } from '@gpuix/components/ui/Text'
+import { platformColor, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { formatHistoryTimestamp } from '@views/main/utils/history-display'
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
+
+import type { HistoryMessageRowProps } from './types'
+
+function typeColor(message: NormalizedChatMessage, theme: Theme): string {
+  if (message.type === 'action') return theme.link
+  if (message.type === 'system') return theme.warningText
+  return theme.text2
+}
+
+function HistoryMetaPill({ color, children }: { color: string; children: ReactNode }) {
+  const theme = useTheme()
+  return (
+    <div
+      style={{
+        paddingTop: 1,
+        paddingBottom: 1,
+        paddingLeft: 6,
+        paddingRight: 6,
+        borderRadius: 999,
+        backgroundColor: theme.fill,
+      }}
+    >
+      <Text style={{ fontSize: 11, color }}>{children}</Text>
+    </div>
+  )
+}
 
 export const HistoryMessageRow = memo(function HistoryMessageRow({
   message,
   visible,
-}: {
-  message: NormalizedChatMessage
-  visible: boolean
-}) {
+}: HistoryMessageRowProps) {
   const theme = useTheme()
-
-  function getTypeColor(
-    message: NormalizedChatMessage,
-    theme: ReturnType<typeof useTheme>,
-  ): string {
-    if (message.type === 'action') return theme.link
-    if (message.type === 'system') return theme.warningText
-    return theme.text2
-  }
 
   return (
     <div
@@ -59,33 +74,11 @@ export const HistoryMessageRow = memo(function HistoryMessageRow({
             marginBottom: 4,
           }}
         >
-          <div style={{ fontSize: 11, color: theme.text2 }}>
+          <Text style={{ fontSize: 11, color: theme.text2 }}>
             {formatHistoryTimestamp(message.timestamp)}
-          </div>
-          <div
-            style={{
-              paddingTop: 1,
-              paddingBottom: 1,
-              paddingLeft: 6,
-              paddingRight: 6,
-              borderRadius: 999,
-              backgroundColor: theme.fill,
-            }}
-          >
-            <div style={{ fontSize: 11, color: theme.text2 }}>{message.channelId}</div>
-          </div>
-          <div
-            style={{
-              paddingTop: 1,
-              paddingBottom: 1,
-              paddingLeft: 6,
-              paddingRight: 6,
-              borderRadius: 999,
-              backgroundColor: theme.fill,
-            }}
-          >
-            <div style={{ fontSize: 11, color: getTypeColor(message, theme) }}>{message.type}</div>
-          </div>
+          </Text>
+          <HistoryMetaPill color={theme.text2}>{message.channelId}</HistoryMetaPill>
+          <HistoryMetaPill color={typeColor(message, theme)}>{message.type}</HistoryMetaPill>
         </div>
 
         <ChatMessage

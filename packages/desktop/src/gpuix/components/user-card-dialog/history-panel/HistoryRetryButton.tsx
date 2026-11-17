@@ -2,9 +2,7 @@ import { Text } from '@gpuix/components/ui/Text'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 
-interface HistoryRetryButtonProps {
-  onClick: () => void
-}
+import type { HistoryRetryButtonProps } from './types'
 
 export function HistoryRetryButton({ onClick }: HistoryRetryButtonProps) {
   const theme = useTheme()

@@ -1,10 +1,6 @@
 import { useTheme } from '@gpuix/theme-context'
 
-interface HistoryStateProps {
-  minHeight: number
-  error?: boolean
-  children: React.ReactNode
-}
+import type { HistoryStateProps } from './types'
 
 export function HistoryState({ minHeight, error, children }: HistoryStateProps) {
   const theme = useTheme()
