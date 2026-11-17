@@ -111,6 +111,22 @@ export const UserCardDialog = memo(function UserCardDialog({
   const [aliasFocused, setAliasFocused] = useState(false)
   const aliasFocus = useTextInputFocusTracking(setAliasFocused)
 
+  // Track mounted state to avoid state updates after unmount
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const effectiveAlias = currentAlias ?? target.currentAlias
+  const [openingWindow, setOpeningWindow] = useState(false)
+
+  // Initialize refs before callbacks that use them
+  const openPictureRef = useRef<() => void>(() => {})
+  const openInWindowRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
   const openPicture = useCallback(() => {
     if (!hideAvatar && avatarUrl) {
       renderer.blur?.()
@@ -121,22 +137,18 @@ export const UserCardDialog = memo(function UserCardDialog({
     if (hideAvatar) setAvatarMenuOpen(false)
   }, [hideAvatar])
 
-  const effectiveAlias = currentAlias ?? target.currentAlias
-  const [openingWindow, setOpeningWindow] = useState(false)
   const openInWindow = useCallback(async () => {
     if (!windows) return
     setOpeningWindow(true)
     try {
       await windows.openUser({ ...target, currentAlias: effectiveAlias })
-      onClose()
+      if (mountedRef.current) onClose()
     } finally {
-      setOpeningWindow(false)
+      if (mountedRef.current) setOpeningWindow(false)
     }
   }, [windows, target, effectiveAlias, onClose])
 
-  const openPictureRef = useRef(openPicture)
   openPictureRef.current = openPicture
-  const openInWindowRef = useRef(openInWindow)
   openInWindowRef.current = openInWindow
 
   const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
