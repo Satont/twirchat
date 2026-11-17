@@ -1,7 +1,7 @@
 import { useBackend } from '@gpuix/backend/context'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
-import type { Badge } from '@twirchat/shared/types'
 import { logger } from '@twirchat/shared/logger'
+import type { Badge } from '@twirchat/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const log = logger('twitch-user-badges')
