@@ -22,8 +22,8 @@ export function ChangelogItem({ item, theme }: ChangelogItemProps) {
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 18, color: 'white', fontWeight: 500 }}>{displayLabel}</div>
-        <div style={{ fontSize: 16, color: 'darkgray', fontWeight: 100, whiteSpace: 'normal' }}>
+        <div style={{ fontSize: 18, color: theme.text, fontWeight: 500 }}>{displayLabel}</div>
+        <div style={{ fontSize: 16, color: theme.text2, fontWeight: 400, whiteSpace: 'normal' }}>
           {displayDescription?.trim()}
         </div>
       </div>
