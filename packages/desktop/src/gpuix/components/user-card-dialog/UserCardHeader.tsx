@@ -131,18 +131,22 @@ export function UserCardHeader({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        gap: 12,
-        padding: 14,
+        gap: 16,
+        padding: 20,
+        marginLeft: 16,
+        marginRight: 16,
+        marginTop: 16,
+        marginBottom: 16,
         background: headerGradient(theme, accent),
         borderWidth: 1,
         borderColor: headerBorder,
-        borderRadius: 14,
+        borderRadius: 16,
         boxShadow: {
           offsetX: 0,
-          offsetY: 8,
-          blurRadius: 24,
+          offsetY: 12,
+          blurRadius: 30,
           spreadRadius: 0,
-          color: theme.isLight ? withAlpha(theme.accent.deep, 0.12) : '#00000044',
+          color: theme.isLight ? withAlpha(theme.accent.deep, 0.16) : '#00000066',
         },
       }}
     >
@@ -329,14 +333,14 @@ export function UserCardHeader({
           icon="externalLink"
           justify="start"
           style={{
-            marginTop: 8,
+            marginTop: 10,
             backgroundColor: headerButtonBg,
             borderColor: headerBorder,
-            borderRadius: 8,
-            paddingLeft: 12,
-            paddingRight: 12,
-            paddingTop: 6,
-            paddingBottom: 6,
+            borderRadius: 10,
+            paddingLeft: 14,
+            paddingRight: 14,
+            paddingTop: 7,
+            paddingBottom: 7,
             hover: { backgroundColor: headerButtonHover },
           }}
         >

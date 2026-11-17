@@ -36,13 +36,13 @@ export const UserCardProfileTab = memo(function UserCardProfileTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/*<UserProfileView target={target} hideAvatar={hideAvatar} state={profileState} />*/}
-      {platform === 'twitch' && username ? (
+      {/*{platform === 'twitch' && username ? (
         <TwitchBadgeCollection
           username={username}
           channelId={channelId}
           channelSlug={channelSlug}
         />
-      ) : null}
+      ) : null}*/}
 
       <UserCardMetadataSection
         supportedByCard={supportedByCard}
