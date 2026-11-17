@@ -1,11 +1,13 @@
 import type { ModerationPlatform } from '@gpuix/backend/api'
+import type { UserAlias } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
 import type { IconName } from '@gpuix/icons'
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { showNotice } from '@gpuix/state/app'
-import { useStore } from '@gpuix/state/create-store'
+import { aliasesStore } from '@gpuix/state/app'
+import { useStore, useStoreSelector } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
@@ -121,7 +123,15 @@ export const UserCardDialog = memo(function UserCardDialog({
     }
   }, [])
 
-  const effectiveAlias = currentAlias ?? target.currentAlias
+  // Get alias from store - this will update when alias is changed in Notes tab
+  const storeAlias = useStoreSelector(aliasesStore, (store) => {
+    const alias = store.find(
+      (a: UserAlias) =>
+        a.platform === target.platform && a.platformUserId === target.platformUserId,
+    )
+    return alias?.alias
+  })
+  const effectiveAlias = currentAlias ?? storeAlias ?? target.currentAlias
   const [openingWindow, setOpeningWindow] = useState(false)
 
   const openPictureRef = useRef<() => void>(() => {})

@@ -78,8 +78,6 @@ export function UserNotes({
     handleRemoveAlias,
   } = useUserCardAlias({ target, currentAlias, onClose })
 
-  // Remove the isSavedAliase state - we use effectiveAlias from the hook instead
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <UserCardPanel>
