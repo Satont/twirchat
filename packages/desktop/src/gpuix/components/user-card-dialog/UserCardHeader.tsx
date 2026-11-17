@@ -1,4 +1,3 @@
-import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
 import { PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
@@ -7,7 +6,7 @@ import { useT } from '@gpuix/i18n'
 import type { LinearGradientBackground } from '@gpuix/react'
 import { platformColor, withAlpha, type Theme } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
-import { memo, useMemo } from 'react'
+import { memo } from 'react'
 
 import { Badge } from './Badge'
 import type { UserCardHeaderAccent, UserCardHeaderProps } from './types'
@@ -77,9 +76,6 @@ const UserCardBadges = memo(function UserCardBadges({
   badges: ReturnType<typeof mergeBadges>
   size?: number
 }) {
-  const theme = useTheme()
-  const headerText = theme.isLight ? theme.text : '#ffffff'
-
   return (
     <div
       style={{
@@ -108,10 +104,6 @@ export function UserCardHeader({
   effectiveAlias,
   accent,
   extraBadges,
-  windows,
-  standalone,
-  openingWindow,
-  openWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -139,51 +131,47 @@ export function UserCardHeader({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        gap: 16,
-        padding: 20,
-        marginLeft: 16,
-        marginRight: 16,
-        marginTop: 16,
-        marginBottom: 16,
+        gap: 12,
+        padding: 14,
         background: headerGradient(theme, accent),
         borderWidth: 1,
         borderColor: headerBorder,
-        borderRadius: 16,
+        borderRadius: 14,
         boxShadow: {
           offsetX: 0,
-          offsetY: 12,
-          blurRadius: 30,
+          offsetY: 8,
+          blurRadius: 24,
           spreadRadius: 0,
-          color: theme.isLight ? withAlpha(theme.accent.deep, 0.16) : '#00000066',
+          color: theme.isLight ? withAlpha(theme.accent.deep, 0.12) : '#00000044',
         },
       }}
     >
-      {/* GPUI clips overflow to a rectangle, so keep the glows clear of the rounded corners. */}
+      {/* Subtle background glows - reduced size and opacity */}
       <div
         style={{
           position: 'absolute',
-          top: -76,
-          right: 24,
-          width: 230,
-          height: 230,
-          borderRadius: 115,
+          top: -60,
+          right: 18,
+          width: 180,
+          height: 180,
+          borderRadius: 90,
           backgroundColor: theme.isLight
-            ? withAlpha(theme.accent.deep, 0.09)
-            : withAlpha('#ffffff', 0.08),
+            ? withAlpha(theme.accent.deep, 0.06)
+            : withAlpha('#ffffff', 0.05),
           pointerEvents: 'none',
         }}
       />
       <div
         style={{
           position: 'absolute',
-          bottom: -96,
-          left: 140,
-          width: 220,
-          height: 220,
-          borderRadius: 110,
+          bottom: -70,
+          left: 100,
+          width: 160,
+          height: 160,
+          borderRadius: 80,
           backgroundColor: theme.isLight
-            ? withAlpha(theme.accent.deep, 0.06)
-            : withAlpha('#ffffff', 0.05),
+            ? withAlpha(theme.accent.deep, 0.04)
+            : withAlpha('#ffffff', 0.03),
           pointerEvents: 'none',
         }}
       />
@@ -193,10 +181,10 @@ export function UserCardHeader({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 14,
+          gap: 12,
           minWidth: 0,
           flexGrow: 1,
-          flexBasis: 320,
+          flexBasis: 280,
         }}
       >
         <div
@@ -211,8 +199,8 @@ export function UserCardHeader({
           }}
           style={{
             flexShrink: 0,
-            width: 78,
-            height: 78,
+            width: 70,
+            height: 70,
             borderRadius: 999,
             borderWidth: 2,
             borderColor: avatarBorder,
@@ -222,22 +210,22 @@ export function UserCardHeader({
             boxShadow: {
               offsetX: 0,
               offsetY: 0,
-              blurRadius: 20,
-              spreadRadius: 1,
-              color: withAlpha(avatarGlow, 0.45),
+              blurRadius: 16,
+              spreadRadius: 0,
+              color: withAlpha(avatarGlow, 0.35),
             },
           }}
         >
           {showAvatar ? (
             <RemoteImage
               url={target.avatarUrl}
-              thumbnailSize={156}
+              thumbnailSize={140}
               objectFit="cover"
-              style={{ width: 74, height: 74, borderRadius: 999 }}
+              style={{ width: 66, height: 66, borderRadius: 999 }}
               fallback={
                 <AvatarFallback
                   name={target.displayName}
-                  size={74}
+                  size={66}
                   color={headerText}
                   background={avatarBackground}
                 />
@@ -246,14 +234,14 @@ export function UserCardHeader({
           ) : (
             <AvatarFallback
               name={target.displayName}
-              size={74}
+              size={66}
               color={headerText}
               background={avatarBackground}
             />
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
           <div
             style={{
               display: 'flex',
@@ -274,7 +262,7 @@ export function UserCardHeader({
             >
               <Text
                 style={{
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: 800,
                   color: headerText,
                   minWidth: 0,
@@ -283,13 +271,13 @@ export function UserCardHeader({
               >
                 {formatDisplayUsername(target.displayName)}
               </Text>
-              <UserCardBadges badges={userBadges} size={20} />
+              <UserCardBadges badges={userBadges} size={18} />
             </div>
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'row',
-                fontSize: 13,
+                fontSize: 12,
                 color: headerMuted,
               }}
             >
@@ -297,32 +285,32 @@ export function UserCardHeader({
               <div>{titleHandle}</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 5,
-                maxWidth: 80,
-                minHeight: 22,
-                paddingLeft: 8,
-                paddingRight: 8,
+                gap: 4,
+                maxWidth: 75,
+                minHeight: 20,
+                paddingLeft: 7,
+                paddingRight: 7,
                 borderRadius: 999,
                 backgroundColor: withAlpha(
                   platformColor(target.platform),
-                  theme.isLight ? 0.14 : 0.24,
+                  theme.isLight ? 0.12 : 0.2,
                 ),
                 borderWidth: 1,
-                borderColor: withAlpha(platformColor(target.platform), 0.36),
+                borderColor: withAlpha(platformColor(target.platform), 0.32),
               }}
             >
               <PlatformIcon
                 platform={target.platform}
-                size={12}
+                size={11}
                 color={theme.isLight ? theme.text : '#ffffff'}
               />
-              <Text style={{ fontSize: 10, fontWeight: 700, color: headerText }}>
+              <Text style={{ fontSize: 9, fontWeight: 700, color: headerText }}>
                 {target.platform.toUpperCase()}
               </Text>
             </div>
@@ -330,42 +318,31 @@ export function UserCardHeader({
               <HeaderPillUI>{t('userCard.alias.pill', { alias: effectiveAlias })}</HeaderPillUI>
             ) : null}
           </div>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'start',
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              marginTop: 10,
-              gap: 4,
-              alignItems: 'center',
-            }}
-          ></div>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {channelUrl ? (
-            <GhostButton
-              disabled={openingPublicChannel}
-              onClick={openPublicChannel}
-              icon="externalLink"
-              justify="start"
-              style={{
-                width: '100%',
-                backgroundColor: headerButtonBg,
-                borderColor: headerBorder,
-                borderRadius: 10,
-                paddingLeft: 14,
-                paddingRight: 14,
-                hover: { backgroundColor: headerButtonHover },
-              }}
-            >
-              {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-            </GhostButton>
-          ) : null}
-        </div>
-      </div>
+
+      {/* Open channel button - compact and inline with user info */}
+      {channelUrl ? (
+        <GhostButton
+          disabled={openingPublicChannel}
+          onClick={openPublicChannel}
+          icon="externalLink"
+          justify="start"
+          style={{
+            marginTop: 8,
+            backgroundColor: headerButtonBg,
+            borderColor: headerBorder,
+            borderRadius: 8,
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: 6,
+            paddingBottom: 6,
+            hover: { backgroundColor: headerButtonHover },
+          }}
+        >
+          {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
+        </GhostButton>
+      ) : null}
     </div>
   )
 }
