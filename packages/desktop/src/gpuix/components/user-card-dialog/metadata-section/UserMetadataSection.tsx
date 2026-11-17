@@ -63,7 +63,10 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
         if (value === 'Subscription status is only available for your authenticated Twitch channel')
           return false
         if (
-          value === 'Twitch does not expose on-demand sub age through the available broadcaster API'
+          value ===
+            'Twitch does not expose on-demand sub age through the available broadcaster API' ||
+          value ===
+            'Twitch does not expose on-demand sub age through the available broadcaster API.'
         )
           return false
         return true
