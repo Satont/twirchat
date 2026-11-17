@@ -1,4 +1,4 @@
-import { PlatformIcon } from '@gpuix/components/ui/Icon'
+import { Icon, PlatformIcon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { hexMix } from '@gpuix/components/user-card/format'
@@ -324,29 +324,30 @@ export function UserCardHeader({
           </div>
         </div>
       </div>
-
-      {/* Open channel button - compact and inline with user info */}
-      {channelUrl ? (
-        <GhostButton
-          disabled={openingPublicChannel}
-          onClick={openPublicChannel}
-          icon="externalLink"
-          justify="start"
-          style={{
-            marginTop: 10,
-            backgroundColor: headerButtonBg,
-            borderColor: headerBorder,
-            borderRadius: 10,
-            paddingLeft: 14,
-            paddingRight: 14,
-            paddingTop: 7,
-            paddingBottom: 7,
-            hover: { backgroundColor: headerButtonHover },
-          }}
-        >
-          {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-        </GhostButton>
-      ) : null}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          cursor: 'pointer',
+          gap: 4,
+          backgroundColor: headerButtonBg,
+          borderColor: headerBorder,
+          borderWidth: 1,
+          borderRadius: 10,
+          paddingLeft: 14,
+          paddingRight: 14,
+          paddingTop: 3,
+          paddingBottom: 3,
+          maxHeight: 40,
+          hover: { backgroundColor: headerButtonHover },
+          color: theme.text2,
+        }}
+      >
+        <Icon size={14} name="externalLink" color={theme.text2} />
+        {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
+      </div>
     </div>
   )
 }

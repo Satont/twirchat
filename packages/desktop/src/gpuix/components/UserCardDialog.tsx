@@ -2,7 +2,7 @@ import type { ModerationPlatform } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
-import { useGpuixRequired, useWindowSize, motion, type PublicInstance } from '@gpuix/react'
+import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { showNotice } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
@@ -59,8 +59,18 @@ export const UserCardDialog = memo(function UserCardDialog({
   const { t } = useT()
   const windows = useDesktopWindows()
   const renderer = useGpuixRequired()
-  const scrollHeader = useWindowSize().height < 500
+  const scrollHeaderRef = useRef(false)
   const streamer = useStore(streamerModeStore)
+
+  // Initialize scrollHeaderRef once on mount - avoids useWindowSize re-renders on every resize
+  useEffect(() => {
+    const update = () => {
+      scrollHeaderRef.current = typeof window !== 'undefined' && window.innerHeight < 500
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
   const hideAvatar = streamer.effectiveEnabled && streamer.settings.hideUsercardAvatars
   const avatarKey = `${target.platform}:${target.platformUserId}`
   const [profileAvatar, setProfileAvatar] = useState<{ key: string; url?: string }>({
@@ -124,6 +134,11 @@ export const UserCardDialog = memo(function UserCardDialog({
     }
   }, [windows, target, effectiveAlias, onClose])
 
+  const openPictureRef = useRef(openPicture)
+  openPictureRef.current = openPicture
+  const openInWindowRef = useRef(openInWindow)
+  openInWindowRef.current = openInWindow
+
   const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
 
   const [userBadgeCatalog, setUserBadgeCatalog] = useState<Map<string, Badge>>(new Map())
@@ -164,9 +179,11 @@ export const UserCardDialog = memo(function UserCardDialog({
     }
   }, [target.platform, target.username])
 
+  const enrichedRetainedBadgesRef = useRef<ReturnType<typeof mergeBadges> | null>(null)
+
   // Enrich retainedBadges with catalog data (imageUrl, description)
   const enrichedRetainedBadges = useMemo(() => {
-    return retainedBadges.map((badge) => {
+    const newBadges = retainedBadges.map((badge) => {
       const catalogBadge = userBadgeCatalog.get(badge.id)
       if (catalogBadge) {
         return {
@@ -177,6 +194,23 @@ export const UserCardDialog = memo(function UserCardDialog({
       }
       return badge
     })
+
+    // Only update ref if content actually changed (shallow compare)
+    const prev = enrichedRetainedBadgesRef.current
+    const changed =
+      !prev ||
+      prev.length !== newBadges.length ||
+      newBadges.some(
+        (b, i) =>
+          prev[i]?.id !== b.id ||
+          prev[i]?.imageUrl !== b.imageUrl ||
+          prev[i]?.description !== b.description,
+      )
+
+    if (changed) {
+      enrichedRetainedBadgesRef.current = newBadges
+    }
+    return enrichedRetainedBadgesRef.current
   }, [retainedBadges, userBadgeCatalog])
 
   // retainedBadges now contains badges from current channel + home (global)
@@ -185,7 +219,7 @@ export const UserCardDialog = memo(function UserCardDialog({
   const extraBadges = useMemo(
     () =>
       mergeBadges(
-        enrichedRetainedBadges,
+        enrichedRetainedBadges ?? [],
         target.badges,
         profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
       ),
@@ -278,12 +312,12 @@ export const UserCardDialog = memo(function UserCardDialog({
         windows={windows}
         standalone={standalone}
         openingWindow={openingWindow}
-        openWindow={() => runUiTask(openInWindow())}
+        openWindow={() => runUiTask(openInWindowRef.current())}
         hideAvatar={hideAvatar}
         channelUrl={channelUrl}
         openingPublicChannel={openingPublicChannel}
         openPublicChannel={() => runUiTask(openPublicChannel())}
-        onAvatarClick={openPicture}
+        onAvatarClick={openPictureRef.current}
         effectiveAlias={effectiveAlias}
         accent={headerAccent}
       />
@@ -299,12 +333,12 @@ export const UserCardDialog = memo(function UserCardDialog({
       windows,
       standalone,
       openingWindow,
-      openInWindow,
+      openInWindowRef,
       hideAvatar,
       channelUrl,
       openingPublicChannel,
       openPublicChannel,
-      openPicture,
+      openPictureRef,
       effectiveAlias,
       headerAccent,
     ],
@@ -326,7 +360,7 @@ export const UserCardDialog = memo(function UserCardDialog({
           minHeight: 0,
         }}
       >
-        {scrollHeader ? null : header}
+        {scrollHeaderRef.current ? null : header}
 
         <div
           tabIndex={-1}
@@ -340,7 +374,7 @@ export const UserCardDialog = memo(function UserCardDialog({
             scrollbarWidth: 4,
           }}
         >
-          {scrollHeader ? header : null}
+          {scrollHeaderRef.current ? header : null}
           <div
             style={{
               paddingLeft: 16,
@@ -374,10 +408,8 @@ export const UserCardDialog = memo(function UserCardDialog({
 
             <UserCardTabs tab={tab} setTab={setTab} />
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
+            {/* Profile tab - always rendered, visibility controlled by CSS */}
+            <div
               style={{
                 display: tab === 'profile' ? 'flex' : 'none',
                 flexDirection: 'column',
@@ -395,44 +427,34 @@ export const UserCardDialog = memo(function UserCardDialog({
                 metadata={metadataItems}
                 reloadMetadata={reloadMetadata}
               />
-            </motion.div>
+            </div>
 
-            {tab !== 'profile' ? (
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.16, ease: 'easeOut' }}
-                style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
-              >
-                {tab === 'actions' ? (
-                  <UserCardActions
-                    key={`${target.platform}:${target.platformUserId}`}
-                    target={target}
-                    moderation={moderation}
-                    avatarUrl={avatarUrl}
-                    hideAvatar={hideAvatar}
-                  />
-                ) : null}
-                {tab === 'notes' ? (
-                  <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
-                ) : null}
-                {tab === 'history' ? (
-                  <UserChatHistoryPanel
-                    onViewport={(viewport) => {
-                      historyViewport.current = viewport
-                    }}
-                    platform={target.platform}
-                    platformUserId={target.platformUserId}
-                    channelId={
-                      target.platform === 'youtube'
-                        ? target.channelId
-                        : (target.channelSlug ?? target.channelId)
-                    }
-                    username={target.username}
-                  />
-                ) : null}
-              </motion.div>
+            {tab === 'actions' ? (
+              <UserCardActions
+                key={`${target.platform}:${target.platformUserId}`}
+                target={target}
+                moderation={moderation}
+                avatarUrl={avatarUrl}
+                hideAvatar={hideAvatar}
+              />
+            ) : null}
+            {tab === 'notes' ? (
+              <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
+            ) : null}
+            {tab === 'history' ? (
+              <UserChatHistoryPanel
+                onViewport={(viewport) => {
+                  historyViewport.current = viewport
+                }}
+                platform={target.platform}
+                platformUserId={target.platformUserId}
+                channelId={
+                  target.platform === 'youtube'
+                    ? target.channelId
+                    : (target.channelSlug ?? target.channelId)
+                }
+                username={target.username}
+              />
             ) : null}
           </div>
         </div>

@@ -16,9 +16,11 @@ export const ProfileNameHistory = memo(function ProfileNameHistory({
   const theme = useTheme()
   const { t, language } = useT()
 
-  const formatDate = (date: string | undefined, locale: string) => {
-    if (date === undefined || date === null) return '?'
-    return new Date(date).toLocaleDateString(locale)
+  const formatDate = (inputDate: string | undefined, locale: string) => {
+    if (inputDate === undefined || inputDate === null) return '?'
+    const date = new Date(inputDate)
+    if (date.toDateString() === new Date().toDateString()) return 'Present'
+    return date.toLocaleDateString(locale)
   }
 
   if (profile?.nameHistory?.length) {
