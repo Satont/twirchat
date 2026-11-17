@@ -435,28 +435,6 @@ export const UserCardDialog = memo(function UserCardDialog({
               flexDirection: 'column',
             }}
           >
-            {/*<UserCardAliasSection
-              aliasValue={alias.aliasValue}
-              setAliasValue={alias.setAliasValue}
-              aliasFocused={aliasFocused}
-              effectiveAlias={effectiveAlias}
-              displayName={target.displayName}
-              aliasFocus={aliasFocus}
-              handleSaveAlias={alias.handleSaveAlias}
-              handleRemoveAlias={alias.handleRemoveAlias}
-              pinned={pinned}
-              togglePin={togglePin}
-              onClose={onClose}
-              windows={windows}
-              standalone={standalone}
-              target={target}
-              openingWindow={openingWindow}
-              setOpeningWindow={setOpeningWindow}
-              showNotice={showNotice}
-              publicChannelError={publicChannelError}
-              openPublicChannel={() => runUiTask(openPublicChannel())}
-            />*/}
-
             <UserCardTabs tab={tab} setTab={setTab} />
 
             {/* Profile tab - always rendered, visibility controlled by CSS */}
