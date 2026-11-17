@@ -164,8 +164,25 @@ export const UserCardDialog = memo(function UserCardDialog({
       .then((res) => res.json())
       .then((data) => {
         if (controller.signal.aborted) return
+
+        // Handle different possible API response structures
+        // Primary: data.badges
+        // Alternative: data.channelViewer?.earnedBadges (from Twitch Helix)
+        // Alternative: data.data?.channelViewer?.earnedBadges
+        let badgesData = data.badges
+        if (!badgesData && data.channelViewer?.earnedBadges) {
+          badgesData = data.channelViewer.earnedBadges
+        } else if (!badgesData && data.data?.channelViewer?.earnedBadges) {
+          badgesData = data.data.channelViewer.earnedBadges
+        }
+
+        if (!badgesData || typeof badgesData !== 'object') {
+          log.warn('No badge data found in API response', { dataKeys: Object.keys(data) })
+          return
+        }
+
         const catalog = new Map<string, Badge>()
-        for (const [key, imageUrl] of Object.entries(data.badges ?? {})) {
+        for (const [key, imageUrl] of Object.entries(badgesData)) {
           if (typeof imageUrl !== 'string') continue
           const [setId, version] = key.split('/')
           const meta = data.badgeMetadata?.[key]
@@ -405,7 +422,7 @@ export const UserCardDialog = memo(function UserCardDialog({
             minHeight: 0,
             overflowY: 'scroll',
             scrollbarColor: theme.scrollbar,
-            scrollbarWidth: 4,
+            scrollbarWidth: 1,
           }}
         >
           {scrollHeaderRef.current ? header : null}
@@ -418,7 +435,7 @@ export const UserCardDialog = memo(function UserCardDialog({
               flexDirection: 'column',
             }}
           >
-            <UserCardAliasSection
+            {/*<UserCardAliasSection
               aliasValue={alias.aliasValue}
               setAliasValue={alias.setAliasValue}
               aliasFocused={aliasFocused}
@@ -438,7 +455,7 @@ export const UserCardDialog = memo(function UserCardDialog({
               showNotice={showNotice}
               publicChannelError={publicChannelError}
               openPublicChannel={() => runUiTask(openPublicChannel())}
-            />
+            />*/}
 
             <UserCardTabs tab={tab} setTab={setTab} />
 

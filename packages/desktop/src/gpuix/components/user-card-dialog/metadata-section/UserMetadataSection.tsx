@@ -55,25 +55,17 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
     }
 
     if (metadata.length > 0) {
-      // Filter out specific "unavailable" messages
       const filteredMetadata = metadata.filter((el) => {
         const value = el.value?.trim()
         if (value === 'This user is not currently following this channel.') return false
+        if (value === 'Twitch denied follow lookup for this broadcaster token.') return false
         if (
-          value === 'Twitch denied follow lookup for this broadcaster token' ||
-          value === 'Twitch denied follow lookup for this broadcaster token.'
-        )
-          return false
-        if (
-          value === 'Subscription status is only available for your authenticated Twitch channel' ||
           value === 'Subscription status is only available for your authenticated Twitch channel.'
         )
           return false
         if (
           value ===
-            'Twitch does not expose on-demand sub age through the available broadcaster API' ||
-          value ===
-            'Twitch does not expose on-demand sub age through the available broadcaster API.'
+          'Twitch does not expose on-demand sub age through the available broadcaster API.'
         )
           return false
         return true

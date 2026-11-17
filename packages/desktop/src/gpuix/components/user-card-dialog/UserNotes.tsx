@@ -2,6 +2,7 @@ import { useBackend } from '@gpuix/backend/context'
 import { ActionButton, FormInput } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
 import { parseNoteMarkdown } from '@gpuix/components/user-card/note-markdown'
+import { useUserCardAlias } from '@gpuix/hooks/user-card-dialog/use-user-card-alias'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
@@ -9,7 +10,15 @@ import { useEffect, useState } from 'react'
 
 import { SectionHeader, UserCardPanel } from './UserCardUI'
 
-export function UserNotes({ target }: { target: UserCardTarget }) {
+export function UserNotes({
+  target,
+  currentAlias,
+  onClose,
+}: {
+  target: UserCardTarget
+  currentAlias?: string
+  onClose?: () => void
+}) {
   const backend = useBackend()
   const theme = useTheme()
   const { t } = useT()
@@ -20,6 +29,7 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
   const [preview, setPreview] = useState(false)
   const [error, setError] = useState('')
   const { platform, platformUserId } = target
+
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -42,6 +52,7 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
       active = false
     }
   }, [backend, platform, platformUserId])
+
   async function save() {
     setSaving(true)
     setError('')
@@ -55,8 +66,131 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
       setSaving(false)
     }
   }
+
+  const {
+    aliasValue,
+    setAliasValue,
+    effectiveAlias,
+    isSaving,
+    saveError,
+    handleSaveAlias,
+    handleRemoveAlias,
+  } = useUserCardAlias({ target, currentAlias, onClose })
+
   return (
     <UserCardPanel>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Alias Section */}
+        <div style={{ marginBottom: 8 }}>
+          <SectionHeader
+            icon="edit"
+            title={t('userCard.alias.title')}
+            hint={t('userCard.alias.hint')}
+          />
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <input
+              autoFocus
+              value={aliasValue}
+              placeholder={target.displayName}
+              onChange={(event) => setAliasValue(event.value ?? '')}
+              onSubmit={() => void handleSaveAlias()}
+              onKeyDown={(event) => {
+                if (event.key === 'escape') onClose?.()
+              }}
+              theme={{ caret: theme.link }}
+              style={{
+                flexGrow: 8,
+                flexBasis: 180,
+                minWidth: 0,
+                minHeight: 38,
+                paddingTop: 8,
+                paddingBottom: 8,
+                paddingLeft: 12,
+                paddingRight: 12,
+                backgroundColor: theme.surface2,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 10,
+                fontSize: 13,
+                lineHeight: 18,
+                color: theme.text,
+              }}
+            />
+            <ActionButton
+              primary
+              onClick={() => void handleSaveAlias()}
+              disabled={isSaving}
+              style={{
+                flexGrow: 1,
+                flexBasis: 60,
+                paddingLeft: 18,
+                paddingRight: 18,
+              }}
+            >
+              {t('common.save')}
+            </ActionButton>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 10,
+              marginTop: 12,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              {effectiveAlias ? (
+                <ActionButton danger onClick={() => void handleRemoveAlias()} disabled={isSaving}>
+                  {t('userCard.alias.remove')}
+                </ActionButton>
+              ) : null}
+            </div>
+          </div>
+
+          {saveError ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                marginTop: 10,
+                padding: 10,
+                backgroundColor: 'rgba(252, 165, 165, 0.1)',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme.dangerText,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: theme.dangerText }}>{saveError}</Text>
+              <ActionButton onClick={() => void handleSaveAlias()}>
+                {t('common.retry')}
+              </ActionButton>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Notes Section */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <SectionHeader
           icon="pencil"
