@@ -257,6 +257,7 @@ export function UserCardHeader({
               left: 0,
               width: '100%',
               height: '100%',
+              borderRadius: 16,
               pointerEvents: 'none',
             }}
           />
@@ -267,6 +268,7 @@ export function UserCardHeader({
               left: 0,
               width: '100%',
               height: '100%',
+              borderRadius: 16,
               background: bannerOverlay(),
               pointerEvents: 'none',
             }}
