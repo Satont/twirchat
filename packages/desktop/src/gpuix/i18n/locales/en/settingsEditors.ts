@@ -134,7 +134,13 @@ export const settingsEditors = {
 
   // Twitch session settings
   'twitchSessionSettings.intro':
-    'Voting, predictions, reward redemption and following use a separate Twitch web session. Copy its token, then connect below. Encrypted sessions are saved separately for each Twitch account and never displayed.',
+    'A Twitch web session supports voting, predictions, rewards and following. Web session tokens are stored encrypted for each Twitch account.',
+  'twitchSessionSettings.checking': 'Checking connection…',
+  'twitchSessionSettings.pointsConnected': 'Channel Points connected with a Twitch code.',
+  'twitchSessionSettings.pointsNotConnected':
+    'Confirm on Twitch to see your balance and redeem channel rewards in chat.',
+  'twitchSessionSettings.connectPoints': 'Connect Channel Points',
+  'twitchSessionSettings.disconnectPoints': 'Disconnect Channel Points',
   'twitchSessionSettings.connected': 'Connected',
   'twitchSessionSettings.connectedAs': 'Connected as {username}',
   'twitchSessionSettings.notConnected': 'No additional Twitch session connected.',

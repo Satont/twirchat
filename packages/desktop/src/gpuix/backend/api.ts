@@ -12,6 +12,7 @@ import type {
   ShareableDonationProvider,
 } from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
+import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type {
   ChannelStatusRequest,
   ChannelsStatusResponse,
@@ -71,6 +72,7 @@ import {
   currentTwitchAccessToken,
   twitchAccessTokenIfAvailable,
 } from '../../auth/twitch-access-token'
+import { connectTwitchPointsDevice, requestTwitchPointsDeviceCode } from '../../auth/twitch-points'
 import { validateTwitchUserToken } from '../../auth/twitch-user-token'
 import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
@@ -144,6 +146,8 @@ import {
 import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchChattersError } from '../../services/twitch-chatters'
 import type { TwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
+import { currentTwitchPointsSession } from '../../services/twitch-points-session'
+import { buildTwitchRewardNotice } from '../../services/twitch-reward-notice'
 import {
   getTwitchUserBadges,
   type TwitchUserBadgesRequest,
@@ -156,7 +160,10 @@ import { updateTwitchStream } from '../../services/update-stream'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
 import { AccountStore, ChannelStore, MessageStore, SettingsStore } from '../../store'
-import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import {
+  TwitchPointsSessionStore,
+  TwitchWebSessionStore,
+} from '../../store/twitch-web-session-store'
 import { UserAliasStore } from '../../store/user-alias-store'
 import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
 import { mergeChatMessageSnapshot } from '../../views/main/utils/chat-message-buffer'
@@ -341,7 +348,10 @@ export interface DesktopApi {
   }): Promise<TwitchActivitiesSnapshot>
   getTwitchActivityCapability(params: { channelSlug: string }): Promise<TwitchActivityCapability>
   getTwitchRewardQueueSummary(params: { channelSlug: string }): Promise<TwitchRewardQueueSummary>
-  executeTwitchActivityAction(params: TwitchActivityAction): Promise<{ message?: string }>
+  executeTwitchActivityAction(
+    params: TwitchActivityAction,
+    expectedAccountId?: string,
+  ): Promise<{ message?: string }>
   getTwitchRewardRedemptions(params: {
     channelSlug: string
     rewardId?: string
@@ -353,6 +363,9 @@ export interface DesktopApi {
   setTwitchWebSession(params: { token: string }): Promise<TwitchWebSessionStatus>
   getTwitchWebSessionStatus(): Promise<TwitchWebSessionStatus>
   clearTwitchWebSession(): Promise<void>
+  connectTwitchPoints(params: { windowScope: string }): Promise<TwitchWebSessionStatus | null>
+  getTwitchPointsSessionStatus(): Promise<TwitchWebSessionStatus>
+  clearTwitchPointsSession(): Promise<void>
   watchTwitchActivities(params: { channelSlug: string; watch: boolean }): Promise<void>
   executePlatformCommand(params: {
     platform: Platform
@@ -580,6 +593,7 @@ export interface DesktopApiContext {
 }
 
 const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+let webSessionRevision = 0
 
 const twitchActivities = createTwitchActivitiesService()
 const twitchChatTools = createChatToolsService()
@@ -603,7 +617,7 @@ async function twitchRequest<T>(action: string, run: () => Promise<T>): Promise<
   }
 }
 
-async function prepareTwitchActivitiesRequest(eventSubAccountId?: string) {
+async function prepareTwitchActivitiesRequest(eventSubAccountId?: string, usePoints = false) {
   const getAccount = () =>
     eventSubAccountId
       ? AccountStore.findById(eventSubAccountId)
@@ -612,11 +626,20 @@ async function prepareTwitchActivitiesRequest(eventSubAccountId?: string) {
   if (account?.platform !== 'twitch' || !AccountStore.getTokens(account.id)?.accessToken)
     throw new Error(t('runtime.api.connectTwitchFirst'))
   const accessToken = await currentTwitchAccessToken(account.id)
+  const [token, webSession, pointsSession] = await Promise.all([
+    twitchUserCredentials(accessToken),
+    eventSubAccountId ? undefined : TwitchWebSessionStore.get(),
+    usePoints ? currentTwitchPointsSession() : undefined,
+  ])
   const credentials: TwitchActivitiesCredentials = {
-    ...(await twitchUserCredentials(accessToken)),
+    ...token,
     platformUserId: account.platformUserId,
     scopes: account.scopes,
-    webSession: eventSubAccountId ? undefined : await TwitchWebSessionStore.get(),
+    webSession,
+    pointsSession,
+    refreshPointsSession: pointsSession
+      ? () => currentTwitchPointsSession(pointsSession)
+      : undefined,
   }
   const checkIdentity = () => {
     if (getAccount()?.id !== account.id)
@@ -638,8 +661,9 @@ async function prepareTwitchActivitiesRequest(eventSubAccountId?: string) {
 async function twitchActivity<T>(
   operation: (credentials: TwitchActivitiesCredentials) => Promise<T>,
   eventSubAccountId?: string,
+  usePoints = false,
 ): Promise<T> {
-  const request = await prepareTwitchActivitiesRequest(eventSubAccountId)
+  const request = await prepareTwitchActivitiesRequest(eventSubAccountId, usePoints)
   return request.run(operation)
 }
 
@@ -662,11 +686,53 @@ export async function requestTwitchActivitiesSnapshot(params: {
   channelSlug: string
   sections?: TwitchActivitySnapshotPart[]
 }): Promise<TwitchActivitiesSnapshot> {
-  const { credentials, run } = await prepareTwitchActivitiesRequest()
-  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${credentials.webSession ? 'web' : 'oauth'}`
+  const sessionRevision = webSessionRevision
+  const usesPoints =
+    !params.sections ||
+    params.sections.some((part) => part === 'rewards' || part === 'pointsBalance')
+  const { credentials, run } = await prepareTwitchActivitiesRequest(undefined, usesPoints)
+  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${sessionRevision}`
   return activitySnapshots.request(key, params.sections, () =>
     run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
   )
+}
+
+export async function planTwitchActivitySnapshot(
+  channelSlug: string,
+  eventSubConnected: boolean,
+): Promise<Omit<TwitchActivityCapability, 'channelSlug'>> {
+  const account = AccountStore.findByPlatform('twitch')
+  if (!account)
+    return {
+      mode: 'unavailable',
+      snapshotSections: [],
+      error: t('runtime.server.connectTwitchActivities'),
+    }
+  const own = channelSlug.toLowerCase() === account.username.toLowerCase()
+  const [web, points] = await Promise.all([
+    TwitchWebSessionStore.status(),
+    TwitchPointsSessionStore.status(),
+  ])
+  const hasWeb = web.configured && web.userId === account.platformUserId
+  const hasPoints = hasWeb || (points.configured && points.userId === account.platformUserId)
+  const allowed = (...names: string[]) => names.some((scope) => account.scopes.includes(scope))
+  const polls = own && allowed('channel:read:polls', 'channel:manage:polls')
+  const predictions = own && allowed('channel:read:predictions', 'channel:manage:predictions')
+  const rewards = own && allowed('channel:read:redemptions', 'channel:manage:redemptions')
+  const eventsub = own && eventSubConnected
+  const sections: TwitchActivitySnapshotPart[] = ['pinnedMessage']
+  if ((hasWeb || polls) && !(eventsub && polls)) sections.push('polls')
+  if ((hasWeb || predictions) && !(eventsub && predictions)) sections.push('predictions')
+  if (hasPoints || (rewards && !eventsub)) sections.push('rewards')
+  if (hasPoints) sections.push('pointsBalance')
+  return {
+    mode: eventsub && (polls || predictions || rewards) ? 'eventsub' : 'snapshot',
+    snapshotSections: sections,
+    intervalMs: 15000,
+    ...(!hasPoints && !(polls && predictions && rewards)
+      ? { error: t('runtime.server.saveTwitchWebSession') }
+      : {}),
+  }
 }
 
 // ── Avatar resolution (port of internal/avatar/resolver.go) ────────────────
@@ -903,8 +969,62 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   }
 
   let twitchAuth:
-    | { controller: AbortController; windowScope: string; userCode?: string }
+    | {
+        controller: AbortController
+        windowScope: string
+        userCode?: string
+        purpose?: 'channel-points'
+      }
     | undefined
+
+  function cancelTwitchDeviceAuth() {
+    if (!twitchAuth) return
+    twitchAuth.controller.abort()
+    twitchAuth = undefined
+    ctx.events.emit('twitch_device_code', null)
+  }
+
+  ctx.events.on('accounts_changed', ({ platform, identityChanged }) => {
+    if (platform === 'twitch' && identityChanged && twitchAuth?.purpose === 'channel-points')
+      cancelTwitchDeviceAuth()
+  })
+
+  function twitchWebSessionChanged() {
+    webSessionRevision++
+    ctx.events.emit('twitch_web_session_changed', undefined)
+    ctx.twitchActivityRefresh?.restart()
+  }
+
+  async function startTwitchDeviceAuth<
+    T extends { code: { user_code: string; verification_uri: string } },
+  >(windowScope: string, request: (signal: AbortSignal) => Promise<T>, purpose?: 'channel-points') {
+    cancelTwitchDeviceAuth()
+    const controller = new AbortController()
+    const current: NonNullable<typeof twitchAuth> = { controller, windowScope, purpose }
+    twitchAuth = current
+    const clear = () => {
+      if (twitchAuth !== current) return
+      twitchAuth = undefined
+      ctx.events.emit('twitch_device_code', null)
+    }
+    try {
+      const attempt = await request(controller.signal)
+      controller.signal.throwIfAborted()
+      const { user_code: userCode, verification_uri: url } = attempt.code
+      current.userCode = userCode
+      ctx.events.emit('twitch_device_code', {
+        userCode,
+        url,
+        windowScope,
+        ...(purpose ? { purpose } : {}),
+      })
+      return { attempt, signal: controller.signal, url, clear }
+    } catch (error) {
+      clear()
+      if (controller.signal.aborted && purpose === 'channel-points') return null
+      throw error
+    }
+  }
 
   async function createAuthUrl({ platform, windowScope }: AuthRequest): Promise<string> {
     if (platform === 'kick') {
@@ -914,42 +1034,23 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     if (platform === 'vkplay') return getVkPlayAuthUrl()
     if (platform === 'youtube') return getYouTubeAuthUrl()
 
-    twitchAuth?.controller.abort()
-    const controller = new AbortController()
-    const current: NonNullable<typeof twitchAuth> = { controller, windowScope }
-    twitchAuth = current
-    ctx.events.emit('twitch_device_code', null)
-
-    const clear = () => {
-      if (twitchAuth !== current) return
-      twitchAuth = undefined
-      ctx.events.emit('twitch_device_code', null)
-    }
-
-    try {
-      const attempt = await requestTwitchDeviceCode(controller.signal)
-      controller.signal.throwIfAborted()
-      const { user_code: userCode, verification_uri: url } = attempt.code
-      current.userCode = userCode
-      ctx.events.emit('twitch_device_code', { userCode, url, windowScope })
-      void connectTwitchDevice(attempt, controller.signal)
-        .then((account) => {
-          clear()
-          return finishDesktopSignIn('twitch', account)
+    const flow = await startTwitchDeviceAuth(windowScope, requestTwitchDeviceCode)
+    if (!flow) throw new Error(t('runtime.auth.twitchSignInFailed'))
+    const { attempt, clear, signal, url } = flow
+    void connectTwitchDevice(attempt, signal)
+      .then((account) => {
+        clear()
+        return finishDesktopSignIn('twitch', account)
+      })
+      .catch((error: unknown) => {
+        if (signal.aborted) return
+        ctx.events.emit('auth_error', {
+          platform: 'twitch',
+          error: error instanceof Error ? error.message : t('runtime.auth.twitchSignInFailed'),
         })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return
-          ctx.events.emit('auth_error', {
-            platform: 'twitch',
-            error: error instanceof Error ? error.message : t('runtime.auth.twitchSignInFailed'),
-          })
-        })
-        .finally(clear)
-      return url
-    } catch (error) {
-      clear()
-      throw error
-    }
+      })
+      .finally(clear)
+    return url
   }
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
@@ -1009,8 +1110,47 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         throw new Error(t('runtime.api.twitchActivitiesNotInitialized'))
       return ctx.twitchActivityRefresh.capability(channelSlug)
     },
-    executeTwitchActivityAction: (action) =>
-      twitchActivity((credentials) => twitchActivities.execute(credentials, action)),
+    executeTwitchActivityAction: async (action, expectedAccountId) => {
+      const account = AccountStore.findByPlatform('twitch')
+      if (expectedAccountId && account?.id !== expectedAccountId)
+        throw new Error(t('runtime.api.activeTwitchAccountChanged'))
+      const result = await twitchActivity(
+        (credentials) => twitchActivities.execute(credentials, action),
+        undefined,
+        action.action === 'redeem_reward',
+      )
+      if (action.action !== 'redeem_reward' || action.input || !account) return result
+      if (AccountStore.findByPlatform('twitch')?.id !== account.id) return result
+
+      const channelId = normalizeMessageChannel('twitch', action.channelSlug)
+      if (channelId === account.username.toLowerCase()) return result
+      const watchedChannelId = watchedChannelManager.findActiveChannelId('twitch', channelId)
+      if (!watchedChannelId) return result
+
+      const broadcaster = channelAccount('twitch', channelId)
+      if (
+        broadcaster?.username.toLowerCase() === channelId &&
+        ctx.twitchEventSub?.ownsChannel(broadcaster.id, channelId) &&
+        broadcaster.scopes.some(
+          (scope) => scope === 'channel:read:redemptions' || scope === 'channel:manage:redemptions',
+        )
+      )
+        return result
+
+      const message = buildTwitchRewardNotice({
+        id: `local:${crypto.randomUUID()}`,
+        channelId,
+        actor: {
+          id: account.platformUserId,
+          username: account.username,
+          displayName: account.displayName,
+        },
+        timestamp: new Date(),
+        reward: { id: action.rewardId, title: action.rewardTitle, cost: action.cost },
+      })
+      ctx.events.emit('twitch_chat_notice', { message, watchedChannelId })
+      return result
+    },
     getTwitchRewardRedemptions: (params) =>
       twitchActivity((credentials) => twitchActivities.redemptions(credentials, params)),
     getTwitchFollowing: (params = {}) =>
@@ -1024,12 +1164,48 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (account && account.platformUserId !== session.userId)
         throw new Error(t('runtime.api.twitchWebSessionMismatch'))
       await TwitchWebSessionStore.set(session)
-      ctx.twitchActivityRefresh?.restart()
+      twitchWebSessionChanged()
       return TwitchWebSessionStore.status()
     },
     clearTwitchWebSession: async () => {
       await TwitchWebSessionStore.clear()
-      ctx.twitchActivityRefresh?.restart()
+      twitchWebSessionChanged()
+    },
+    getTwitchPointsSessionStatus: async () => {
+      const session = await currentTwitchPointsSession()
+      return session
+        ? { configured: true, userId: session.userId, username: session.username }
+        : { configured: false }
+    },
+    connectTwitchPoints: async ({ windowScope }) => {
+      const account = AccountStore.findByPlatform('twitch')
+      if (!account || !AccountStore.getTokens(account.id)?.accessToken)
+        throw new Error(t('runtime.api.connectTwitchFirst'))
+      const flow = await startTwitchDeviceAuth(
+        windowScope,
+        requestTwitchPointsDeviceCode,
+        'channel-points',
+      )
+      if (!flow) return null
+      const { attempt, clear, signal, url } = flow
+      try {
+        signal.throwIfAborted()
+        ctx.openBrowser(url)
+        const session = await connectTwitchPointsDevice(attempt, account.platformUserId, signal)
+        await TwitchPointsSessionStore.set(session, signal)
+        twitchWebSessionChanged()
+        return { configured: true, userId: session.userId, username: session.username }
+      } catch (error) {
+        if (signal.aborted) return null
+        throw error
+      } finally {
+        clear()
+      }
+    },
+    clearTwitchPointsSession: async () => {
+      if (twitchAuth?.purpose === 'channel-points') cancelTwitchDeviceAuth()
+      await TwitchPointsSessionStore.clear()
+      twitchWebSessionChanged()
     },
     watchTwitchActivities: async ({ channelSlug, watch }) => {
       if (!ctx.twitchEventSub) throw new Error(t('runtime.api.twitchEventsNotInitialized'))
@@ -1140,9 +1316,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     cancelTwitchAuth: async ({ userCode, windowScope }) => {
       if (twitchAuth?.windowScope !== windowScope || twitchAuth.userCode !== userCode) return
-      twitchAuth.controller.abort()
-      twitchAuth = undefined
-      ctx.events.emit('twitch_device_code', null)
+      cancelTwitchDeviceAuth()
     },
 
     authLogout: async ({ platform }) => {

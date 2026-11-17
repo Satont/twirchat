@@ -8,7 +8,6 @@ import {
 } from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
-import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
 import type {
   Account,
   NormalizedChatMessage,
@@ -67,12 +66,16 @@ import { createStreamerModeService } from '../../services/streamer-mode'
 import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { createTwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
+import { parseTwitchRewardNotice } from '../../services/twitch-reward-notice'
 import { sevenTVService } from '../../seventv'
 import { AccountStore, ChannelStore, SettingsStore } from '../../store'
 import { getClientSecret } from '../../store/client-secret'
 import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
-import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import {
+  TwitchPointsSessionStore,
+  TwitchWebSessionStore,
+} from '../../store/twitch-web-session-store'
 import { createChatAccountSender } from '../../watched-channels/account-sender'
 import {
   HOME_PLUGIN_CHANNELS_KEY,
@@ -83,6 +86,7 @@ import { createPluginChannels } from '../../watched-channels/plugin-channels'
 import { setLanguage, t } from '../i18n'
 import {
   createDesktopApi,
+  planTwitchActivitySnapshot,
   subscribeTwitchActivities,
   unsubscribeTwitchActivities,
   requestTwitchActivitiesSnapshot,
@@ -268,6 +272,14 @@ function boot(): DesktopBackend {
               event.eventType === 'stream.online',
             )
           events.emit('twitch_activity', event)
+          if (event.type === 'redemption' && event.channelId === account.platformUserId) {
+            const message = parseTwitchRewardNotice(event)
+            if (message)
+              emitTwitchNotice(message, {
+                home: primary && isHomeTwitchChannel(message.channelId),
+                watched: ownsChannel(message.channelId),
+              })
+          }
         },
         autoMod: (event) => {
           if (event.channelSlug && ownsChannel(event.channelSlug))
@@ -297,38 +309,7 @@ function boot(): DesktopBackend {
     },
   })
   const twitchActivityRefresh = new TwitchActivityRefreshClient({
-    async plan(channelSlug) {
-      const account = AccountStore.findByPlatform('twitch')
-      if (!account)
-        return {
-          mode: 'unavailable',
-          snapshotSections: [],
-          error: t('runtime.server.connectTwitchActivities'),
-        }
-      const own = channelSlug.toLowerCase() === account.username.toLowerCase()
-      const web = await TwitchWebSessionStore.status()
-      const hasWeb = web.configured && web.userId === account.platformUserId
-      const allowed = (...names: string[]) => names.some((scope) => account.scopes.includes(scope))
-      const polls = own && allowed('channel:read:polls', 'channel:manage:polls')
-      const predictions = own && allowed('channel:read:predictions', 'channel:manage:predictions')
-      const rewards = own && allowed('channel:read:redemptions', 'channel:manage:redemptions')
-      const eventsub = own && twitchEventSubConnected
-      const sections: TwitchActivitySnapshotPart[] = ['pinnedMessage']
-      if ((hasWeb || polls) && !(eventsub && polls)) sections.push('polls')
-      if ((hasWeb || predictions) && !(eventsub && predictions)) sections.push('predictions')
-      if ((hasWeb || rewards) && !(eventsub && rewards)) sections.push('rewards')
-      if (hasWeb) sections.push('pointsBalance')
-      return {
-        mode: eventsub && (polls || predictions || rewards) ? 'eventsub' : 'snapshot',
-        snapshotSections: sections,
-        intervalMs: 15000,
-        ...(!hasWeb && !(polls && predictions && rewards)
-          ? {
-              error: t('runtime.server.saveTwitchWebSession'),
-            }
-          : {}),
-      }
-    },
+    plan: (channelSlug) => planTwitchActivitySnapshot(channelSlug, twitchEventSubConnected),
     snapshot: (channelSlug, sections) => requestTwitchActivitiesSnapshot({ channelSlug, sections }),
     publish: (update) => events.emit('twitch_activity_snapshot', update),
     capability: (capability) => events.emit('twitch_activity_capability', capability),
@@ -347,7 +328,10 @@ function boot(): DesktopBackend {
     remove: (id) => AccountStore.delete(id),
     removeSession: async (account) => {
       if (account.platform === 'twitch')
-        await TwitchWebSessionStore.clearForUser(account.platformUserId)
+        await Promise.all([
+          TwitchWebSessionStore.clearForUser(account.platformUserId),
+          TwitchPointsSessionStore.clearForUser(account.platformUserId),
+        ])
     },
     disconnect: async (platform) => {
       const channel = currentStatuses.get(platform)?.channelLogin

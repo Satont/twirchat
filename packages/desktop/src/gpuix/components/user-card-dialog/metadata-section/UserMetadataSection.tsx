@@ -54,7 +54,7 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
       )
     }
 
-    if (metadata.length > 0) {
+    if (metadata && metadata.length > 0) {
       const filteredMetadata = metadata.filter((el) => {
         const value = el.value?.trim()
         if (value === 'This user is not currently following this channel.') return false

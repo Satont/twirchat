@@ -328,6 +328,73 @@ describe('Twitch activities public API', () => {
 })
 
 describe('Twitch web session operations from pinned Leafyrino contracts', () => {
+  test('refreshes an unauthorized points read without replaying a redemption', async () => {
+    const { service, calls } = fixture((_, init) => {
+      if (new Headers(init.headers).get('authorization') !== 'OAuth rotated-points')
+        return new Response(null, { status: 401 })
+      return Response.json([
+        {
+          data: {
+            community: {
+              channel: {
+                self: { communityPoints: { balance: 1900 } },
+                communityPointsSettings: { customRewards: [] },
+              },
+            },
+          },
+        },
+      ])
+    })
+    const pointsSession = { ...required(account.webSession), token: 'rejected-points' }
+    const credentials = {
+      ...account,
+      pointsSession,
+      refreshPointsSession: async () => ({ ...pointsSession, token: 'rotated-points' }),
+    }
+    const snapshot = await service.snapshot(credentials, 'other', ['pointsBalance'])
+    expect(snapshot.pointsBalance).toBe(1900)
+    expect(calls).toHaveLength(2)
+
+    await expect(
+      service.execute(credentials, {
+        channelSlug: 'other',
+        action: 'redeem_reward',
+        rewardId: 'reward',
+        rewardTitle: 'Reward',
+        cost: 100,
+      }),
+    ).rejects.toThrow('HTTP 401')
+    expect(calls).toHaveLength(3)
+  })
+
+  test('uses the device session for spending points and the web session for other activities', async () => {
+    const { service, calls } = fixture((_, init) => {
+      const field =
+        new Headers(init.headers).get('authorization') === 'OAuth points-secret'
+          ? 'redeemCommunityPointsCustomReward'
+          : 'followUser'
+      return Response.json([{ data: { [field]: { error: null } } }])
+    })
+    const credentials = {
+      ...account,
+      pointsSession: { ...required(account.webSession), token: 'points-secret' },
+    }
+
+    await service.execute(credentials, {
+      channelSlug: 'creator',
+      action: 'redeem_reward',
+      rewardId: 'reward',
+      rewardTitle: 'Reward',
+      cost: 100,
+    })
+    await service.execute(credentials, { channelSlug: 'creator', action: 'follow' })
+
+    expect(calls.map(({ init }) => new Headers(init.headers).get('authorization'))).toEqual([
+      'OAuth points-secret',
+      'OAuth web-secret',
+    ])
+  })
+
   for (const action of literal(['vote_poll', 'place_bet', 'redeem_reward', 'follow', 'unfollow']))
     test(action, async () => {
       const payload = {
@@ -340,6 +407,7 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
         points: 100,
         rewardId: 'reward',
         rewardTitle: 'Reward',
+        rewardPrompt: 'Tell us what to play',
         cost: 100,
         input: 'Text',
         votes: 3,
@@ -392,7 +460,7 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
           rewardID: 'reward',
           title: 'Reward',
           textInput: 'Text',
-          prompt: null,
+          prompt: 'Tell us what to play',
         })
       else
         expect(request.variables.input).toEqual(
@@ -479,7 +547,18 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
                   self: { communityPoints: { balance: 1234 } },
                   communityPointsSettings: {
                     customRewards: [
-                      { id: 'reward', title: 'Hi', cost: 50, isEnabled: true, isPaused: false },
+                      {
+                        id: 'reward',
+                        title: 'Hi',
+                        cost: 50,
+                        isEnabled: true,
+                        isPaused: false,
+                        isInStock: false,
+                        defaultBackgroundColor: '#9147ff',
+                        defaultImage: { url: 'https://example.test/reward.png' },
+                      },
+                      { id: 'bits', title: 'Bits', cost: 10, pricingType: 'BITS' },
+                      { id: 'invalid', title: 'Missing cost' },
                     ],
                   },
                 },
@@ -494,7 +573,13 @@ describe('Twitch web session operations from pinned Leafyrino contracts', () => 
     expect(result.errors).toEqual({})
     expect(required(required(result.polls[0]).choices[0]).votes).toBe(4)
     expect(required(required(result.predictions[0]).outcomes[0]).points).toBe(100)
-    expect(required(result.rewards[0]).cost).toBe(50)
+    expect(result.rewards).toHaveLength(1)
+    expect(required(result.rewards[0])).toMatchObject({
+      cost: 50,
+      isInStock: false,
+      backgroundColor: '#9147ff',
+      imageUrl: 'https://example.test/reward.png',
+    })
     expect(result.pointsBalance).toBe(1234)
   })
 })

@@ -16,6 +16,12 @@ import {
   waitForTwitchDeviceToken,
 } from '../src/auth/twitch'
 import { createTwitchChatAuthProvider } from '../src/auth/twitch-access-token'
+import {
+  connectTwitchPointsDevice,
+  refreshTwitchPointsDevice,
+  requestTwitchPointsDeviceCode,
+  TWITCH_TV_CLIENT_ID,
+} from '../src/auth/twitch-points'
 import { getYouTubeAuthUrl, handleYouTubeCallback, refreshYouTubeToken } from '../src/auth/youtube'
 import { AccountStore } from '../src/store/account-store'
 import { getDb, initDb } from '../src/store/db'
@@ -142,6 +148,90 @@ test('Twitch rejects foreign verification links and cancels a poll before sendin
   controller.abort()
   await expect(polling).rejects.toThrow()
   expect(requests).toBe(1)
+})
+
+test('Twitch Channel Points use the Android TV device flow and validate the active identity', async () => {
+  let polls = 0
+  let deviceId: string | null = null
+  mockFetch(async (url, init) => {
+    const headers = new Headers(init?.headers)
+    if (url === 'https://id.twitch.tv/oauth2/validate') {
+      expect(headers.get('Authorization')).toBe('OAuth points-access')
+      return Response.json({
+        client_id: TWITCH_TV_CLIENT_ID,
+        user_id: '42',
+        login: 'twitchlogin',
+        expires_in: 0,
+        scopes: ['channel:read:redemptions', 'channel:manage:redemptions'],
+      })
+    }
+
+    const form = readForm(init)
+    expect(form.get('client_id')).toBe(TWITCH_TV_CLIENT_ID)
+    expect(form.has('client_secret')).toBe(false)
+    expect(headers.get('Client-Id')).toBe(TWITCH_TV_CLIENT_ID)
+    expect(headers.get('Origin')).toBe('https://android.tv.twitch.tv')
+    expect(headers.get('Referer')).toBe('https://android.tv.twitch.tv/')
+    expect(headers.get('User-Agent')).toContain('Android')
+    if (url === 'https://id.twitch.tv/oauth2/device') {
+      expect(form.get('scopes')).toBe('channel:read:redemptions channel:manage:redemptions')
+      deviceId = headers.get('X-Device-Id')
+      expect(deviceId).toMatch(/^[a-f0-9]{32}$/u)
+      return Response.json({ ...code, verification_uri: 'https://www.twitch.tv/activate' })
+    }
+
+    expect(url).toBe(TWITCH_TOKEN_URL)
+    expect(headers.get('X-Device-Id')).toBe(deviceId)
+    expect(form.get('device_code')).toBe(code.device_code)
+    expect(form.get('grant_type')).toBe('urn:ietf:params:oauth:grant-type:device_code')
+    expect(form.has('scopes')).toBe(false)
+    if (++polls === 1) return Response.json({ message: 'authorization_pending' }, { status: 400 })
+    return Response.json({ access_token: 'points-access' })
+  })
+
+  const { signal } = new AbortController()
+  const attempt = await requestTwitchPointsDeviceCode(signal)
+  expect(attempt.code.user_code).toBe(code.user_code)
+  await expect(connectTwitchPointsDevice(attempt, '42', signal)).resolves.toEqual({
+    token: 'points-access',
+    userId: '42',
+    username: 'twitchlogin',
+    clientId: TWITCH_TV_CLIENT_ID,
+    expiresAt: undefined,
+    refreshToken: undefined,
+  })
+  expect(polls).toBe(2)
+  expect(AccountStore.findByPlatform('twitch')).toBeNull()
+})
+
+test('Twitch Channel Points refresh rejects another identity and preserves an unrotated refresh token', async () => {
+  mockFetch(async (url, init) => {
+    if (url === 'https://id.twitch.tv/oauth2/validate')
+      return Response.json({
+        client_id: TWITCH_TV_CLIENT_ID,
+        user_id: '51',
+        login: 'viewer',
+        expires_in: 0,
+        scopes: null,
+      })
+    expect(url).toBe(TWITCH_TOKEN_URL)
+    const form = readForm(init)
+    expect(form.get('client_id')).toBe(TWITCH_TV_CLIENT_ID)
+    expect(form.get('grant_type')).toBe('refresh_token')
+    expect(form.get('refresh_token')).toBe('points+refresh%')
+    expect(form.has('client_secret')).toBe(false)
+    return Response.json({ access_token: 'points-refreshed', expires_in: 60 })
+  })
+
+  const refreshToken = 'points+refresh%'
+  await expect(refreshTwitchPointsDevice({ userId: '42', refreshToken })).rejects.toThrow(
+    'connected Twitch account',
+  )
+  await expect(refreshTwitchPointsDevice({ userId: '51', refreshToken })).resolves.toMatchObject({
+    token: 'points-refreshed',
+    refreshToken,
+    expiresAt: expect.any(Number),
+  })
 })
 
 test('Twitch refresh is serialized and persists the rotated public-client token', async () => {

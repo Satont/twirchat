@@ -69,6 +69,8 @@ export const app = {
   'app.platforms.twitchDevice.title': 'Connect Twitch',
   'app.platforms.twitchDevice.description':
     'Confirm the code on Twitch and authorize TwirChat in your browser.',
+  'app.platforms.twitchDevice.pointsDescription':
+    'Enter the code on Twitch and approve the connection using the same account as in TwirChat.',
   'app.platforms.twitchDevice.open': 'Open Twitch',
   'app.platforms.twitchDevice.copyCode': 'Copy code',
 

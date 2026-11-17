@@ -64,9 +64,15 @@ export type DesktopEventMap = {
   twitch_eventsub_status: TwitchEventSubStatus
   twitch_activity_snapshot: TwitchActivitySnapshotUpdate
   twitch_activity_capability: TwitchActivityCapability
+  twitch_web_session_changed: undefined
   platform_status: PlatformStatusInfo
   auth_url: { platform: Platform; url: string }
-  twitch_device_code: { url: string; userCode: string; windowScope: string } | null
+  twitch_device_code: {
+    url: string
+    userCode: string
+    windowScope: string
+    purpose?: 'channel-points'
+  } | null
   auth_success: { platform: Platform; username: string; displayName: string }
   auth_error: { platform: Platform; error: string }
   update_status: { status: string; message: string; progress?: number; hash?: string }
@@ -126,6 +132,7 @@ export function createDesktopEvents(): DesktopEvents {
     twitch_eventsub_status: new Set(),
     twitch_activity_snapshot: new Set(),
     twitch_activity_capability: new Set(),
+    twitch_web_session_changed: new Set(),
     platform_status: new Set(),
     auth_url: new Set(),
     twitch_device_code: new Set(),

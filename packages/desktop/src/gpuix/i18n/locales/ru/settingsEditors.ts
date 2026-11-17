@@ -139,7 +139,13 @@ export const ruSettingsEditors = {
 
   // Twitch session settings
   'twitchSessionSettings.intro':
-    'Голосование, прогнозы, получение наград и отслеживание каналов используют отдельную веб-сессию Twitch. Скопируйте её токен и подключите ниже. Зашифрованные сессии сохраняются отдельно для каждого аккаунта Twitch и никогда не отображаются.',
+    'Веб-сессия Twitch даёт доступ к голосованиям, прогнозам, наградам и отслеживанию каналов. Токены веб-сессий хранятся зашифрованными отдельно для каждого аккаунта Twitch.',
+  'twitchSessionSettings.checking': 'Проверка подключения…',
+  'twitchSessionSettings.pointsConnected': 'Баллы подключены по коду Twitch.',
+  'twitchSessionSettings.pointsNotConnected':
+    'Подтвердите подключение на Twitch, чтобы видеть баланс и получать награды в чате.',
+  'twitchSessionSettings.connectPoints': 'Подключить баллы',
+  'twitchSessionSettings.disconnectPoints': 'Отключить баллы',
   'twitchSessionSettings.connected': 'Подключено',
   'twitchSessionSettings.connectedAs': 'Подключено как {username}',
   'twitchSessionSettings.notConnected': 'Дополнительная сессия Twitch не подключена.',

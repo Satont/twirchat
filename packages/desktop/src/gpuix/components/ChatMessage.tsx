@@ -20,6 +20,7 @@ import type {
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
@@ -50,6 +51,7 @@ import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
 import { MessageTranslation } from './MessageTranslation'
 import { TwitchChatNotice } from './TwitchChatNotice'
+import { TwitchRewardNotice } from './TwitchRewardNotice'
 import { Badge as BadgeComponent } from './ui/Badge'
 import { BadgeTooltip } from './ui/BadgeTooltip'
 import { EventTimestamp } from './ui/EventTimestamp'
@@ -582,22 +584,34 @@ function legacySystemAction(text: string): SevenTvSystemAction {
 
 function wrapTwitchMessage(
   content: ReactElement,
-  id: string,
+  props: ChatMessageProps,
   fontSize: number,
   announcement: string | undefined,
   bits: number | undefined,
+  rewardId: string | undefined,
 ): ReactElement {
   if (announcement)
     return (
-      <ChatAnnouncement id={id} color={announcement} fontSize={fontSize}>
+      <ChatAnnouncement id={props.message.id} color={announcement} fontSize={fontSize}>
         {content}
       </ChatAnnouncement>
     )
   if (bits)
     return (
-      <CheerNotice id={id} fontSize={fontSize} bits={bits}>
+      <CheerNotice id={props.message.id} fontSize={fontSize} bits={bits}>
         {content}
       </CheerNotice>
+    )
+  if (rewardId)
+    return (
+      <TwitchRewardNotice
+        message={props.message}
+        rewardId={rewardId}
+        channelSlug={props.channelSlug}
+        fontSize={fontSize}
+      >
+        {content}
+      </TwitchRewardNotice>
     )
   return content
 }
@@ -654,6 +668,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const isSystem = message.type === 'system'
   const isAction = message.type === 'action'
   const isTombstone = props.moderationOutcome?.isTombstone === true
+  const twitchMetadata = message.platform === 'twitch' ? message.metadata : undefined
+  const rewardId = isTombstone && !isSystem ? undefined : twitchMetadata?.rewardId
   const mentionMatcher = useMemo(() => createMentionMatcher(props.accounts ?? []), [props.accounts])
   const isSelfPing =
     props.highlighted ?? (props.selfPingEnabled === true && mentionMatcher(message))
@@ -740,8 +756,30 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
 
   // ── System message ────────────────────────────────────────────────────────
   if (isSystem) {
+    if (rewardId)
+      return (
+        <TwitchRewardNotice
+          message={message}
+          rewardId={rewardId}
+          channelSlug={props.channelSlug}
+          fontSize={fontSize}
+          authorName={authorName}
+          chatTheme={props.chatTheme}
+          timestampFormat={props.timestampFormat}
+          sourceLabel={sourceLabel}
+          time={
+            props.showTimestamp
+              ? formatMessageTime(message.timestamp, props.timestampFormat)
+              : undefined
+          }
+        />
+      )
+
     const notice = message.metadata?.twitchNotice
     if (message.platform === 'twitch' && notice) {
+      // Membership notices are single-line events: the feed chip belongs in the
+      // row, not on a line of its own above it.
+      const inlineSource = isTwitchMembershipNoticeKind(notice.kind) ? sourceLabel : null
       const row = (
         <TwitchChatNotice
           id={message.id}
@@ -751,6 +789,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           detail={notice.detail}
           chatTheme={props.chatTheme}
           timestampFormat={props.timestampFormat}
+          sourceLabel={inlineSource}
           time={
             props.showTimestamp
               ? formatMessageTime(message.timestamp, props.timestampFormat)
@@ -758,7 +797,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           }
         />
       )
-      return sourceLabel ? (
+      return sourceLabel && !inlineSource ? (
         <div>
           <div style={{ paddingTop: 4, paddingLeft: 12 }}>{sourceLabel}</div>
           {row}
@@ -877,8 +916,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   }
 
   const rowOpacity = props.moderationOutcome ? 0.48 : 1
-  const announcement = message.platform === 'twitch' ? message.metadata?.announcement : undefined
-  const bits = message.platform === 'twitch' && !isTombstone ? message.metadata?.bits : undefined
+  const announcement = twitchMetadata?.announcement
+  const bits = isTombstone ? undefined : twitchMetadata?.bits
 
   // Platform stripe: one continuous hairline down the list (rows are flush),
   // so a run of same-platform messages reads as a single column.
@@ -1059,7 +1098,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         {moderationRail}
       </div>
     )
-    return wrapTwitchMessage(content, message.id, fontSize, announcement, bits)
+    return wrapTwitchMessage(content, props, fontSize, announcement, bits, rewardId)
   }
 
   // ── Modern (default) ──────────────────────────────────────────────────────
@@ -1230,7 +1269,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       {moderationRail}
     </div>
   )
-  return wrapTwitchMessage(content, message.id, fontSize, announcement, bits)
+  return wrapTwitchMessage(content, props, fontSize, announcement, bits, rewardId)
 })
 
 export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
