@@ -107,20 +107,9 @@ export const UserCardDialog = memo(function UserCardDialog({
   const historyViewport = useRef<PublicInstance | null>(null)
   const moderation = useUserCardModeration(target)
 
-  // Track mounted state to avoid state updates after unmount
-  const mountedRef = useRef(true)
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
   const effectiveAlias = useUserCardAliasValue(target, currentAlias)
-  const [openingWindow, setOpeningWindow] = useState(false)
 
   const openPictureRef = useRef<() => void>(() => {})
-  const openInWindowRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const openPicture = useCallback(() => {
     if (!hideAvatar && avatarUrl) {
@@ -132,19 +121,7 @@ export const UserCardDialog = memo(function UserCardDialog({
     if (hideAvatar) setAvatarMenuOpen(false)
   }, [hideAvatar])
 
-  const openInWindow = useCallback(async () => {
-    if (!windows) return
-    setOpeningWindow(true)
-    try {
-      await windows.openUser({ ...target, currentAlias: effectiveAlias })
-      if (mountedRef.current) onClose()
-    } finally {
-      if (mountedRef.current) setOpeningWindow(false)
-    }
-  }, [windows, target, effectiveAlias, onClose])
-
   openPictureRef.current = openPicture
-  openInWindowRef.current = openInWindow
 
   const retainedBadges = useRetainedBadges(target.platform, target.platformUserId, target.channelId)
 
@@ -358,10 +335,6 @@ export const UserCardDialog = memo(function UserCardDialog({
           badges: target.badges,
         }}
         extraBadges={extraBadgesRef.current}
-        windows={windows}
-        standalone={standalone}
-        openingWindow={openingWindow}
-        openWindow={() => runUiTask(openInWindowRef.current())}
         hideAvatar={hideAvatar}
         channelUrl={channelUrl}
         openingPublicChannel={openingPublicChannel}
@@ -379,10 +352,6 @@ export const UserCardDialog = memo(function UserCardDialog({
       target.username,
       avatarUrl,
       target.badges,
-      windows,
-      standalone,
-      openingWindow,
-      openInWindowRef,
       hideAvatar,
       channelUrl,
       openingPublicChannel,

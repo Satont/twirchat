@@ -39,10 +39,6 @@ export interface UserCardHeaderProps {
   effectiveAlias?: string
   accent?: UserCardHeaderAccent
   extraBadges?: BadgeData[]
-  windows: DesktopWindows | null
-  standalone: boolean
-  openingWindow: boolean
-  openWindow: () => void
 }
 
 export interface UserCardHeaderAccent {

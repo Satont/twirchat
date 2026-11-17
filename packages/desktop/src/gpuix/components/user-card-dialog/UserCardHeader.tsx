@@ -165,10 +165,6 @@ export function UserCardHeader({
   effectiveAlias,
   accent,
   extraBadges,
-  windows,
-  standalone,
-  openingWindow,
-  openWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -390,7 +386,7 @@ export function UserCardHeader({
         </div>
       </div>
       {/* Compact actions stay inline with the user info instead of adding header height. */}
-      {channelUrl || (windows && !standalone) ? (
+      {channelUrl ? (
         <div
           style={{
             display: 'flex',
@@ -401,30 +397,16 @@ export function UserCardHeader({
             gap: 8,
           }}
         >
-          {channelUrl ? (
-            <HeaderAction
-              icon="externalLink"
-              label={openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-              disabled={openingPublicChannel}
-              onClick={openPublicChannel}
-              backgroundColor={headerButtonBg}
-              hoverBackgroundColor={headerButtonHover}
-              borderColor={headerBorder}
-              color={theme.text2}
-            />
-          ) : null}
-          {windows && !standalone ? (
-            <HeaderAction
-              icon="monitor"
-              label={openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
-              disabled={openingWindow}
-              onClick={openWindow}
-              backgroundColor={headerButtonBg}
-              hoverBackgroundColor={headerButtonHover}
-              borderColor={headerBorder}
-              color={theme.text2}
-            />
-          ) : null}
+          <HeaderAction
+            icon="externalLink"
+            label={openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
+            disabled={openingPublicChannel}
+            onClick={openPublicChannel}
+            backgroundColor={headerButtonBg}
+            hoverBackgroundColor={headerButtonHover}
+            borderColor={headerBorder}
+            color={theme.text2}
+          />
         </div>
       ) : null}
     </div>
