@@ -152,71 +152,53 @@ export function UserCardHeader({
       }}
     >
       {showBanner ? (
+        <RemoteImage
+          url={bannerUrl}
+          thumbnailSize={800}
+          objectFit="cover"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            borderRadius: 16,
+            pointerEvents: 'none',
+          }}
+        />
+      ) : (
         <>
-          <RemoteImage
-            url={bannerUrl}
-            thumbnailSize={800}
-            objectFit="cover"
+          {/* GPUI clips overflow to a rectangle, so keep the glows clear of the rounded corners. */}
+          <div
             style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              borderRadius: 16,
+              top: -76,
+              right: 24,
+              width: 230,
+              height: 230,
+              borderRadius: 115,
+              backgroundColor: theme.isLight
+                ? withAlpha(theme.accent.deep, 0.09)
+                : withAlpha('#ffffff', 0.08),
               pointerEvents: 'none',
             }}
           />
           <div
             style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              borderRadius: 16,
-              background: {
-                type: 'linear-gradient',
-                angle: 90,
-                stops: [
-                  { color: 'rgba(0, 0, 0, 0.72)', position: 0 },
-                  { color: 'rgba(0, 0, 0, 0.46)', position: 1 },
-                ],
-              },
+              bottom: -96,
+              left: 140,
+              width: 220,
+              height: 220,
+              borderRadius: 110,
+              backgroundColor: theme.isLight
+                ? withAlpha(theme.accent.deep, 0.06)
+                : withAlpha('#ffffff', 0.05),
               pointerEvents: 'none',
             }}
           />
         </>
-      ) : null}
-      {/* GPUI clips overflow to a rectangle, so keep the glows clear of the rounded corners. */}
-      <div
-        style={{
-          position: 'absolute',
-          top: -76,
-          right: 24,
-          width: 230,
-          height: 230,
-          borderRadius: 115,
-          backgroundColor: theme.isLight
-            ? withAlpha(theme.accent.deep, 0.09)
-            : withAlpha('#ffffff', 0.08),
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: -96,
-          left: 140,
-          width: 220,
-          height: 220,
-          borderRadius: 110,
-          backgroundColor: theme.isLight
-            ? withAlpha(theme.accent.deep, 0.06)
-            : withAlpha('#ffffff', 0.05),
-          pointerEvents: 'none',
-        }}
-      />
+      )}
 
       <div
         style={{
