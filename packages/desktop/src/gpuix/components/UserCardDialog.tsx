@@ -2,6 +2,7 @@ import type { ModerationPlatform } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
+import type { IconName } from '@gpuix/icons'
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { showNotice } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
@@ -62,7 +63,6 @@ export const UserCardDialog = memo(function UserCardDialog({
   const scrollHeaderRef = useRef(false)
   const streamer = useStore(streamerModeStore)
 
-  // Initialize scrollHeaderRef once on mount - avoids useWindowSize re-renders on every resize
   useEffect(() => {
     if (typeof window === 'undefined') return
     const update = () => {
@@ -124,7 +124,6 @@ export const UserCardDialog = memo(function UserCardDialog({
   const effectiveAlias = currentAlias ?? target.currentAlias
   const [openingWindow, setOpeningWindow] = useState(false)
 
-  // Initialize refs before callbacks that use them
   const openPictureRef = useRef<() => void>(() => {})
   const openInWindowRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -229,20 +228,30 @@ export const UserCardDialog = memo(function UserCardDialog({
   // retainedBadges now contains badges from current channel + home (global)
   // Merge: enrichedRetainedBadges (all badges from current channel + global) + target.badges (fallback) + active cosmetics.
   // The 7TV inventory is user-card-only and is rendered in the profile tab, not next to the name.
-  const extraBadges = useMemo(
-    () =>
-      mergeBadges(
-        enrichedRetainedBadges ?? [],
-        target.badges,
-        profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
-      ),
-    [
-      enrichedRetainedBadges,
+  const extraBadgesRef = useRef<ReturnType<typeof mergeBadges> | undefined>(undefined)
+
+  // Update extraBadgesRef when dependencies change - use useEffect for side effects
+  useEffect(() => {
+    const merged = mergeBadges(
+      enrichedRetainedBadges ?? [],
       target.badges,
-      profileState.badgesEnabled,
-      profileState.cosmetics?.badges,
-    ],
-  )
+      profileState.badgesEnabled ? profileState.cosmetics?.badges : undefined,
+    )
+
+    // Only update ref if content actually changed
+    const prev = extraBadgesRef.current
+    const changed =
+      !prev || prev.length !== merged.length || merged.some((b, i) => prev[i]?.id !== b.id)
+
+    if (changed) {
+      extraBadgesRef.current = merged
+    }
+  }, [
+    enrichedRetainedBadges,
+    target.badges,
+    profileState.badgesEnabled,
+    profileState.cosmetics?.badges,
+  ])
   const channelUrl = target.username
     ? publicChannelURL(target.platform, target.username)
     : undefined
@@ -263,34 +272,46 @@ export const UserCardDialog = memo(function UserCardDialog({
   const reloadMetadataAsync = metadata.reloadMetadata
   const reloadMetadata = useCallback(() => runUiTask(reloadMetadataAsync()), [reloadMetadataAsync])
 
-  const metadataItems = useMemo<MetadataItem[]>(
-    () =>
-      metadata.metadata
-        ? [
-            {
-              label: t('userCard.metadata.accountAge'),
-              value: accountAgeText(metadata.metadata),
-              icon: 'calendar',
-            },
-            {
-              label: t('userCard.metadata.followAge'),
-              value: followAgeText(metadata.metadata),
-              icon: 'users',
-            },
-            {
-              label: t('userCard.metadata.subscriptionDuration'),
-              value: subscriptionDurationText(metadata.metadata),
-              icon: 'gift',
-            },
-            {
-              label: t('userCard.metadata.subAge'),
-              value: subAgeText(metadata.metadata),
-              icon: 'clock',
-            },
-          ]
-        : [],
-    [metadata.metadata, t],
-  )
+  const metadataItemsRef = useRef<MetadataItem[]>([])
+
+  const metadataItems = useMemo<MetadataItem[]>(() => {
+    const newItems: MetadataItem[] = metadata.metadata
+      ? [
+          {
+            label: t('userCard.metadata.accountAge'),
+            value: accountAgeText(metadata.metadata),
+            icon: 'calendar' satisfies IconName,
+          },
+          {
+            label: t('userCard.metadata.followAge'),
+            value: followAgeText(metadata.metadata),
+            icon: 'users' satisfies IconName,
+          },
+          {
+            label: t('userCard.metadata.subscriptionDuration'),
+            value: subscriptionDurationText(metadata.metadata),
+            icon: 'gift' satisfies IconName,
+          },
+          {
+            label: t('userCard.metadata.subAge'),
+            value: subAgeText(metadata.metadata),
+            icon: 'clock' satisfies IconName,
+          },
+        ]
+      : []
+
+    // Only update ref if content actually changed
+    const prev = metadataItemsRef.current
+    const changed =
+      !prev ||
+      prev.length !== newItems.length ||
+      newItems.some((item, i) => prev[i]?.label !== item.label || prev[i]?.value !== item.value)
+
+    if (changed) {
+      metadataItemsRef.current = newItems
+    }
+    return metadataItemsRef.current
+  }, [metadata.metadata, t])
 
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,
@@ -321,7 +342,7 @@ export const UserCardDialog = memo(function UserCardDialog({
           avatarUrl,
           badges: target.badges,
         }}
-        extraBadges={extraBadges}
+        extraBadges={extraBadgesRef.current}
         windows={windows}
         standalone={standalone}
         openingWindow={openingWindow}
@@ -336,7 +357,7 @@ export const UserCardDialog = memo(function UserCardDialog({
       />
     ),
     [
-      extraBadges,
+      extraBadgesRef,
       target.platform,
       target.platformUserId,
       target.displayName,
