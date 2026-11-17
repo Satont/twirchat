@@ -9,6 +9,7 @@ interface UseUserCardAliasOptions {
   target: UserCardTarget
   /** Opening snapshot, only used until the alias list has loaded once. */
   currentAlias?: string
+  onClose?: () => void
 }
 
 interface UseUserCardAliasReturn {

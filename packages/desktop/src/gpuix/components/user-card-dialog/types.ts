@@ -36,14 +36,9 @@ export interface UserCardHeaderProps {
   channelUrl: string | undefined
   openingPublicChannel: boolean
   openPublicChannel: () => void
-  onAvatarClick: () => void
   effectiveAlias?: string
   accent?: UserCardHeaderAccent
   extraBadges?: BadgeData[]
-  windows: DesktopWindows | null
-  standalone: boolean
-  openingWindow: boolean
-  openWindow: () => void
 }
 
 export interface UserCardHeaderAccent {

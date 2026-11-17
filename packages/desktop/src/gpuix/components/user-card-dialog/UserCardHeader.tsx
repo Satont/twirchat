@@ -74,14 +74,9 @@ export function UserCardHeader({
   channelUrl,
   openingPublicChannel,
   openPublicChannel,
-  onAvatarClick,
   effectiveAlias,
   accent,
   extraBadges,
-  windows,
-  standalone,
-  openingWindow,
-  openWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -213,14 +208,6 @@ export function UserCardHeader({
       >
         <div
           testId="user-card-avatar"
-          tabIndex={showAvatar ? 0 : undefined}
-          onClick={onAvatarClick}
-          onKeyDown={(event) => {
-            if (event.key === 'enter' || event.key === 'space') {
-              event.preventDefault()
-              onAvatarClick()
-            }
-          }}
           style={{
             flexShrink: 0,
             width: 78,
@@ -230,7 +217,6 @@ export function UserCardHeader({
             borderColor: avatarBorder,
             backgroundColor: avatarBackground,
             overflow: 'hidden',
-            cursor: showAvatar ? 'pointer' : 'default',
             boxShadow: {
               offsetX: 0,
               offsetY: 0,
@@ -410,26 +396,6 @@ export function UserCardHeader({
               }}
             >
               {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-            </GhostButton>
-          ) : null}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {windows && !standalone ? (
-            <GhostButton
-              disabled={openingWindow}
-              onClick={openWindow}
-              icon="externalLink"
-              style={{
-                backgroundColor: headerButtonBg,
-                borderColor: headerBorder,
-                borderRadius: 10,
-                paddingLeft: 14,
-                paddingRight: 14,
-                color: showBanner ? '#ffffff' : undefined,
-                hover: { backgroundColor: headerButtonHover },
-              }}
-            >
-              {openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
             </GhostButton>
           ) : null}
         </div>
