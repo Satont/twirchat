@@ -287,6 +287,7 @@ export class DesktopWindowManager {
       },
       openChat: (tabId, panelId, overlay) => this.openChat(tabId, panelId, overlay),
       openUser: (target) => this.openUser(target),
+      openImage: (src) => this.openImage(src),
       close: () => this.close(descriptor.id),
       quit: () => this.quit(),
       toggleOverlayInertia: (target) => this.toggleOverlayInertia(descriptor.id, target),
@@ -336,7 +337,7 @@ export class DesktopWindowManager {
         height: bounds?.height ?? (descriptor.kind === 'main' ? 800 : 720),
         minWidth: 320,
         minHeight: 240,
-        kind: descriptor.kind === 'overlay' || descriptor.kind === 'user' ? 'floating' : 'normal',
+        kind: descriptor.kind === 'main' || descriptor.kind === 'chat' ? 'normal' : 'floating',
         focus: process.env.GPUIX_BACKGROUND !== '1',
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
       }
@@ -433,6 +434,21 @@ export class DesktopWindowManager {
       kind: 'user',
       title: `TwirChat — ${target.username ?? target.platformUserId}`,
       target: structuredClone(target),
+    })
+  }
+
+  async openImage(src: string): Promise<string> {
+    for (const window of this.mounted.values()) {
+      if (window.descriptor.kind === 'image' && window.descriptor.src === src) {
+        window.renderer.activateWindow()
+        return window.descriptor.id
+      }
+    }
+    return this.open({
+      id: `window:${crypto.randomUUID()}`,
+      kind: 'image',
+      title: t('chat.imagePreview.title'),
+      src,
     })
   }
 

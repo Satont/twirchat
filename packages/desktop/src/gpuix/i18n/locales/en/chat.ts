@@ -155,6 +155,12 @@ export const chat = {
   'chat.appearance.toggle.avatars': 'Avatars',
   'chat.appearance.toggle.badges': 'Badges',
   'chat.appearance.toggle.timestamp': 'Timestamp',
+  'chat.imagePreview.setting': 'Image previews',
+  'chat.imagePreview.privacy':
+    'Automatically checks links from chat. Link hosts can see your IP address.',
+  'chat.imagePreview.unavailable': 'The image is no longer available.',
+  'chat.imagePreview.open': 'Open image in a new window',
+  'chat.imagePreview.title': 'TwirChat — Image preview',
   'chat.appearance.toggle.channelLabel': 'Channel label',
   'chat.appearance.toggle.emoteCache': 'Session emote cache',
 

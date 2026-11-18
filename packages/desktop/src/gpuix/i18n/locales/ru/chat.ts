@@ -161,6 +161,12 @@ export const ruChat = {
   'chat.appearance.toggle.avatars': 'Аватары',
   'chat.appearance.toggle.badges': 'Значки',
   'chat.appearance.toggle.timestamp': 'Время',
+  'chat.imagePreview.setting': 'Превью изображений',
+  'chat.imagePreview.privacy':
+    'Ссылки из чата проверяются автоматически. Их владельцы могут видеть ваш IP-адрес.',
+  'chat.imagePreview.unavailable': 'Изображение больше недоступно.',
+  'chat.imagePreview.open': 'Открыть изображение в новом окне',
+  'chat.imagePreview.title': 'TwirChat — Просмотр изображения',
   'chat.appearance.toggle.channelLabel': 'Название канала',
   'chat.appearance.toggle.emoteCache': 'Кэш эмоутов сеанса',
 

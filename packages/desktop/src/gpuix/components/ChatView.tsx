@@ -2394,6 +2394,10 @@ export function ChatView({
                     timestampFormat={settings?.timestampFormat}
                     showAvatar={settings?.showAvatars}
                     showBadges={settings?.showBadges}
+                    showImagePreviews={
+                      settings?.showChatImagePreviews === true &&
+                      !(streamerMode.effectiveEnabled && streamerMode.settings.hideLinkThumbnails)
+                    }
                     fontSize={settings?.fontSize}
                     chatTheme={settings?.chatTheme}
                     accounts={ownAccounts}
