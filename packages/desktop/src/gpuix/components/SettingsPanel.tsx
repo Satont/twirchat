@@ -140,6 +140,7 @@ function appSectionFields(
         themeMode: source.themeMode,
         customPalette: source.customPalette,
         fontFamily: source.fontFamily,
+        showObsRemoteButton: source.showObsRemoteButton,
       }
     case 'updates':
       return { autoCheckUpdates: source.autoCheckUpdates }
@@ -159,7 +160,10 @@ function appSectionFields(
     case 'shortcuts':
       return { hotkeys: { ...source.hotkeys } }
     case 'twir-integration':
-      return { twirIntegrationEnabled: source.twirIntegrationEnabled }
+      return {
+        twirIntegrationEnabled: source.twirIntegrationEnabled,
+        twirNowPlayingEnabled: source.twirNowPlayingEnabled,
+      }
     case 'jeetbot-integration':
       return { jeetbotIntegrationEnabled: source.jeetbotIntegrationEnabled }
     case 'fossabot-integration':
@@ -878,6 +882,17 @@ export function SettingsPanel() {
                         />
                       </SettingsRowControl>
                     </SettingsRow>
+                    <SettingsRow label={t('settings.appearance.showObsRemoteButton')}>
+                      <Switch
+                        testId="show-obs-remote-button-switch"
+                        checked={local.showObsRemoteButton === true}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.showObsRemoteButton = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
                     <SettingsRow label={t('settings.appearance.theme')}>
                       <ThemeSettings
                         value={local.theme}
@@ -924,15 +939,30 @@ export function SettingsPanel() {
                   >
                     <SettingsRow
                       first
-                      last
                       label={t('settings.twir.suggest')}
                       hint={t('settings.twir.suggestHint')}
                     >
                       <Switch
+                        testId="twir-command-suggestions-switch"
                         checked={local.twirIntegrationEnabled !== false}
                         onChange={(value) =>
                           patch((draft) => {
                             draft.twirIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    <SettingsRow
+                      last
+                      label={t('settings.twir.nowPlaying')}
+                      hint={t('settings.twir.nowPlayingHint')}
+                    >
+                      <Switch
+                        testId="twir-now-playing-switch"
+                        checked={local.twirNowPlayingEnabled === true}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.twirNowPlayingEnabled = value
                           })
                         }
                       />

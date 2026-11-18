@@ -37,6 +37,7 @@ export const ruChat = {
   'chat.room.uniqueChat': 'Уникальные сообщения',
 
   'chat.banner.pinned': 'Закреплено · {author}: {text}',
+  'chat.banner.nowPlaying': 'Сейчас играет · {track}',
   'chat.banner.poll.one': 'Опрос · {title} · {count} голос',
   'chat.banner.poll.few': 'Опрос · {title} · {count} голоса',
   'chat.banner.poll.many': 'Опрос · {title} · {count} голосов',
@@ -161,6 +162,12 @@ export const ruChat = {
   'chat.appearance.toggle.avatars': 'Аватары',
   'chat.appearance.toggle.badges': 'Значки',
   'chat.appearance.toggle.timestamp': 'Время',
+  'chat.imagePreview.setting': 'Превью изображений',
+  'chat.imagePreview.privacy':
+    'Ссылки из чата проверяются автоматически. Их владельцы могут видеть ваш IP-адрес.',
+  'chat.imagePreview.unavailable': 'Изображение больше недоступно.',
+  'chat.imagePreview.open': 'Открыть изображение в новом окне',
+  'chat.imagePreview.title': 'TwirChat — Просмотр изображения',
   'chat.appearance.toggle.channelLabel': 'Название канала',
   'chat.appearance.toggle.emoteCache': 'Кэш эмоутов сеанса',
 

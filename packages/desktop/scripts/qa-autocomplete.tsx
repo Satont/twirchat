@@ -102,8 +102,8 @@ let potatRequests = 0
 const supibotUsers: Array<string | undefined> = []
 let waitForTwirCommands: Promise<void> | undefined
 backend.api.getChannelEmotes = async () => []
-backend.api.getTwirCommands = async (target, options) => {
-  assert.deepEqual(target, { platform: 'kick', platformChannelId: '12345' })
+backend.api.getTwirCommands = async (targets, options) => {
+  assert.deepEqual(targets, [{ platform: 'kick', platformChannelId: '12345' }])
   twirRequests++
   if (options?.refresh) twirReloads++
   await waitForTwirCommands
@@ -557,7 +557,8 @@ try {
   await draft('/twirreload ')
   currentRenderer().simulateKeystrokes('enter')
   await until(
-    () => nodes().some((node) => node.text && /Twir.*disabled/iu.test(node.text)),
+    () =>
+      nodes().some((node) => node.text === 'Enable Twir command suggestions in Settings → Twir.'),
     'Reload reports disabled integration',
   )
   assert.equal(twirRequests, beforeDisable + 1)

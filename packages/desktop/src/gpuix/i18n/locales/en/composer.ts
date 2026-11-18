@@ -50,7 +50,6 @@ export const composer = {
   'composer.target.clickToEnable': 'Click to enable',
 
   'composer.notice.twirReloaded': 'Twir commands reloaded.',
-  'composer.notice.twirPartial': 'Twir commands reloaded for some channels.',
   'composer.notice.jeetbotReloaded': 'jeetbot commands reloaded.',
 
   'composer.error.whisperNoAccount': 'Connect a Twitch account before sending a whisper.',
@@ -61,11 +60,10 @@ export const composer = {
   'composer.error.translatedTooLong':
     'The {platform} message is too long after translation: {limit} characters max. Nothing was sent.',
   'composer.error.noWatchedTarget': 'No watched chat target is available.',
-  'composer.error.twirDisabled': 'Twir integration is disabled. Enable it in Settings → Commands.',
+  'composer.error.twirDisabled': 'Enable Twir command suggestions in Settings → Twir.',
   'composer.error.twirNoTarget':
-    'Open a watched channel or select a connected chat target to reload Twir commands.',
-  'composer.error.twirReload':
-    'Could not reload Twir commands ({failures}). Try /twirreload again.',
+    'Open a supported chat or connect a streaming account to reload Twir commands.',
+  'composer.error.twirReload': 'Could not reload Twir commands ({detail}). Try /twirreload again.',
   'composer.error.jeetbotDisabled':
     'jeetbot integration is disabled. Enable it in Settings → Commands.',
   'composer.error.jeetbotNoTarget': 'Open a Twitch chat to reload jeetbot commands.',

@@ -75,6 +75,8 @@ describe('settings search index', () => {
       ['Quick reasons', 'moderation'],
       ['command template', 'commands'],
       ['Twir autocomplete', 'twir-integration'],
+      ['Twir current track', 'twir-integration'],
+      ['текущий трек', 'twir-integration'],
       ['jeetbot аргументы', 'jeetbot-integration'],
       ['Fossabot алиасы', 'fossabot-integration'],
       ['Nightbot автодополнение', 'nightbot-integration'],

@@ -45,6 +45,7 @@ import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
 import { ChatAnnouncement } from './ChatAnnouncement'
+import { ChatImagePreviews } from './ChatImagePreview'
 import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
 import { MessageActionsMenu } from './MessageActionsMenu'
 import { MessageModerationRail } from './MessageModerationRail'
@@ -514,6 +515,7 @@ export interface ChatMessageProps {
   channelSlug?: string
   feedSource?: WatchedChannel
   showPlatformColorStripe?: boolean
+  showImagePreviews?: boolean
   showPlatformIcon?: boolean
   showTimestamp?: boolean
   timestampFormat?: TimestampFormat
@@ -918,6 +920,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const rowOpacity = props.moderationOutcome ? 0.48 : 1
   const announcement = twitchMetadata?.announcement
   const bits = isTombstone ? undefined : twitchMetadata?.bits
+  const previews =
+    props.showImagePreviews && !isTombstone ? <ChatImagePreviews message={message} /> : null
 
   // Platform stripe: one continuous hairline down the list (rows are flush),
   // so a run of same-platform messages reads as a single column.
@@ -1092,6 +1096,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
 
         {/* Paint order = document order: the rail sits last so its fill and
             preview draw above the row content. */}
+        {previews}
         {!isTombstone ? (
           <MessageTranslation message={message} channelId={props.channelSlug} fontSize={fontSize} />
         ) : null}
@@ -1251,6 +1256,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           isAction={isAction}
           actionColor={isAction ? authorColor : undefined}
         />
+        {previews}
         {!isTombstone ? (
           <MessageTranslation message={message} channelId={props.channelSlug} fontSize={fontSize} />
         ) : null}

@@ -278,7 +278,9 @@ export interface AppSettings {
   showAvatars: boolean
   showBadges: boolean
   showChannelLabel: boolean
+  showChatImagePreviews?: boolean
   showModerationRail?: boolean
+  showObsRemoteButton?: boolean
   emoteSessionCache: boolean
   platformFilter: Platform[] | 'all'
   hotkeys: HotkeySettings
@@ -286,6 +288,7 @@ export interface AppSettings {
   /** Auto-check for updates on startup */
   autoCheckUpdates?: boolean
   twirIntegrationEnabled?: boolean
+  twirNowPlayingEnabled?: boolean
   jeetbotIntegrationEnabled?: boolean
   fossabotIntegrationEnabled?: boolean
   nightbotIntegrationEnabled?: boolean
@@ -342,7 +345,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showAvatars: true,
   showBadges: true,
   showChannelLabel: true,
+  showChatImagePreviews: false,
   showModerationRail: true,
+  showObsRemoteButton: false,
   emoteSessionCache: true,
   showPlatformColorStripe: true,
   showPlatformIcon: true,
@@ -353,6 +358,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   themeMode: 'dark',
   twirIntegrationEnabled: true,
+  twirNowPlayingEnabled: false,
   jeetbotIntegrationEnabled: true,
   fossabotIntegrationEnabled: true,
   nightbotIntegrationEnabled: true,

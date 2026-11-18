@@ -10,6 +10,7 @@ export function ActionButton({
   disabled,
   primary,
   danger,
+  autoFocus,
   testId,
   style,
   textStyle,
@@ -19,6 +20,7 @@ export function ActionButton({
   disabled?: boolean
   primary?: boolean
   danger?: boolean
+  autoFocus?: boolean
   testId?: string
   style?: Record<string, unknown>
   textStyle?: Record<string, unknown>
@@ -28,6 +30,7 @@ export function ActionButton({
     <div
       testId={testId}
       tabIndex={disabled ? undefined : 0}
+      autoFocus={!disabled && autoFocus}
       onClick={() => {
         if (!disabled) onClick()
       }}

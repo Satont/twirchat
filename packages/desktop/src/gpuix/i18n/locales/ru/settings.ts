@@ -45,6 +45,8 @@ export const ruSettings = {
   'settings.category.moderation.desc': 'Тайм-ауты и причины',
   'settings.category.commands': 'Команды',
   'settings.category.commands.desc': 'Свои команды и действия',
+  'settings.category.twir': 'Twir',
+  'settings.category.twir.desc': 'Подсказки команд и текущий трек',
   'settings.category.plugins': 'Плагины',
   'settings.category.plugins.desc': 'Локальные и удалённые расширения, транспорты каналов',
   'settings.category.donations': 'Донаты',
@@ -111,6 +113,7 @@ export const ruSettings = {
 
   'settings.appearance.language': 'Язык',
   'settings.appearance.languageHint': 'Язык интерфейса',
+  'settings.appearance.showObsRemoteButton': 'Показывать кнопку OBS Remote',
   'settings.appearance.theme': 'Тема',
   'settings.appearance.font': 'Шрифт',
   'settings.appearance.fontFamily': 'Семейство шрифтов',
@@ -129,6 +132,8 @@ export const ruSettings = {
 
   'settings.twir.suggest': 'Подсказывать команды Twir',
   'settings.twir.suggestHint': 'Показывать публичные команды выбранного чата при вводе !',
+  'settings.twir.nowPlaying': 'Показывать текущий трек',
+  'settings.twir.nowPlayingHint': 'Показывать над чатом трек, который передаёт Twir',
   'settings.jeetbot.suggest': 'Подсказывать команды jeetbot',
   'settings.jeetbot.suggestHint':
     'Показывать команды jeetbot и их аргументы для выбранного Twitch-чата при вводе !',

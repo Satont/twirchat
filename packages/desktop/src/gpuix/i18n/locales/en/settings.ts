@@ -40,6 +40,8 @@ export const settings = {
   'settings.category.moderation.desc': 'Timeouts and reasons',
   'settings.category.commands': 'Commands',
   'settings.category.commands.desc': 'Custom commands and actions',
+  'settings.category.twir': 'Twir',
+  'settings.category.twir.desc': 'Command suggestions and now playing',
   'settings.category.plugins': 'Plugins',
   'settings.category.plugins.desc': 'Local and remote extensions and channel transports',
   'settings.category.donations': 'Donations',
@@ -106,6 +108,7 @@ export const settings = {
 
   'settings.appearance.language': 'Language',
   'settings.appearance.languageHint': 'Interface language',
+  'settings.appearance.showObsRemoteButton': 'Show OBS Remote button',
   'settings.appearance.theme': 'Theme',
   'settings.appearance.font': 'Font',
   'settings.appearance.fontFamily': 'Font family',
@@ -124,6 +127,8 @@ export const settings = {
 
   'settings.twir.suggest': 'Suggest Twir commands',
   'settings.twir.suggestHint': 'Show public commands for the selected chat when you type !',
+  'settings.twir.nowPlaying': 'Show current track',
+  'settings.twir.nowPlayingHint': 'Show the track reported by Twir above the chat',
   'settings.jeetbot.suggest': 'Suggest jeetbot commands',
   'settings.jeetbot.suggestHint':
     'Show jeetbot commands and their arguments for the selected Twitch chat when you type !',

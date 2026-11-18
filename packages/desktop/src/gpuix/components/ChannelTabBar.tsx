@@ -139,6 +139,8 @@ function ChannelTabs({
   const [menuId, setMenuId] = useState<string | null>(null)
   useOverlayClose(menuId !== null, () => setMenuId(null))
   const [edit, setEdit] = useState<{ id: string; title: string; color: string } | null>(null)
+  const [tabToClose, setTabToClose] = useState<{ id: string; label: string } | null>(null)
+  const dismissCloseTab = () => setTabToClose(null)
   const [editError, setEditError] = useState('')
   const [saving, setSaving] = useState(false)
   const motion = useDragMotion(({ x, y }) => {
@@ -340,7 +342,6 @@ function ChannelTabs({
                 action(() => reorderChatTab(backend, current.id, targetIndex))
             },
           }
-        // Browser-style middle-click closes the tab without selecting it.
         // GPUIX does not always populate `button` for aux clicks, so an
         // auxiliary click that is not a right click is the middle button.
         const onAuxClick: Props['onAuxClick'] = (event) => {
@@ -348,7 +349,7 @@ function ChannelTabs({
             return
           cancelDrag()
           setMenuId(null)
-          onRemoveChannel(channel.id)
+          setTabToClose({ id: channel.id, label })
         }
         return (
           <div
@@ -518,6 +519,40 @@ function ChannelTabs({
         >
           {state.error}
         </Text>
+      ) : null}
+      {tabToClose ? (
+        <Modal width={380} onClose={dismissCloseTab}>
+          <div
+            role="alertdialog"
+            aria-label={t('app.tab.close.title')}
+            testId="tab-close-dialog"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>
+              {t('app.tab.close.title')}
+            </Text>
+            <Text style={{ fontSize: 13, color: theme.text2, whiteSpace: 'normal' }}>
+              {t('app.tab.close.description', { name: tabToClose.label })}
+            </Text>
+            <div
+              style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}
+            >
+              <ActionButton autoFocus testId="tab-close-cancel" onClick={dismissCloseTab}>
+                {t('common.cancel')}
+              </ActionButton>
+              <ActionButton
+                danger
+                testId="tab-close-confirm"
+                onClick={() => {
+                  dismissCloseTab()
+                  onRemoveChannel(tabToClose.id)
+                }}
+              >
+                {t('app.tab.menu.close')}
+              </ActionButton>
+            </div>
+          </div>
+        </Modal>
       ) : null}
       {edit ? (
         <Modal

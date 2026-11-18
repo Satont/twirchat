@@ -35,7 +35,7 @@ import { WatchedView } from './WatchedView'
 export function ChatWindow({
   descriptor,
 }: {
-  descriptor: Exclude<DesktopWindowDescriptor, { kind: 'main' }>
+  descriptor: Exclude<DesktopWindowDescriptor, { kind: 'main' | 'image' }>
 }) {
   const backend = useBackend()
   const { t } = useT()

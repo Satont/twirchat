@@ -304,6 +304,17 @@ try {
   assert.ok(homePane)
   await until(() => !!find(main, `pane-${homePane.id}`), 'legacy tab selection falls back to Chat')
   assert.equal(find(main, 'nav-events'), undefined)
+  assert.equal(find(main, 'nav-obs-remote'), undefined, 'OBS Remote is hidden by default')
+  await openNavTab('settings', 'settings-search')
+  await click('show-obs-remote-button-switch')
+  await until(() => !!find(main, 'nav-obs-remote'), 'enabling the setting shows OBS Remote')
+  await captureGuiQaDisplay('obs-remote-button-enabled')
+  await click('settings-save')
+  await until(
+    () => main.getPaintedText().some((text) => text.includes('All changes are saved')),
+    'OBS Remote visibility is saved',
+  )
+  assert.equal((await getDesktopBackend().api.getSettings()).showObsRemoteButton, true)
   const navOrder = [
     'nav-chat',
     'nav-platforms',
@@ -346,6 +357,16 @@ try {
   await checkColorThemes()
   await openNavTab('obs-remote', 'obs-remote-controller')
   assert.equal(mounts.size, 1, 'Reopening OBS Remote reuses the main window')
+  await openNavTab('settings', 'settings-search')
+  await click('show-obs-remote-button-switch')
+  await until(() => !find(main, 'nav-obs-remote'), 'disabling the setting hides OBS Remote')
+  await captureGuiQaDisplay('obs-remote-button-disabled')
+  await click('settings-save')
+  await until(
+    () => main.getPaintedText().some((text) => text.includes('All changes are saved')),
+    'hidden OBS Remote button setting is saved',
+  )
+  assert.equal((await getDesktopBackend().api.getSettings()).showObsRemoteButton, false)
   await openNavTab('chat', `pane-${homePane.id}`)
   main.simulateMouseMove(8, 140)
   await Bun.sleep(150)

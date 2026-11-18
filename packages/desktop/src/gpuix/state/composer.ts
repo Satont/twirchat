@@ -13,7 +13,6 @@ export interface ComposerState {
   translateOnSend?: boolean
   activePlatform?: Platform
   activeWatchedChannelId?: string
-  disabledPlatforms?: ReadonlySet<Platform>
 }
 
 export const EMPTY_COMPOSER: ComposerState = {

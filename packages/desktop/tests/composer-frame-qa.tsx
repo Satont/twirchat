@@ -317,13 +317,14 @@ try {
   assert.equal(find('composer-target-kick').id, kickId)
   assert.deepEqual(bounds('composer-target-kick'), kickWide)
   const kickErrorScreenshot = await captureGuiQaDisplay('composer-kick-error')
-  const preferences = composerStore.get().get('qa:compact-frame')
+  const activePlatform = composerStore.get().get('qa:compact-frame')?.activePlatform
+  const preferenceKey = 'ui.homeComposerDisabledPlatforms'
+  const savedPlatforms = await backend.api.getUiState({ key: preferenceKey })
   const beforeUnavailableKick = submissions.length
   renderer.simulateKeystrokes('enter')
   await click('composer-target-kick')
-  const afterClick = composerStore.get().get('qa:compact-frame')
-  assert.equal(afterClick?.activePlatform, preferences?.activePlatform)
-  assert.equal(afterClick?.disabledPlatforms, preferences?.disabledPlatforms)
+  assert.equal(composerStore.get().get('qa:compact-frame')?.activePlatform, activePlatform)
+  assert.equal(await backend.api.getUiState({ key: preferenceKey }), savedPlatforms)
   assert.equal(
     submissions.length,
     beforeUnavailableKick,
@@ -352,6 +353,7 @@ try {
   await sendHome('r e s t o r e d', ['kick', 'twitch'])
 
   await click('composer-target-kick')
+  assert.equal(await backend.api.getUiState({ key: preferenceKey }), '["kick"]')
   root.render(React.createElement('div', { testId: 'composer-unmounted' }))
   await until(
     () =>
