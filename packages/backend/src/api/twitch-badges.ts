@@ -13,7 +13,7 @@ import type { z } from 'zod'
 import { createStaleCache } from './stale-cache.ts'
 import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 import { helixBadgesSchema, mergeHelixBadges } from './twitch-badge-data'
-import { normalizeTwitchLogin, resolveTwitchUserId } from './twitch-users.ts'
+import { normalizeTwitchLogin, resolveTwitchUserIdsByLogin } from './twitch-users.ts'
 
 const log = logger('twitch-badges')
 
@@ -63,7 +63,8 @@ const channelBadges = createStaleCache({
   retryMs: 60 * 1000,
   maxEntries: 1024,
   async load(login) {
-    const broadcasterId = await resolveTwitchUserId(login)
+    // An all-digit login is still a login here, so skip resolveTwitchUserId's user-id shortcut.
+    const broadcasterId = (await resolveTwitchUserIdsByLogin([login])).get(login)
     if (!broadcasterId) return { data: [] }
     const badges = await fetchHelixBadges(
       `https://api.twitch.tv/helix/chat/badges?broadcaster_id=${encodeURIComponent(broadcasterId)}`,

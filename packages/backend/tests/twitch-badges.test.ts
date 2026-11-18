@@ -32,7 +32,8 @@ test('badge catalogs come from cached Helix data, merged or per channel', async 
       if (url.endsWith('/chat/badges/global')) {
         return Response.json(helixSet('moderator', 'https://example.com/moderator.png'))
       }
-      if (url.includes('/users?')) return Response.json({ data: [{ id: '42', login: 'cached' }] })
+      const login = new URL(url).searchParams.get('login')
+      if (login) return Response.json({ data: [{ id: '42', login }] })
       return Response.json(helixSet('subscriber', 'https://example.com/subscriber.png'))
     }),
     { preconnect: originalFetch.preconnect },
@@ -52,6 +53,16 @@ test('badge catalogs come from cached Helix data, merged or per channel', async 
   await expect(
     handleTwitchBadges(new URL('http://localhost/api/twitch/badges?scope=channel')),
   ).rejects.toBeInstanceOf(TwitchBadgesRequestError)
+
+  // All-digit logins are valid and must resolve as logins, not be taken as user ids.
+  helixCalls.length = 0
+  await handleTwitchBadges(
+    new URL('http://localhost/api/twitch/badges?broadcasterLogin=1234567&scope=channel'),
+  )
+  expect(helixCalls).toEqual([
+    'https://api.twitch.tv/helix/users?login=1234567',
+    'https://api.twitch.tv/helix/chat/badges?broadcaster_id=42',
+  ])
 })
 
 test('channel badge versions override both global artwork and metadata', () => {

@@ -95,6 +95,8 @@ export function createTwitchBadgeCatalog(options: TwitchBadgeCatalogOptions = {}
   const lifetime = new AbortController()
   const entries = new Map<string, Entry>()
   const queue = new Set<string>()
+  /** Scopes with a request running; a release and re-acquire reuse it instead of starting another. */
+  const inFlight = new Set<string>()
   const listeners = new Set<() => void>()
   let active = 0
   let failures = 0
@@ -153,7 +155,8 @@ export function createTwitchBadgeCatalog(options: TwitchBadgeCatalogOptions = {}
     for (const entry of entries.values()) if (entry !== global && !entry.holders) idle++
     for (const entry of entries.values()) {
       if (idle <= MAX_IDLE_CHANNELS) return
-      if (entry === global || entry.holders || queue.has(entry.scope)) continue
+      if (entry === global || entry.holders || queue.has(entry.scope) || inFlight.has(entry.scope))
+        continue
       entries.delete(entry.scope)
       idle--
     }
@@ -207,7 +210,8 @@ export function createTwitchBadgeCatalog(options: TwitchBadgeCatalogOptions = {}
   }
 
   const scheduleRevalidation = (entry: Entry) => {
-    if (!entry.holders || queue.has(entry.scope)) return
+    // A running request reschedules the entry when it settles.
+    if (!entry.holders || queue.has(entry.scope) || inFlight.has(entry.scope)) return
     const dueAt = entry.fetchedAt + entry.ttlMs * (0.8 + random() * 0.4)
     if (!entry.badges || dueAt <= now()) enqueue(entry)
     else scheduleRefresh(entry, dueAt - now())
@@ -254,23 +258,26 @@ export function createTwitchBadgeCatalog(options: TwitchBadgeCatalogOptions = {}
       entry.rejectedUntil = now() + REJECTED_RETRY_MS
       return
     }
-    // Requests already in flight when another one failed belong to the same outage.
+    // Requests already in flight when another one failed belong to the same outage and do not
+    // grow the backoff, but their Retry-After still applies.
+    let delayMs = outcome.retryAfterMs
     if (startedAt > lastFailureAt) {
       failures++
       lastFailureAt = now()
       const ceiling = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** (failures - 1))
-      const backoff = ceiling / 2 + random() * (ceiling / 2)
-      retryAt = Math.max(retryAt, now() + Math.max(backoff, outcome.retryAfterMs))
+      delayMs = Math.max(delayMs, ceiling / 2 + random() * (ceiling / 2))
       log.warn('Twitch badge backend unavailable, backing off', {
         failures,
-        retryInMs: Math.round(retryAt - now()),
+        retryInMs: Math.round(Math.max(retryAt - now(), delayMs)),
       })
     }
+    retryAt = Math.max(retryAt, now() + delayMs)
     if (entry.holders) queue.add(entry.scope)
   }
 
   function start(entry: Entry): void {
     active++
+    inFlight.add(entry.scope)
     entry.cancelRefresh?.()
     entry.cancelRefresh = undefined
     const startedAt = now()
@@ -287,6 +294,7 @@ export function createTwitchBadgeCatalog(options: TwitchBadgeCatalogOptions = {}
       })
       .finally(() => {
         active--
+        inFlight.delete(entry.scope)
         entry.attempts++
         if (lifetime.signal.aborted) return
         scheduleRevalidation(entry)

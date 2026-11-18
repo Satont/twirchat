@@ -202,6 +202,46 @@ test('Retry-After stretches the shared pause', async () => {
   expect(requests).toHaveLength(first + 1)
 })
 
+test('Retry-After from a concurrent failure still stretches the pause', async () => {
+  const { catalog, clock, requests } = setup((path) =>
+    path.includes('scope=channel')
+      ? new Response(null, { status: 429, headers: { 'Retry-After': '60' } })
+      : new Response('boom', { status: 500 }),
+  )
+  catalog.acquire('a')
+  catalog.acquire('b')
+  await clock.advance(0)
+  expect(requests).toHaveLength(3)
+  await clock.advance(59_000)
+  expect(requests).toHaveLength(3)
+  await clock.advance(1000)
+  expect(requests).toHaveLength(4)
+})
+
+test('re-acquiring a scope while its request runs reuses that request', async () => {
+  const pending: PromiseWithResolvers<Response>[] = []
+  const { catalog, clock, requests } = setup(() => {
+    const response = Promise.withResolvers<Response>()
+    pending.push(response)
+    return response.promise
+  })
+  const release = catalog.acquire('a')
+  await clock.advance(0)
+  release()
+  catalog.acquire('a')
+  await clock.advance(0)
+  expect(requests).toHaveLength(2)
+
+  for (const [index, response] of pending.entries()) {
+    response.resolve(healthy(requests[index] ?? ''))
+  }
+  await clock.advance(0)
+  expect(requests).toHaveLength(2)
+  expect(catalog.resolver('a').get('subscriber/12')?.imageUrl).toBe(
+    'https://example.com/a-subscriber.png',
+  )
+})
+
 test('a failed refresh keeps serving the last catalog', async () => {
   const storage = memoryStorage({
     global: { payload: globalPayload, fetchedAt: 1_000_000 },
