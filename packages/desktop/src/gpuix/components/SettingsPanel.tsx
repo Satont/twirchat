@@ -140,6 +140,7 @@ function appSectionFields(
         themeMode: source.themeMode,
         customPalette: source.customPalette,
         fontFamily: source.fontFamily,
+        showObsRemoteButton: source.showObsRemoteButton,
       }
     case 'updates':
       return { autoCheckUpdates: source.autoCheckUpdates }
@@ -880,6 +881,17 @@ export function SettingsPanel() {
                           }
                         />
                       </SettingsRowControl>
+                    </SettingsRow>
+                    <SettingsRow label={t('settings.appearance.showObsRemoteButton')}>
+                      <Switch
+                        testId="show-obs-remote-button-switch"
+                        checked={local.showObsRemoteButton === true}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.showObsRemoteButton = value
+                          })
+                        }
+                      />
                     </SettingsRow>
                     <SettingsRow label={t('settings.appearance.theme')}>
                       <ThemeSettings

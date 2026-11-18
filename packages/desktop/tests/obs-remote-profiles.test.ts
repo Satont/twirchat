@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import { obsRemoteApi } from '../src/gpuix/backend/obs-remote'
 import { initDb } from '../src/store/db'
+import { SettingsStore } from '../src/store/settings-store'
 
 test('OBS connection links separate the password from the WebSocket endpoint', () => {
   expect(obsRemoteApi.parseAddress(' studio.local:4455 ')).toEqual({
@@ -16,6 +17,37 @@ test('OBS connection links separate the password from the WebSocket endpoint', (
   })
   expect(() => obsRemoteApi.parseAddress('ws://user:password@studio.local:4455')).toThrow()
   expect(() => obsRemoteApi.parseAddress('https://studio.example')).toThrow()
+})
+
+test('OBS toolbar visibility defaults off and persists without changing saved connections', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'twirchat-obs-toolbar-'))
+  const path = join(directory, 'profile.sqlite')
+  let db = initDb(path)
+  try {
+    expect(SettingsStore.get().showObsRemoteButton).toBe(false)
+    db.run('INSERT INTO settings (key, value) VALUES (?, ?)', [
+      'app_settings',
+      JSON.stringify({ fontSize: 18 }),
+    ])
+    await obsRemoteApi.save({ name: 'Studio', url: 'ws://localhost:4455' })
+    const profiles = await obsRemoteApi.list()
+    expect(profiles).toHaveLength(1)
+    expect(SettingsStore.get()).toMatchObject({ showObsRemoteButton: false, fontSize: 18 })
+
+    SettingsStore.update({ showObsRemoteButton: true })
+    db.close()
+    db = initDb(path)
+    expect(SettingsStore.get().showObsRemoteButton).toBe(true)
+
+    SettingsStore.update({ showObsRemoteButton: false })
+    db.close()
+    db = initDb(path)
+    expect(SettingsStore.get().showObsRemoteButton).toBe(false)
+    expect(await obsRemoteApi.list()).toEqual(profiles)
+  } finally {
+    db.close()
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('OBS connections survive reopening the database and never expose stored passwords', async () => {

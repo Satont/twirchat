@@ -113,6 +113,7 @@ export const ruSettings = {
 
   'settings.appearance.language': 'Язык',
   'settings.appearance.languageHint': 'Язык интерфейса',
+  'settings.appearance.showObsRemoteButton': 'Показывать кнопку OBS Remote',
   'settings.appearance.theme': 'Тема',
   'settings.appearance.font': 'Шрифт',
   'settings.appearance.fontFamily': 'Семейство шрифтов',

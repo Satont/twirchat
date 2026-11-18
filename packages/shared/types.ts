@@ -280,6 +280,7 @@ export interface AppSettings {
   showChannelLabel: boolean
   showChatImagePreviews?: boolean
   showModerationRail?: boolean
+  showObsRemoteButton?: boolean
   emoteSessionCache: boolean
   platformFilter: Platform[] | 'all'
   hotkeys: HotkeySettings
@@ -346,6 +347,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showChannelLabel: true,
   showChatImagePreviews: false,
   showModerationRail: true,
+  showObsRemoteButton: false,
   emoteSessionCache: true,
   showPlatformColorStripe: true,
   showPlatformIcon: true,

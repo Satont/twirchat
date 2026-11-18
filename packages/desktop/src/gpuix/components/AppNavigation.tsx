@@ -2,7 +2,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 
 import type { StreamerModeStatus } from '../../services/streamer-mode'
 import { useT, type MessageKey } from '../i18n'
-import { accountsStore, activeTabStore, type MainTab } from '../state/app'
+import { accountsStore, activeTabStore, settingsStore, type MainTab } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { setMainTab } from '../state/settings-session'
 import { streamerModeStore } from '../state/streamer-mode'
@@ -136,6 +136,10 @@ export function AppNavigation({ onSearchAll }: { onSearchAll?: () => void }) {
   const activeTab = useStore(activeTabStore)
   const accountCount = useStoreSelector(accountsStore, (accounts) => accounts.length)
   const streamerMode = useStore(streamerModeStore)
+  const showObsRemoteButton = useStoreSelector(
+    settingsStore,
+    (settings) => settings?.showObsRemoteButton === true,
+  )
 
   return (
     <div
@@ -155,6 +159,7 @@ export function AppNavigation({ onSearchAll }: { onSearchAll?: () => void }) {
       }}
     >
       {ITEMS.map((item) => {
+        if (item.id === 'obs-remote' && !showObsRemoteButton) return null
         const badge = item.id === 'platforms' ? accountCount : undefined
         return (
           <NavButton
