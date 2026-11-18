@@ -8,6 +8,11 @@ const twitchBadgesResponseSchema: z.ZodType<TwitchBadgesResponse> = z.object({
     .optional(),
 })
 
+/** Looks up a badge by its "setId/version" id. A `ReadonlyMap` satisfies it. */
+export interface TwitchBadgeResolver {
+  get(id: string): Badge | undefined
+}
+
 export function parseTwitchBadgeCatalog(value: unknown): Map<string, Badge> {
   const catalog = twitchBadgesResponseSchema.parse(value)
   return new Map(

@@ -219,7 +219,6 @@ export const ruNotices = {
 
   'notices.twitchHistory.emptyResponse': 'Бэкенд истории вернул пустой ответ.',
   'notices.twitchHistory.tooLarge': 'Ответ истории слишком большой.',
-  'notices.twitchHistory.badgesUnavailable': 'Значки канала недоступны.',
   'notices.twitchHistory.stopped': 'Загрузка истории остановлена.',
   'notices.twitchHistory.tooManyRequests':
     'Слишком много запросов истории. Повторите попытку позже.',

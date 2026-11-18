@@ -1,8 +1,8 @@
 import { ClientStore } from '../db/index.ts'
 
-export function json(data: unknown, status = 200): Response {
+export function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...headers, 'Content-Type': 'application/json' },
     status,
   })
 }

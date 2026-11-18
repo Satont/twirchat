@@ -44,6 +44,7 @@ import {
 } from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
+import { createTwitchBadgeCatalog } from '../../platforms/twitch/badge-catalog'
 import { createDefaultTwitchSenderPool } from '../../platforms/twitch/sender-pool'
 import { VkPlayAdapter } from '../../platforms/vkplay/adapter'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
@@ -66,12 +67,14 @@ import { createStreamerModeService } from '../../services/streamer-mode'
 import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { createTwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
+import { createTwitchHistoryClient } from '../../services/twitch-history'
 import { parseTwitchRewardNotice } from '../../services/twitch-reward-notice'
 import { sevenTVService } from '../../seventv'
 import { AccountStore, ChannelStore, SettingsStore } from '../../store'
 import { getClientSecret } from '../../store/client-secret'
 import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
+import { createTwitchBadgeCatalogStore } from '../../store/twitch-badge-catalog-store'
 import {
   TwitchPointsSessionStore,
   TwitchWebSessionStore,
@@ -190,7 +193,8 @@ function boot(): DesktopBackend {
   }
 
   const twitchSenders = createDefaultTwitchSenderPool()
-  const twitchAdapter = new TwitchAdapter(twitchSenders)
+  const twitchBadges = createTwitchBadgeCatalog({ storage: createTwitchBadgeCatalogStore() })
+  const twitchAdapter = new TwitchAdapter(twitchSenders, twitchBadges)
   const kickAdapter = new KickAdapter()
   const youtubeAdapter = new YouTubeAdapter()
   const vkPlayAdapter = new VkPlayAdapter()
@@ -203,7 +207,8 @@ function boot(): DesktopBackend {
 
   const watchedChannelManager = new WatchedChannelManager(
     (message) => providerRuntime.enrich(message),
-    (channel) => (channel.platform === 'twitch' ? new TwitchAdapter(twitchSenders) : undefined),
+    (channel) =>
+      channel.platform === 'twitch' ? new TwitchAdapter(twitchSenders, twitchBadges) : undefined,
     createChatAccountSender(twitchSenders),
   )
   const donationShare = createDonationShareClient({
@@ -480,6 +485,7 @@ function boot(): DesktopBackend {
   })
   streamerMode.start()
   const twitchHistory = createTwitchHistoryRuntime({
+    client: createTwitchHistoryClient({ badges: twitchBadges }),
     channels: () => [
       ...AccountStore.findAllActive()
         .filter((account) => account.platform === 'twitch')
@@ -811,6 +817,7 @@ function boot(): DesktopBackend {
         log.warn('Plugin shutdown failed', { error: String(error) })
       })
       twitchHistory.dispose()
+      twitchBadges.dispose()
       twitchSenders.dispose()
       streamerMode.stop()
       providerRuntime.stop()
