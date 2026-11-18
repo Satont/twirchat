@@ -170,7 +170,8 @@ test('caps redirect chains and cancels a response with an unusable Location', as
 test('cancels unsupported MIME, status, encoding and length without reading the body', async () => {
   for (const body of [
     trackedBody({}),
-    trackedBody({ 'Content-Type': 'text/html' }),
+    trackedBody({ 'Content-Type': 'text/html', 'Content-Length': '524289' }),
+    trackedBody({ 'Content-Type': 'text/html', 'Content-Encoding': 'gzip' }),
     trackedBody({ 'Content-Type': 'image/svg+xml' }),
     trackedBody({ 'Content-Type': 'image/png', 'Content-Length': '5242881' }),
     trackedBody({ 'Content-Type': 'image/png', 'Content-Length': '1e2' }),
@@ -181,6 +182,99 @@ test('cancels unsupported MIME, status, encoding and length without reading the 
     expect(await fetchImage(IMAGE_URL, new AbortController().signal)).toBeUndefined()
     expect(body.state()).toEqual({ canceled: true, reads: 0 })
   }
+})
+
+function pageResponse(head: string): Response {
+  return new Response(`<html><head>${head}</head><body></body></html>`, {
+    headers: { 'Content-Type': 'Text/HTML; charset=utf-8' },
+  })
+}
+
+test('follows a cross-origin Open Graph thumbnail through the pinned image fetch', async () => {
+  const { fetchImage, queries, requests } = fixture({
+    addresses: async (hostname) => [hostname === 'pic.hishi.icu' ? PUBLIC_V6 : PUBLIC_V4],
+    respond: (index) =>
+      index === 0
+        ? pageResponse(`
+          <!-- <meta property="og:image" content="/comment.png"> -->
+          <script>const markup = '<meta property="og:image" content="/script.png">'</script>
+          <meta name="twitter:image" content="/fallback.png">
+          <meta content="https://pic.hishi.icu/thumb.webp?w=311&amp;h=308" property="og:image">
+        `)
+        : imageResponse(),
+  })
+  const url = 'https://img.hishi.icu/post/N6GO5CjxdNnXVHNgnGbpRQ'
+  expect(await fetchImage(url, new AbortController().signal)).toEqual(PNG)
+  expect(queries).toEqual(['img.hishi.icu', 'pic.hishi.icu'])
+  expect(requests.map((request) => request.url)).toEqual([
+    `https://${PUBLIC_V4}/post/N6GO5CjxdNnXVHNgnGbpRQ`,
+    `https://[${PUBLIC_V6}]/thumb.webp?w=311&h=308`,
+  ])
+  expect(requests[1]?.options).toMatchObject({
+    headers: { Host: 'pic.hishi.icu' },
+    tls: { serverName: 'pic.hishi.icu', rejectUnauthorized: true },
+    redirect: 'manual',
+    credentials: 'omit',
+  })
+})
+
+test('resolves Twitter metadata against the final page URL without following a second HTML page', async () => {
+  const html = trackedBody({ 'Content-Type': 'text/html' })
+  const { fetchImage, requests } = fixture({
+    respond: (index) =>
+      [
+        new Response(null, { status: 302, headers: { Location: '/posts/show' } }),
+        pageResponse(`<meta name='twitter:image' content='thumb.png'>`),
+        html.response,
+      ][index] ?? imageResponse(),
+  })
+  expect(await fetchImage(IMAGE_URL, new AbortController().signal)).toBeUndefined()
+  expect(requests.map((request) => request.url)).toEqual([
+    `https://${PUBLIC_V4}/image`,
+    `https://${PUBLIC_V4}/posts/show`,
+    `https://${PUBLIC_V4}/posts/thumb.png`,
+  ])
+  expect(html.state()).toEqual({ canceled: true, reads: 0 })
+})
+
+test('applies the same DNS and redirect budget to metadata images', async () => {
+  const denied = fixture({
+    addresses: async (hostname) => (hostname === 'cdn.example.com' ? [] : [PUBLIC_V4]),
+    respond: () => pageResponse('<meta property=og:image content=https://cdn.example.com/a>'),
+  })
+  expect(await denied.fetchImage(IMAGE_URL, new AbortController().signal)).toBeUndefined()
+  expect(denied.queries).toEqual(['images.example.com', 'cdn.example.com'])
+  expect(denied.requests).toHaveLength(1)
+
+  const redirected = fixture({
+    respond: (index) =>
+      index === 2
+        ? pageResponse('<meta property=og:image content=/thumbnail>')
+        : new Response(null, { status: 302, headers: { Location: `/step-${index}` } }),
+  })
+  expect(await redirected.fetchImage(IMAGE_URL, new AbortController().signal)).toBeUndefined()
+  expect(redirected.requests).toHaveLength(5)
+})
+
+test('rejects oversized streaming HTML without fetching its metadata image', async () => {
+  const chunk = new TextEncoder().encode(
+    `<head><meta property=og:image content=/thumbnail></head>${' '.repeat(512 * 1024)}`,
+  )
+  let canceled = false
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      controller.enqueue(chunk)
+    },
+    cancel() {
+      canceled = true
+    },
+  })
+  const { fetchImage, requests } = fixture({
+    respond: () => new Response(stream, { headers: { 'Content-Type': 'text/html' } }),
+  })
+  expect(await fetchImage(IMAGE_URL, new AbortController().signal)).toBeUndefined()
+  expect(requests).toHaveLength(1)
+  expect(canceled).toBe(true)
 })
 
 test('rejects mismatched image content before further reads', async () => {

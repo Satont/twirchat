@@ -2,12 +2,25 @@
 import { Resolver } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 
+import { decodeHTMLAttribute } from 'entities'
+
 const MAX_URL_LENGTH = 4096
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_PAGE_BYTES = 512 * 1024
 const MAX_REDIRECTS = 3
 const TIMEOUT_MS = 5000
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+const PAGE_TYPE = 'text/html'
+const IMAGE_METADATA = [
+  'og:image:secure_url',
+  'og:image',
+  'og:image:url',
+  'twitter:image',
+  'twitter:image:src',
+]
+const IMAGE_ACCEPT = [...IMAGE_TYPES].join(', ')
+const PAGE_ACCEPT = `${IMAGE_ACCEPT}, ${PAGE_TYPE};q=0.9`
 const DNS_NAME =
   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u
 const LOCAL_SUFFIX = /\.(?:localhost|local|internal|home\.arpa|onion|invalid|test|example)$/u
@@ -142,19 +155,22 @@ function matchesImageType(bytes: Uint8Array, type: string): boolean {
   }
 }
 
-async function readImage(response: Response, signal: AbortSignal): Promise<Uint8Array | undefined> {
-  const type = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+async function readBody(
+  response: Response,
+  signal: AbortSignal,
+  limit: number,
+  imageType?: string,
+): Promise<Uint8Array | undefined> {
+  const minBytes = imageType === undefined ? 1 : 12
   const encoding = response.headers.get('content-encoding')?.trim().toLowerCase()
   const contentLength = response.headers.get('content-length')
   const expected = contentLength === null ? undefined : Number(contentLength)
   if (
     response.status !== 200 ||
     !response.body ||
-    !type ||
-    !IMAGE_TYPES.has(type) ||
     (encoding && encoding !== 'identity') ||
     (contentLength !== null && !/^\d+$/u.test(contentLength)) ||
-    (expected !== undefined && (expected < 12 || expected > MAX_IMAGE_BYTES))
+    (expected !== undefined && (expected < minBytes || expected > limit))
   )
     return undefined
 
@@ -167,24 +183,56 @@ async function readImage(response: Response, signal: AbortSignal): Promise<Uint8
       signal.throwIfAborted()
       if (done) break
       const end = length + value.byteLength
-      if (end > (expected ?? MAX_IMAGE_BYTES)) return undefined
+      if (end > (expected ?? limit)) return undefined
       if (end > bytes.length) {
         const expanded = new Uint8Array(
-          Math.min(expected ?? MAX_IMAGE_BYTES, Math.max(end, bytes.length * 2, 16 * 1024)),
+          Math.min(expected ?? limit, Math.max(end, bytes.length * 2, 16 * 1024)),
         )
         expanded.set(bytes)
         bytes = expanded
       }
       bytes.set(value, length)
-      if (length < 12 && end >= 12 && !matchesImageType(bytes, type)) return undefined
+      if (
+        imageType !== undefined &&
+        length < 12 &&
+        end >= 12 &&
+        !matchesImageType(bytes, imageType)
+      )
+        return undefined
       length = end
     }
-    if (length < 12 || (expected !== undefined && length !== expected)) return undefined
+    if (length < minBytes || (expected !== undefined && length !== expected)) return undefined
     return bytes.subarray(0, length)
   } finally {
     reader.cancel().catch(() => {})
     reader.releaseLock()
   }
+}
+
+function readImageTarget(bytes: Uint8Array, pageUrl: URL): URL | undefined {
+  const candidates = new Map<string, URL>()
+  new HTMLRewriter()
+    .on('head meta', {
+      element(meta) {
+        const key = decodeHTMLAttribute(
+          meta.getAttribute('property') ?? meta.getAttribute('name') ?? '',
+        )
+          .trim()
+          .toLowerCase()
+        if (!IMAGE_METADATA.includes(key) || candidates.has(key)) return
+        const content = meta.getAttribute('content')
+        if (!content) return
+        const value = decodeHTMLAttribute(content).trim()
+        const target = value ? parseTarget(value, pageUrl) : undefined
+        if (target && target.href !== pageUrl.href) candidates.set(key, target)
+      },
+    })
+    .transform(new TextDecoder().decode(bytes))
+  for (const key of IMAGE_METADATA) {
+    const target = candidates.get(key)
+    if (target) return target
+  }
+  return undefined
 }
 
 export function createChatImageFetcher(network: ChatImageNetwork) {
@@ -197,7 +245,9 @@ export function createChatImageFetcher(network: ChatImageNetwork) {
     ])
     try {
       let url = parseTarget(input)
-      for (let hop = 0; url && hop <= MAX_REDIRECTS; hop++) {
+      let redirects = 0
+      let allowPage = true
+      while (url) {
         signal.throwIfAborted()
         const hostname = addressHost(url)
         const addresses = isIP(hostname)
@@ -214,7 +264,7 @@ export function createChatImageFetcher(network: ChatImageNetwork) {
           method: 'GET',
           headers: {
             Host: url.host,
-            Accept: [...IMAGE_TYPES].join(', '),
+            Accept: allowPage ? PAGE_ACCEPT : IMAGE_ACCEPT,
             'Accept-Encoding': 'identity',
           },
           tls: { serverName: isIP(hostname) ? undefined : hostname, rejectUnauthorized: true },
@@ -226,9 +276,22 @@ export function createChatImageFetcher(network: ChatImageNetwork) {
           signal,
         })
         try {
-          if (!REDIRECT_STATUSES.has(response.status)) return await readImage(response, signal)
-          const location = response.headers.get('location')
-          url = hop < MAX_REDIRECTS && location ? parseTarget(location, url) : undefined
+          if (REDIRECT_STATUSES.has(response.status)) {
+            const location = response.headers.get('location')
+            if (!location || redirects >= MAX_REDIRECTS) return undefined
+            redirects++
+            url = parseTarget(location, url)
+            continue
+          }
+
+          const type = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+          if (type && IMAGE_TYPES.has(type))
+            return await readBody(response, signal, MAX_IMAGE_BYTES, type)
+          if (!allowPage || type !== PAGE_TYPE) return undefined
+
+          const bytes = await readBody(response, signal, MAX_PAGE_BYTES)
+          url = bytes ? readImageTarget(bytes, url) : undefined
+          allowPage = false
         } finally {
           response.body?.cancel().catch(() => {})
         }

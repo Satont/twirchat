@@ -53,6 +53,7 @@
         "@twurple/api": "8.2.0",
         "@twurple/auth": "8.2.0",
         "@twurple/chat": "8.2.0",
+        "entities": "7.0.1",
         "obs-websocket-js": "5.0.8",
         "pcre2-wasm": "10.49.2",
         "react": "19.3.1",
