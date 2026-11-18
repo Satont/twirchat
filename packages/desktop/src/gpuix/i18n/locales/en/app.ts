@@ -30,6 +30,8 @@ export const app = {
   'app.tab.menu.moveLeft': 'Move left',
   'app.tab.menu.moveRight': 'Move right',
   'app.tab.menu.close': 'Close tab',
+  'app.tab.close.title': 'Close chat tab?',
+  'app.tab.close.description': 'The tab “{name}” will be closed.',
   'app.tab.appearance.title': 'Tab appearance',
   'app.tab.appearance.nameLabel': 'Tab name',
   'app.tab.appearance.nameHint': 'Leave blank to use the assigned channel names.',

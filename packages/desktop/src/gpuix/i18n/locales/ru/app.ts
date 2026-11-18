@@ -32,6 +32,8 @@ export const ruApp = {
   'app.tab.menu.moveLeft': 'Переместить влево',
   'app.tab.menu.moveRight': 'Переместить вправо',
   'app.tab.menu.close': 'Закрыть вкладку',
+  'app.tab.close.title': 'Закрыть вкладку чата?',
+  'app.tab.close.description': 'Вкладка «{name}» будет закрыта.',
   'app.tab.appearance.title': 'Внешний вид вкладки',
   'app.tab.appearance.nameLabel': 'Название вкладки',
   'app.tab.appearance.nameHint':
