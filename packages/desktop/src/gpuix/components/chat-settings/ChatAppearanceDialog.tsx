@@ -50,6 +50,7 @@ export function ChatAppearanceDialog({
     { key: 'showTimestamp', label: t('chat.appearance.toggle.timestamp') },
     { key: 'showChannelLabel', label: t('chat.appearance.toggle.channelLabel') },
     { key: 'emoteSessionCache', label: t('chat.appearance.toggle.emoteCache') },
+    { key: 'showChatImagePreviews', label: t('chat.imagePreview.setting') },
   ]
 
   return (
@@ -226,9 +227,17 @@ export function ChatAppearanceDialog({
                     borderColor: theme.divider,
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: theme.text }}>{toggle.label}</Text>
+                  <div style={{ minWidth: 0, flexGrow: 1, paddingRight: 8, gap: 2 }}>
+                    <Text style={{ fontSize: 13, color: theme.text }}>{toggle.label}</Text>
+                    {toggle.key === 'showChatImagePreviews' ? (
+                      <Text style={{ fontSize: 11, color: theme.text2 }}>
+                        {t('chat.imagePreview.privacy')}
+                      </Text>
+                    ) : null}
+                  </div>
                   <Switch
                     small
+                    aria-label={toggle.label}
                     checked={Boolean(settings[toggle.key])}
                     onChange={(value) => patch({ [toggle.key]: value })}
                   />

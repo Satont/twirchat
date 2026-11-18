@@ -17,6 +17,7 @@ import { assertGuiQaEnvironment } from '../services/gui-qa'
 import { establishLinuxSingleInstance } from '../services/linux-single-instance'
 import { getDesktopBackend } from './backend/server'
 import { App } from './components/App'
+import { ChatImageWindow } from './components/ChatImagePreview'
 import { ChatWindow } from './components/ChatWindow'
 import { t } from './i18n'
 import { loadActionBindings } from './state/action-bindings'
@@ -138,6 +139,7 @@ const windows = mountDesktopWindows(
   backend,
   (descriptor) => {
     if (descriptor.kind === 'main') return <App />
+    if (descriptor.kind === 'image') return <ChatImageWindow src={descriptor.src} />
     return <ChatWindow descriptor={descriptor} />
   },
   () => {

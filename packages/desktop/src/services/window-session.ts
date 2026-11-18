@@ -9,6 +9,7 @@ export type DesktopWindowDescriptor = {
   | { kind: 'main' }
   | { kind: 'chat' | 'overlay'; tabId: string; clickThrough: boolean }
   | { kind: 'user'; target: UserCardTarget; pinned?: boolean }
+  | { kind: 'image'; src: string }
 )
 export interface WindowSession {
   version: 1
@@ -44,7 +45,7 @@ export function validateWindowBounds(value: unknown): NativeWindowBounds | undef
   return { x, y, width, height, mode }
 }
 
-/** Restore only known window kinds. Transient user cards never reopen on startup. */
+/** Restore only known window kinds. Transient windows never reopen on startup. */
 export function validateWindowSession(value: unknown): WindowSession {
   if (!isRecord(value)) throw new Error('Invalid saved windows.')
   const input = value

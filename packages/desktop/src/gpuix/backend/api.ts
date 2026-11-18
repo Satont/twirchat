@@ -85,6 +85,10 @@ import { backendFetch } from '../../runtime-config'
 import type { AccountSessions } from '../../services/account-sessions'
 import type { ChannelActions, PlayerSettings } from '../../services/channel-actions'
 import { channelAccount, platformAccount } from '../../services/chat-accounts'
+import {
+  createChatImagePreviewCache,
+  type ChatImagePreview,
+} from '../../services/chat-image-preview-cache'
 import { ChatToolsError, createChatToolsService } from '../../services/chat-tools'
 import {
   getUserCosmetics,
@@ -530,6 +534,7 @@ export interface DesktopApi {
   sendPluginChannelMessage(params: { id: string; text: string }): Promise<void>
   getChatters(params: { targets: ChattersTarget[] }): Promise<{ results: ChannelChatters[] }>
   openExternalUrl(params: { url: string }): Promise<void>
+  getChatImagePreview(url: string, signal: AbortSignal): Promise<ChatImagePreview | undefined>
   /** GPUIX-only: generic UI preference stored in the settings KV table. */
   getUiState(params: { key: string }): Promise<string | null>
   setUiState(params: { key: string; value: string }): Promise<void>
@@ -1789,6 +1794,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return { results }
     },
 
+    getChatImagePreview: createChatImagePreviewCache(),
     openExternalUrl: async ({ url }) => {
       ctx.openBrowser(url)
     },
