@@ -1,4 +1,7 @@
 import { expect, test } from 'bun:test'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 import sharp from 'sharp'
 
@@ -37,6 +40,60 @@ test('deduplicates a download and returns a thumbnail and a larger local image',
   expect(await preview(URL, second.signal)).toBe(result)
   expect(requests).toBe(1)
 })
+
+test('prepares chat previews from a compiled executable with staged Sharp', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'twirchat-preview-'))
+  try {
+    const entry = join(directory, 'preview.ts')
+    const executable = join(directory, process.platform === 'win32' ? 'preview.exe' : 'preview')
+    const source = await image(24, 12)
+    const cacheModule = resolve(import.meta.dir, '../src/services/chat-image-preview-cache.ts')
+    await symlink(
+      resolve(import.meta.dir, '../../../node_modules'),
+      join(directory, 'node_modules'),
+      'junction',
+    )
+    const worker = await Bun.build({
+      entrypoints: [resolve(import.meta.dir, '../src/services/paint-worker.ts')],
+      target: 'bun',
+      outdir: directory,
+      naming: 'paint-worker.js',
+    })
+    expect(worker.success).toBe(true)
+    const workerClient = resolve(import.meta.dir, '../src/services/paint-worker-client.ts')
+    await Bun.write(
+      entry,
+      `
+      import { createChatImagePreviewCache } from ${JSON.stringify(cacheModule)}
+      import { paintWorker } from ${JSON.stringify(workerClient)}
+      const load = async () => Buffer.from(${JSON.stringify(source.toString('base64'))}, 'base64')
+      try {
+        const result = await createChatImagePreviewCache({ load })('${URL}', AbortSignal.timeout(5000))
+        if (result?.width !== 24 || result.height !== 12) throw new Error('Packaged preview did not render')
+      } finally {
+        await paintWorker.close()
+      }
+    `,
+    )
+    const build = Bun.spawnSync([
+      process.execPath,
+      'build',
+      '--compile',
+      '--external',
+      'sharp',
+      entry,
+      '--outfile',
+      executable,
+    ])
+    expect(build.stderr.toString()).not.toContain('error:')
+    expect(build.exitCode).toBe(0)
+    const run = Bun.spawnSync([executable], { cwd: tmpdir(), timeout: 8000 })
+    expect(run.stderr.toString()).toBe('')
+    expect(run.exitCode).toBe(0)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+}, 20_000)
 
 test('drops queued work when the last observer leaves and aborts running work', async () => {
   const controllers = Array.from({ length: 3 }, () => new AbortController())

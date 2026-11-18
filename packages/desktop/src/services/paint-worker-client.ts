@@ -12,6 +12,7 @@ const thumbnailFitSchema = z.enum(['cover', 'inside'])
 export type ThumbnailFit = z.infer<typeof thumbnailFitSchema>
 
 export const paintWorkerJobSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('chat-preview'), bytes: z.base64().max(7_000_000) }),
   z.object({
     kind: z.literal('thumbnail'),
     path: z.string(),

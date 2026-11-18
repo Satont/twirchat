@@ -1,4 +1,5 @@
 import { setRuntimeConfig } from '../runtime-config'
+import { prepareChatImage } from './chat-image-preview-renderer'
 import { getPaintNameImage, cosmeticPaintSchema } from './cosmetics'
 import { modifiedEmoteImage } from './emote-image'
 import { disableImageSweeps } from './image-cache-sweep'
@@ -17,6 +18,7 @@ if (!process.send) throw new Error('The image worker requires desktop IPC.')
 
 async function runJob(input: unknown): Promise<unknown> {
   const job = paintWorkerJobSchema.parse(input)
+  if (job.kind === 'chat-preview') return prepareChatImage(Buffer.from(job.bytes, 'base64'))
   setRuntimeConfig({
     dbPath: job.dbPath,
     ...(job.kind !== 'thumbnail' && job.backendUrl ? { backendUrl: job.backendUrl } : {}),
