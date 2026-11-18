@@ -70,31 +70,50 @@ function AvatarFallback({
 export function UserCardHeader({
   target,
   hideAvatar,
+  bannerUrl,
   channelUrl,
   openingPublicChannel,
   openPublicChannel,
-  onAvatarClick,
   effectiveAlias,
   accent,
   extraBadges,
-  windows,
-  standalone,
-  openingWindow,
-  openWindow,
 }: UserCardHeaderProps) {
   const theme = useTheme()
   const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
   const userBadges = mergeBadges(target.badges, extraBadges)
-  const headerText = theme.isLight ? theme.text : '#ffffff'
-  const headerMuted = theme.isLight ? withAlpha(theme.text, 0.72) : 'rgba(255, 255, 255, 0.88)'
-  const headerBorder = theme.isLight
-    ? withAlpha(theme.accent.deep, 0.18)
-    : withAlpha('#ffffff', 0.14)
-  const headerButtonBg = theme.isLight ? withAlpha('#ffffff', 0.6) : withAlpha('#000000', 0.2)
-  const headerButtonHover = theme.isLight ? withAlpha('#ffffff', 0.82) : withAlpha('#000000', 0.3)
-  const avatarBorder = theme.isLight ? withAlpha('#ffffff', 0.85) : withAlpha('#ffffff', 0.6)
-  const avatarBackground = theme.isLight ? withAlpha('#ffffff', 0.55) : withAlpha('#000000', 0.24)
+  const showBanner = !hideAvatar && Boolean(bannerUrl)
+  const headerText = showBanner || !theme.isLight ? '#ffffff' : theme.text
+  const headerMuted = showBanner
+    ? 'rgba(255, 255, 255, 0.86)'
+    : theme.isLight
+      ? withAlpha(theme.text, 0.72)
+      : 'rgba(255, 255, 255, 0.88)'
+  const headerBorder = showBanner
+    ? withAlpha('#ffffff', 0.16)
+    : theme.isLight
+      ? withAlpha(theme.accent.deep, 0.18)
+      : withAlpha('#ffffff', 0.14)
+  const headerButtonBg = showBanner
+    ? withAlpha('#000000', 0.34)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.6)
+      : withAlpha('#000000', 0.2)
+  const headerButtonHover = showBanner
+    ? withAlpha('#000000', 0.48)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.82)
+      : withAlpha('#000000', 0.3)
+  const avatarBorder = showBanner
+    ? withAlpha('#ffffff', 0.6)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.85)
+      : withAlpha('#ffffff', 0.6)
+  const avatarBackground = showBanner
+    ? withAlpha('#000000', 0.28)
+    : theme.isLight
+      ? withAlpha('#ffffff', 0.55)
+      : withAlpha('#000000', 0.24)
   const avatarGlow = accent?.from ?? theme.accent.primary
   const showAvatar = !hideAvatar && Boolean(target.avatarUrl)
 
@@ -127,35 +146,54 @@ export function UserCardHeader({
         },
       }}
     >
-      {/* GPUI clips overflow to a rectangle, so keep the glows clear of the rounded corners. */}
-      <div
-        style={{
-          position: 'absolute',
-          top: -76,
-          right: 24,
-          width: 230,
-          height: 230,
-          borderRadius: 115,
-          backgroundColor: theme.isLight
-            ? withAlpha(theme.accent.deep, 0.09)
-            : withAlpha('#ffffff', 0.08),
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: -96,
-          left: 140,
-          width: 220,
-          height: 220,
-          borderRadius: 110,
-          backgroundColor: theme.isLight
-            ? withAlpha(theme.accent.deep, 0.06)
-            : withAlpha('#ffffff', 0.05),
-          pointerEvents: 'none',
-        }}
-      />
+      {showBanner ? (
+        <RemoteImage
+          url={bannerUrl}
+          thumbnailSize={800}
+          objectFit="cover"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            borderRadius: 16,
+            pointerEvents: 'none',
+          }}
+        />
+      ) : (
+        <>
+          {/* GPUI clips overflow to a rectangle, so keep the glows clear of the rounded corners. */}
+          <div
+            style={{
+              position: 'absolute',
+              top: -76,
+              right: 24,
+              width: 230,
+              height: 230,
+              borderRadius: 115,
+              backgroundColor: theme.isLight
+                ? withAlpha(theme.accent.deep, 0.09)
+                : withAlpha('#ffffff', 0.08),
+              pointerEvents: 'none',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: -96,
+              left: 140,
+              width: 220,
+              height: 220,
+              borderRadius: 110,
+              backgroundColor: theme.isLight
+                ? withAlpha(theme.accent.deep, 0.06)
+                : withAlpha('#ffffff', 0.05),
+              pointerEvents: 'none',
+            }}
+          />
+        </>
+      )}
 
       <div
         style={{
@@ -170,14 +208,6 @@ export function UserCardHeader({
       >
         <div
           testId="user-card-avatar"
-          tabIndex={showAvatar ? 0 : undefined}
-          onClick={onAvatarClick}
-          onKeyDown={(event) => {
-            if (event.key === 'enter' || event.key === 'space') {
-              event.preventDefault()
-              onAvatarClick()
-            }
-          }}
           style={{
             flexShrink: 0,
             width: 78,
@@ -187,7 +217,6 @@ export function UserCardHeader({
             borderColor: avatarBorder,
             backgroundColor: avatarBackground,
             overflow: 'hidden',
-            cursor: showAvatar ? 'pointer' : 'default',
             boxShadow: {
               offsetX: 0,
               offsetY: 0,
@@ -362,29 +391,11 @@ export function UserCardHeader({
                 borderRadius: 10,
                 paddingLeft: 14,
                 paddingRight: 14,
+                color: showBanner ? '#ffffff' : undefined,
                 hover: { backgroundColor: headerButtonHover },
               }}
             >
               {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
-            </GhostButton>
-          ) : null}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {windows && !standalone ? (
-            <GhostButton
-              disabled={openingWindow}
-              onClick={openWindow}
-              icon="externalLink"
-              style={{
-                backgroundColor: headerButtonBg,
-                borderColor: headerBorder,
-                borderRadius: 10,
-                paddingLeft: 14,
-                paddingRight: 14,
-                hover: { backgroundColor: headerButtonHover },
-              }}
-            >
-              {openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
             </GhostButton>
           ) : null}
         </div>

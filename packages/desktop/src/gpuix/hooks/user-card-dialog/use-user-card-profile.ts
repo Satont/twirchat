@@ -6,7 +6,15 @@ import { useStoreSelector } from '@gpuix/state/create-store'
 import { emotePreferencesStore } from '@gpuix/state/emote-preferences'
 import type { UserProfileSnapshot } from '@twirchat/shared/user-profile'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+/** Fast deep equality for JSON-serializable values. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a === null || b === null) return false
+  if (typeof a !== 'object' || typeof b !== 'object') return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
 
 interface PaintImage {
   path: string
@@ -35,6 +43,29 @@ export function useUserCardProfile({
   const [profile, setProfile] = useState<UserProfileSnapshot | null>(null)
   const [cosmetics, setCosmetics] = useState<UserCosmetics | null>(null)
   const [paintImage, setPaintImage] = useState<PaintImage | null>(null)
+
+  const profileRef = useRef(profile)
+  const cosmeticsRef = useRef(cosmetics)
+  const paintImageRef = useRef(paintImage)
+
+  const setProfileSafe = useCallback((value: UserProfileSnapshot | null) => {
+    if (!deepEqual(profileRef.current, value)) {
+      profileRef.current = value
+      setProfile(value)
+    }
+  }, [])
+  const setCosmeticsSafe = useCallback((value: UserCosmetics | null) => {
+    if (!deepEqual(cosmeticsRef.current, value)) {
+      cosmeticsRef.current = value
+      setCosmetics(value)
+    }
+  }, [])
+  const setPaintImageSafe = useCallback((value: PaintImage | null) => {
+    if (!deepEqual(paintImageRef.current, value)) {
+      paintImageRef.current = value
+      setPaintImage(value)
+    }
+  }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const {
@@ -50,9 +81,9 @@ export function useUserCardProfile({
     let active = true
     setLoading(true)
     setError('')
-    setProfile(null)
-    setCosmetics(null)
-    setPaintImage(null)
+    setProfileSafe(null)
+    setCosmeticsSafe(null)
+    setPaintImageSafe(null)
     const requests: Promise<void>[] = []
     if (badgesEnabled || paintsEnabled)
       requests.push(
@@ -70,14 +101,14 @@ export function useUserCardProfile({
           })
           .then(async (value) => {
             if (!active) return
-            setCosmetics(value)
+            setCosmeticsSafe(value)
             if (paintsEnabled && value?.paint) {
               const image = await backend.api.getPaintNameImage({
                 name: displayName,
                 paint: value.paint,
                 fontSize: 18,
               })
-              if (active) setPaintImage(image)
+              if (active) setPaintImageSafe(image)
             }
           }),
       )
@@ -86,7 +117,7 @@ export function useUserCardProfile({
         backend.api
           .getUserProfile({ platform, platformUserId, username, channelSlug })
           .then((value) => {
-            if (active) setProfile(value)
+            if (active) setProfileSafe(value)
           }),
       )
     runUiTask(
@@ -114,6 +145,9 @@ export function useUserCardProfile({
     badgesEnabled,
     paintsEnabled,
     communityBadges,
+    setProfileSafe,
+    setCosmeticsSafe,
+    setPaintImageSafe,
   ])
 
   const resolvedAvatarUrl = profile?.avatarUrl ?? targetAvatarUrl
@@ -138,6 +172,15 @@ export function useUserCardProfile({
     await copyText(resolvedAvatarUrl)
   }, [copyText, resolvedAvatarUrl])
 
+  const openAvatarUrl = useCallback(async (): Promise<void> => {
+    if (!resolvedAvatarUrl) return
+    try {
+      await backend.api.openExternalUrl({ url: resolvedAvatarUrl })
+    } catch (cause) {
+      setError(errorText(cause))
+    }
+  }, [backend, resolvedAvatarUrl])
+
   const openSevenTvProfile = useCallback(async (): Promise<void> => {
     const sevenTvUserId = cosmetics?.sevenTvUserId
     if (!sevenTvUserId) return
@@ -148,18 +191,34 @@ export function useUserCardProfile({
     }
   }, [backend, cosmetics?.sevenTvUserId])
 
-  return {
-    profile,
-    cosmetics,
-    paintImage,
-    badgesEnabled,
-    paintsEnabled,
-    loading,
-    error,
-    copyText,
-    copyAvatarUrl,
-    openSevenTvProfile,
-  }
+  return useMemo(
+    () => ({
+      profile,
+      cosmetics,
+      paintImage,
+      badgesEnabled,
+      paintsEnabled,
+      loading,
+      error,
+      copyText,
+      copyAvatarUrl,
+      openAvatarUrl,
+      openSevenTvProfile,
+    }),
+    [
+      profile,
+      cosmetics,
+      paintImage,
+      badgesEnabled,
+      paintsEnabled,
+      loading,
+      error,
+      copyText,
+      copyAvatarUrl,
+      openAvatarUrl,
+      openSevenTvProfile,
+    ],
+  )
 }
 
 export type UserCardProfileState = ReturnType<typeof useUserCardProfile>

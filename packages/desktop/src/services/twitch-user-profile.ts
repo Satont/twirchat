@@ -7,6 +7,40 @@ import { resolveTwitchChannel } from './native-emotes'
 const roleSchema = z.object({ data: z.array(z.unknown()) })
 const editorSchema = z.object({ data: z.array(z.object({ user_id: z.string() })) })
 const followerSchema = z.object({ total: z.number() })
+const bannerSchema = z.object({
+  data: z
+    .object({
+      user: z.object({ bannerImageURL: z.url({ protocol: /^https$/ }).nullish() }).nullish(),
+    })
+    .nullish(),
+})
+
+const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
+
+export async function getTwitchUserBanner(
+  login: string | undefined,
+  request: (url: string, init: RequestInit) => Promise<Response> = fetch,
+): Promise<string | undefined> {
+  const user = login?.trim().toLowerCase()
+  if (!user || !/^[a-z0-9_]{1,25}$/.test(user)) return undefined
+  const response = await request('https://gql.twitch.tv/gql', {
+    method: 'POST',
+    credentials: 'omit',
+    redirect: 'error',
+    headers: {
+      'Client-Id': WEB_CLIENT_ID,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: 'query UserBanner($login: String!) { user(login: $login) { bannerImageURL } }',
+      variables: { login: user },
+    }),
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!response.ok) throw new Error(`Twitch user banner: HTTP ${response.status}`)
+  const payload = bannerSchema.parse(await response.json())
+  return payload.data?.user?.bannerImageURL ?? undefined
+}
 
 export async function enrichTwitchUserProfile(
   request: UserProfileRequest,

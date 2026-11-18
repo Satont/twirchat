@@ -72,7 +72,7 @@ export function ChangelogHeader({ version, publishedAt }: ChangelogHeaderProps) 
             {t('app.changelog.title')}
           </Text>
         </div>
-        <Text testId="update-changelog-date" style={{ fontSize: 13, color: 'lightgray' }}>
+        <Text testId="update-changelog-date" style={{ fontSize: 13, color: theme.text2 }}>
           {releaseDate ? (
             <div
               testId="update-changelog-version"

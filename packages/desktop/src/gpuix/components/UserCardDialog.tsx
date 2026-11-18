@@ -1,12 +1,12 @@
 import type { ModerationPlatform } from '@gpuix/backend/api'
+import type { UserAlias } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
 import { useT } from '@gpuix/i18n'
 import { useGpuixRequired, useWindowSize, motion, type PublicInstance } from '@gpuix/react'
-import { showNotice } from '@gpuix/state/app'
-import { useStore } from '@gpuix/state/create-store'
+import { aliasesStore } from '@gpuix/state/app'
+import { useStore, useStoreSelector } from '@gpuix/state/create-store'
 import { useDesktopWindows } from '@gpuix/state/desktop-windows'
-import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { streamerModeStore } from '@gpuix/state/streamer-mode'
 import { useTheme } from '@gpuix/theme-context'
 import { logger } from '@twirchat/shared/logger'
@@ -20,19 +20,16 @@ import { Modal } from './ui/Modal'
 import type { MetadataItem, UserCardTab } from './user-card-dialog'
 import {
   UserCardHeader,
-  UserCardAliasSection,
   UserCardTabs,
   UserCardProfileTab,
   userCardHeaderAccent,
-  useUserCardAlias,
   useUserCardMetadata,
   useUserCardProfile,
   useUserCardPublicChannel,
   useRetainedBadges,
 } from './user-card-dialog'
-import { ProfilePictureMenu } from './user-card-dialog/ProfilePictureMenu'
+import { UserChatHistoryPanel } from './user-card-dialog/history-panel/UserChatHistoryPanel'
 import { UserCardActions, useUserCardModeration } from './user-card-dialog/UserCardActions'
-import { UserChatHistoryPanel } from './user-card-dialog/UserChatHistoryPanel'
 import { UserNotes } from './user-card-dialog/UserNotes'
 import { mergeBadges } from './user-card-dialog/utils'
 import {
@@ -59,7 +56,7 @@ export function UserCardDialog({
   const { t } = useT()
   const windows = useDesktopWindows()
   const renderer = useGpuixRequired()
-  const scrollHeader = useWindowSize().height < 500
+  const windowSize = useWindowSize()
   const streamer = useStore(streamerModeStore)
   const hideAvatar = streamer.effectiveEnabled && streamer.settings.hideUsercardAvatars
   const avatarKey = `${target.platform}:${target.platformUserId}`
@@ -87,7 +84,6 @@ export function UserCardDialog({
       ),
     [profileState.profile?.color, target.color, profileState.cosmetics, profileState.paintsEnabled],
   )
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [localPinned, setLocalPinned] = useState(false)
   const nativeUserWindow = standalone && windows?.descriptor.kind === 'user'
   const pinned = nativeUserWindow ? windows.pinned : localPinned
@@ -98,31 +94,15 @@ export function UserCardDialog({
   const historyViewport = useRef<PublicInstance | null>(null)
   const moderation = useUserCardModeration(target)
 
-  const [aliasFocused, setAliasFocused] = useState(false)
-  const aliasFocus = useTextInputFocusTracking(setAliasFocused)
-
-  const openPicture = useCallback(() => {
-    if (!hideAvatar && avatarUrl) {
-      renderer.blur?.()
-      setAvatarMenuOpen(true)
-    }
-  }, [hideAvatar, avatarUrl, renderer])
-  useEffect(() => {
-    if (hideAvatar) setAvatarMenuOpen(false)
-  }, [hideAvatar])
-
-  const effectiveAlias = currentAlias ?? target.currentAlias
-  const [openingWindow, setOpeningWindow] = useState(false)
-  const openInWindow = useCallback(async () => {
-    if (!windows) return
-    setOpeningWindow(true)
-    try {
-      await windows.openUser({ ...target, currentAlias: effectiveAlias })
-      onClose()
-    } finally {
-      setOpeningWindow(false)
-    }
-  }, [windows, target, effectiveAlias, onClose])
+  // Get alias from store - this will update when alias is changed in Notes tab
+  const storeAlias = useStoreSelector(aliasesStore, (store) => {
+    const alias = store.find(
+      (a: UserAlias) =>
+        a.platform === target.platform && a.platformUserId === target.platformUserId,
+    )
+    return alias?.alias
+  })
+  const effectiveAlias = currentAlias ?? storeAlias ?? target.currentAlias
 
   /**
    * Twitch only reports chat badges with messages, so collect every badge the
@@ -213,7 +193,6 @@ export function UserCardDialog({
   const moderationPlatform: ModerationPlatform | undefined =
     target.platform === 'twitch' || target.platform === 'kick' ? target.platform : undefined
 
-  const alias = useUserCardAlias({ target, currentAlias, onClose })
   const metadata = useUserCardMetadata({ target, moderationPlatform })
   const publicChannel = useUserCardPublicChannel({ channelUrl })
 
@@ -251,7 +230,6 @@ export function UserCardDialog({
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,
     pin: togglePin,
-    openProfilePictureMenu: !hideAvatar && avatarUrl ? openPicture : null,
     scrollPage:
       tab === 'history'
         ? ([direction]) => {
@@ -278,15 +256,11 @@ export function UserCardDialog({
           badges: target.badges,
         }}
         extraBadges={extraBadges}
-        windows={windows}
-        standalone={standalone}
-        openingWindow={openingWindow}
-        openWindow={() => runUiTask(openInWindow())}
         hideAvatar={hideAvatar}
+        bannerUrl={profileState.profile?.bannerUrl}
         channelUrl={channelUrl}
         openingPublicChannel={publicChannel.isOpening}
         openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
-        onAvatarClick={openPicture}
         effectiveAlias={effectiveAlias}
         accent={headerAccent}
       />
@@ -299,14 +273,10 @@ export function UserCardDialog({
       target.username,
       avatarUrl,
       target.badges,
-      windows,
-      standalone,
-      openingWindow,
-      openInWindow,
       hideAvatar,
+      profileState.profile?.bannerUrl,
       channelUrl,
       publicChannel,
-      openPicture,
       effectiveAlias,
       headerAccent,
     ],
@@ -328,7 +298,7 @@ export function UserCardDialog({
           minHeight: 0,
         }}
       >
-        {scrollHeader ? null : header}
+        {windowSize.height < 500 ? null : header}
 
         <div
           tabIndex={-1}
@@ -342,7 +312,7 @@ export function UserCardDialog({
             scrollbarWidth: 4,
           }}
         >
-          {scrollHeader ? header : null}
+          {windowSize.height < 500 ? header : null}
           <div
             style={{
               paddingLeft: 16,
@@ -352,28 +322,6 @@ export function UserCardDialog({
               flexDirection: 'column',
             }}
           >
-            <UserCardAliasSection
-              aliasValue={alias.aliasValue}
-              setAliasValue={alias.setAliasValue}
-              aliasFocused={aliasFocused}
-              effectiveAlias={effectiveAlias}
-              displayName={target.displayName}
-              aliasFocus={aliasFocus}
-              handleSaveAlias={alias.handleSaveAlias}
-              handleRemoveAlias={alias.handleRemoveAlias}
-              pinned={pinned}
-              togglePin={togglePin}
-              onClose={onClose}
-              windows={windows}
-              standalone={standalone}
-              target={target}
-              openingWindow={openingWindow}
-              setOpeningWindow={setOpeningWindow}
-              showNotice={showNotice}
-              publicChannelError={publicChannel.openError}
-              openPublicChannel={() => runUiTask(publicChannel.openPublicChannel())}
-            />
-
             <UserCardTabs tab={tab} setTab={setTab} />
 
             <motion.div
@@ -393,7 +341,12 @@ export function UserCardDialog({
                 />
               ) : null}
               {tab === 'notes' ? (
-                <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
+                <UserNotes
+                  key={`${target.platform}:${target.platformUserId}`}
+                  target={target}
+                  currentAlias={currentAlias}
+                  onClose={onClose}
+                />
               ) : null}
               {tab === 'profile' ? (
                 <UserCardProfileTab
@@ -410,7 +363,7 @@ export function UserCardDialog({
               ) : null}
               {tab === 'history' ? (
                 <UserChatHistoryPanel
-                  onViewport={(viewport) => {
+                  onViewport={(viewport: PublicInstance | null) => {
                     historyViewport.current = viewport
                   }}
                   platform={target.platform}
@@ -427,9 +380,6 @@ export function UserCardDialog({
           </div>
         </div>
       </div>
-      {avatarMenuOpen && !hideAvatar && avatarUrl ? (
-        <ProfilePictureMenu url={avatarUrl} onClose={() => setAvatarMenuOpen(false)} />
-      ) : null}
     </Modal>
   )
 }

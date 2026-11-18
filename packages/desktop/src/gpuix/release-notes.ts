@@ -340,7 +340,7 @@ function verbToBaseForm(verb: string): string {
   return verb.replace(/(?:ed|d)$/u, '').replace(/ied$/u, 'y')
 }
 
-function verbToGerund(verb: string): string {
+function verbToGerund(verb: string): string | undefined {
   const gerunds: Record<string, string> = {
     add: 'Adding',
     browse: 'Browsing',
@@ -372,6 +372,7 @@ function verbToGerund(verb: string): string {
     speed: 'Speeding up',
     streamline: 'Streamlining',
     update: 'Updating',
+    tweak: 'Tweaking',
     chore: 'Updating',
     clamp: 'Clamping',
     close: 'Closing',
@@ -401,7 +402,8 @@ function verbToGerund(verb: string): string {
     documentation: 'Documenting',
     readme: 'Updating readme',
   }
-  return gerunds[verb] ?? `${verb.charAt(0).toUpperCase() + verb.slice(1)}ing`
+  // Return undefined for unknown verbs instead of blindly appending "ing"
+  return gerunds[verb]
 }
 
 function cleanMarkdown(text: string): string {
