@@ -17,7 +17,8 @@ import type { JeetbotCommand, JeetbotCommandTarget } from '../../services/jeetbo
 import type { PublicBotCommand } from '../../services/public-bot-commands'
 import type { SupibotCommandTarget } from '../../services/supibot-commands'
 import { AUTO_TRANSLATION_COMMAND, isAutoTranslationCommand } from '../../services/translation'
-import type { TwirCommand, TwirCommandTarget } from '../../services/twir-commands'
+import type { TwirChannelTarget } from '../../services/twir-channels'
+import type { TwirCommand } from '../../services/twir-commands'
 import {
   createPrefixedBotCommandIndex,
   matchPrefixedBotCommands,
@@ -73,7 +74,7 @@ export type { AutocompleteSuggestion, EmoteSuggestion, MentionSuggestion }
 type AliasMap = Map<Platform, Map<string, string>>
 
 interface TwirSuggestions {
-  targets: readonly TwirCommandTarget[]
+  targets: readonly TwirChannelTarget[]
   commands: ReadonlyMap<string, TwirCommand>
   revision: number
 }
@@ -328,7 +329,7 @@ export function useAutocomplete(params: {
   aliasMap: AliasMap | undefined
   customCommands?: CustomCommandDefinition[]
   twirEnabled: boolean
-  twirTargets?: readonly TwirCommandTarget[]
+  twirTargets?: readonly TwirChannelTarget[]
   jeetbotEnabled: boolean
   /** Twitch chat to complete jeetbot commands for; absent while not typing a `!command`. */
   jeetbotChannelLogin?: string
@@ -378,16 +379,12 @@ export function useAutocomplete(params: {
     if (!twirTargets) return undefined
     let current = true
     const load = async () => {
-      const lists = await Promise.all(
-        twirTargets.map((target) => backend.api.getTwirCommands(target)),
-      )
+      const list = await backend.api.getTwirCommands(twirTargets)
       if (!current) return
       const commands = new Map<string, TwirCommand>()
-      for (const list of lists) {
-        for (const command of list) {
-          const key = command.name.toLowerCase()
-          if (!commands.has(key)) commands.set(key, command)
-        }
+      for (const command of list) {
+        const key = command.name.toLowerCase()
+        if (!commands.has(key)) commands.set(key, command)
       }
       setTwirSuggestions({ targets: twirTargets, commands, revision: twirRevision })
       setSelectedIndex(0)

@@ -52,7 +52,6 @@ export const ruComposer = {
   'composer.target.clickToEnable': 'Нажмите, чтобы включить',
 
   'composer.notice.twirReloaded': 'Команды Twir перезагружены.',
-  'composer.notice.twirPartial': 'Команды Twir перезагружены для некоторых каналов.',
   'composer.notice.jeetbotReloaded': 'Команды jeetbot перезагружены.',
 
   'composer.error.whisperNoAccount': 'Подключите аккаунт Twitch, чтобы отправить шёпот.',
@@ -63,12 +62,11 @@ export const ruComposer = {
   'composer.error.translatedTooLong':
     'Сообщение для {platform} слишком длинное после перевода: максимум {limit} символов. Ничего не отправлено.',
   'composer.error.noWatchedTarget': 'Нет доступного канала для отправки.',
-  'composer.error.twirDisabled':
-    'Интеграция Twir отключена. Включите её в разделе «Настройки → Команды».',
+  'composer.error.twirDisabled': 'Включите подсказки команд Twir в разделе «Настройки → Twir».',
   'composer.error.twirNoTarget':
-    'Откройте отслеживаемый канал или выберите подключённый чат, чтобы перезагрузить команды Twir.',
+    'Откройте поддерживаемый чат или подключите аккаунт, чтобы перезагрузить команды Twir.',
   'composer.error.twirReload':
-    'Не удалось перезагрузить команды Twir ({failures}). Попробуйте /twirreload ещё раз.',
+    'Не удалось перезагрузить команды Twir ({detail}). Попробуйте /twirreload ещё раз.',
   'composer.error.jeetbotDisabled':
     'Интеграция jeetbot отключена. Включите её в разделе «Настройки → Команды».',
   'composer.error.jeetbotNoTarget': 'Откройте Twitch-чат, чтобы перезагрузить команды jeetbot.',

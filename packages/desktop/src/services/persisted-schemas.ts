@@ -299,6 +299,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     overlay: overlayConfigSchema,
     autoCheckUpdates: z.boolean().optional(),
     twirIntegrationEnabled: z.boolean().optional(),
+    twirNowPlayingEnabled: z.boolean().optional(),
     jeetbotIntegrationEnabled: z.boolean().optional(),
     fossabotIntegrationEnabled: z.boolean().optional(),
     nightbotIntegrationEnabled: z.boolean().optional(),

@@ -137,12 +137,14 @@ import {
   type SupibotCommandTarget,
 } from '../../services/supibot-commands'
 import { systemIntegration } from '../../services/system-integration'
+import { createTwirChannelLookup } from '../../services/twir-api'
+import type { TwirChannelTarget } from '../../services/twir-channels'
 import {
   createTwirCommandsClient,
   type TwirCommand,
   type TwirCommandsOptions,
-  type TwirCommandTarget,
 } from '../../services/twir-commands'
+import { createTwirNowPlayingClient, type TwirNowPlaying } from '../../services/twir-now-playing'
 import {
   createTwitchActivitiesService,
   type TwitchActivitiesCredentials,
@@ -391,9 +393,10 @@ export interface DesktopApi {
   getSettings(): Promise<AppSettings>
   saveSettings(params: AppSettings): Promise<void>
   getTwirCommands(
-    target: TwirCommandTarget,
+    targets: readonly TwirChannelTarget[],
     options?: TwirCommandsOptions,
   ): Promise<readonly TwirCommand[]>
+  getTwirNowPlaying(targets: readonly TwirChannelTarget[]): Promise<TwirNowPlaying | null>
   getJeetbotCommands(
     target: JeetbotCommandTarget,
     options?: JeetbotCommandsOptions,
@@ -1093,9 +1096,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       })
   }
 
+  const lookupTwirChannel = createTwirChannelLookup()
   return {
     obsRemote: obsRemoteApi,
-    getTwirCommands: createTwirCommandsClient(),
+    getTwirCommands: createTwirCommandsClient({ lookupChannel: lookupTwirChannel }),
+    getTwirNowPlaying: createTwirNowPlayingClient({ lookupChannel: lookupTwirChannel }),
     getJeetbotCommands: createJeetbotCommandsClient(),
     getFossabotCommands: createFossabotCommandsClient(),
     getNightbotCommands: createNightbotCommandsClient(),

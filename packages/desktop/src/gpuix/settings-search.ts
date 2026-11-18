@@ -58,6 +58,12 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
     aliases: 'commands aliases macros actions команды алиасы макросы действия',
   },
   {
+    id: 'twir',
+    label: 'Twir',
+    description: 'Command suggestions and now playing',
+    aliases: 'twir integration твир интеграция',
+  },
+  {
     id: 'plugins',
     label: 'Plugins',
     description: 'Local and remote extensions and channel transports',
@@ -99,6 +105,7 @@ const CATEGORY_LABEL_KEYS: Record<SettingsCategoryId, MessageKey> = {
   translation: 'settings.category.translation',
   moderation: 'settings.category.moderation',
   commands: 'settings.category.commands',
+  twir: 'settings.category.twir',
   plugins: 'settings.category.plugins',
   donations: 'settings.category.donations',
   overlay: 'settings.category.overlay',
@@ -114,6 +121,7 @@ const CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategoryId, MessageKey> = {
   translation: 'settings.category.translation.desc',
   moderation: 'settings.category.moderation.desc',
   commands: 'settings.category.commands.desc',
+  twir: 'settings.category.twir.desc',
   plugins: 'settings.category.plugins.desc',
   donations: 'settings.category.donations.desc',
   overlay: 'settings.category.overlay.desc',
@@ -332,12 +340,12 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
   },
   {
     id: 'twir-integration',
-    category: 'commands',
+    category: 'twir',
     title: 'Twir Integration',
     saveMode: 'section',
     searchPrefixes: ['settings.twir.'],
     keywords:
-      'twir bot command autocomplete completion suggestions команды бота автодополнение интеграция',
+      'twir bot command autocomplete completion suggestions now playing current track song music команды бота автодополнение интеграция текущий трек песня музыка',
   },
   {
     id: 'jeetbot-integration',

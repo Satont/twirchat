@@ -133,6 +133,7 @@ import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
 import { ChattersDialog } from './ChattersDialog'
 import { ChatThreadPanel } from './ChatThreadPanel'
+import { ChatTwirNowPlaying } from './ChatTwirNowPlaying'
 import { DonationChatRow } from './DonationChatRow'
 import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
@@ -2110,6 +2111,13 @@ export function ChatView({
           >
             {t('chat.banner.restore')}
           </Text>
+        ) : null}
+        {settings?.twirNowPlayingEnabled === true && !feedChannels ? (
+          <ChatTwirNowPlaying
+            accounts={accounts}
+            watchedChannel={watchedChannel}
+            watchedChannelId={watchedChannelStatus?.channelId}
+          />
         ) : null}
         {filtersOpen ? (
           <div
