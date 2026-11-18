@@ -93,6 +93,7 @@ import { useComposerFocusRegistration } from '../state/composer-focus'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { customCommandsStore, loadCustomCommands } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
+import { homeComposerPlatformPreferences } from '../state/home-composer-platforms'
 import { resolvePaneAccount } from '../state/pane-accounts'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
@@ -401,6 +402,14 @@ export function ChatInput(props: ChatInputProps) {
     })
   }, [props.accounts, props.statuses, props.watchedChannel])
 
+  const isHome = !props.watchedChannel
+  const disabledHomePlatforms = useStoreSelector(homeComposerPlatformPreferences.store, (state) =>
+    isHome && state.loaded ? state.value : null,
+  )
+  useEffect(() => {
+    if (isHome) runUiTask(homeComposerPlatformPreferences.load(backend.api))
+  }, [backend, isHome])
+
   const homeConnectionStatuses = connectedPlatforms.filter((p) => p.status !== 'connected')
   const sendablePlatforms = connectedPlatforms.filter(
     (p) => p.mode === 'authenticated' && p.status === 'connected',
@@ -408,26 +417,28 @@ export function ChatInput(props: ChatInputProps) {
   const hasAnything = props.watchedChannel ? true : connectedPlatforms.length > 0
   const isDisabled = props.watchedChannel
     ? !watchedAccount || props.watchedChannelStatus?.status !== 'connected'
-    : !sendablePlatforms.some(
+    : disabledHomePlatforms === null ||
+      !sendablePlatforms.some(
         (target) => !composer.activePlatform || target.platform === composer.activePlatform,
       )
 
   const isEnabled = (platform: Platform): boolean => {
     const info = connectedPlatforms.find((p) => p.platform === platform)
-    if (!info || info.mode !== 'authenticated') return false
+    if (!info || info.mode !== 'authenticated' || disabledHomePlatforms === null) return false
     if (composer.activePlatform) return platform === composer.activePlatform
-    return !composer.disabledPlatforms?.has(platform)
+    return !disabledHomePlatforms.includes(platform)
   }
   const toggle = (platform: Platform) => {
-    updateComposer(composerKey, (current) => {
-      if (current.activePlatform) return { ...current, activePlatform: undefined }
-      const info = connectedPlatforms.find((p) => p.platform === platform)
-      if (!info || info.mode !== 'authenticated') return current
-      const disabledPlatforms = new Set(current.disabledPlatforms)
-      if (disabledPlatforms.has(platform)) disabledPlatforms.delete(platform)
-      else disabledPlatforms.add(platform)
-      return { ...current, disabledPlatforms }
-    })
+    const { loaded, value } = homeComposerPlatformPreferences.store.get()
+    if (!loaded) return
+    const clearedOverride = updateComposer(composerKey, (current) =>
+      current.activePlatform ? { ...current, activePlatform: undefined } : current,
+    )
+    if (clearedOverride) return
+    const next = value.includes(platform)
+      ? value.filter((target) => target !== platform)
+      : [...value, platform]
+    runUiTask(homeComposerPlatformPreferences.save(backend.api, next))
   }
 
   // Over-limit messages are rejected by the platform after the fact; catch
@@ -1858,10 +1869,14 @@ export function ChatInput(props: ChatInputProps) {
                       target.channelLogin,
                       target.error,
                     )}
-                    onClick={() => {
-                      toggle(target.platform)
-                      if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
-                    }}
+                    onClick={
+                      disabledHomePlatforms === null
+                        ? undefined
+                        : () => {
+                            toggle(target.platform)
+                            if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
+                          }
+                    }
                   />
                 ))
               )}
