@@ -293,6 +293,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showChannelLabel: z.boolean(),
     showChatImagePreviews: z.boolean().optional(),
     showModerationRail: z.boolean().optional(),
+    showObsRemoteButton: z.boolean().optional(),
     emoteSessionCache: z.boolean(),
     platformFilter: z.union([z.array(platformSchema), z.literal('all')]),
     hotkeys: hotkeySettingsSchema,

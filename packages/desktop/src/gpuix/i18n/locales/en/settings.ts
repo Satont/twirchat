@@ -108,6 +108,7 @@ export const settings = {
 
   'settings.appearance.language': 'Language',
   'settings.appearance.languageHint': 'Interface language',
+  'settings.appearance.showObsRemoteButton': 'Show OBS Remote button',
   'settings.appearance.theme': 'Theme',
   'settings.appearance.font': 'Font',
   'settings.appearance.fontFamily': 'Font family',
