@@ -8,9 +8,11 @@ import { useBackend } from '../backend/context'
 import { useT } from '../i18n'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
+import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
 const REFRESH_MS = 30_000
+const ARTWORK_SIZE = 24
 const trackText = {
   flexShrink: 1,
   minWidth: 0,
@@ -54,7 +56,8 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
         if (
           previous?.targets === targets &&
           previous.track.title === track.title &&
-          previous.track.artist === track.artist
+          previous.track.artist === track.artist &&
+          previous.track.imageUrl === track.imageUrl
         )
           return previous
         return { targets, track }
@@ -72,7 +75,7 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
   }, [api, targets])
 
   if (playing?.targets !== targets) return null
-  const { title, artist } = playing.track
+  const { title, artist, imageUrl } = playing.track
   const label = t('chat.banner.nowPlaying', { track: artist ? `${title} · ${artist}` : title })
 
   return (
@@ -86,8 +89,11 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 6,
-            padding: 8,
+            gap: 8,
+            paddingTop: 5,
+            paddingBottom: 5,
+            paddingLeft: 8,
+            paddingRight: 8,
             width: '100%',
             minWidth: 0,
             overflow: 'hidden',
@@ -96,7 +102,37 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
             borderColor: theme.border,
           }}
         >
-          <Icon name="music" size={14} color={theme.text2} />
+          <div
+            testId="chat-twir-now-playing-artwork"
+            style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: ARTWORK_SIZE,
+              height: ARTWORK_SIZE,
+              flexShrink: 0,
+              borderRadius: 4,
+              backgroundColor: theme.surface2,
+              overflow: 'hidden',
+            }}
+          >
+            <Icon name="music" size={14} color={theme.text2} />
+            {imageUrl ? (
+              <RemoteImage
+                url={imageUrl}
+                thumbnailSize={ARTWORK_SIZE * 2}
+                objectFit="cover"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: ARTWORK_SIZE,
+                  height: ARTWORK_SIZE,
+                }}
+              />
+            ) : null}
+          </div>
           <Text style={{ ...trackText, color: theme.text, fontWeight: 600 }}>{title}</Text>
           {artist ? (
             <Text style={{ ...trackText, color: theme.text2, maxWidth: '44%' }}>

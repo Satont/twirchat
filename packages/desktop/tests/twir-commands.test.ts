@@ -241,6 +241,40 @@ test('does not move to lower priority on a transient channel lookup error', asyn
   expect(urls).toEqual([`${API}/v1/channels/by-platform/twitch/34`])
 })
 
+test.each([
+  ['https://i.scdn.co/image/ab67616d0000b273a3cf', 'https://i.scdn.co/image/ab67616d0000b273a3cf'],
+  [
+    'https://lastfm.freetls.fastly.net/i/u/300x300/abc.png',
+    'https://lastfm.freetls.fastly.net/i/u/300x300/abc.png',
+  ],
+  [null, undefined],
+  [123, undefined],
+  ['not a URL', undefined],
+  ['http://i.scdn.co/image/abc', undefined],
+  ['https://user:secret@i.scdn.co/image/abc', undefined],
+  ['https://i.scdn.co:8443/image/abc', undefined],
+  ['https://i.scdn.co.evil.example/image/abc', undefined],
+  ['https://127.0.0.1/image/abc', undefined],
+  ['https://i.scdn.co/other/abc', undefined],
+])('accepts only supported public artwork URLs (%s)', async (imageUrl, expected) => {
+  const getTrack = createTwirNowPlayingClient({
+    fetcher: async (url) =>
+      url.endsWith('/twitch/34')
+        ? Response.json({ channel_id: UUID })
+        : Response.json({
+            data: {
+              title: 'Evening Drive',
+              artist: 'Night Shift',
+              imageUrl,
+              canvasUrl: 'https://i.scdn.co/image/abc',
+            },
+          }),
+  })
+  const targets = resolveTwirTargets({ accounts: [account('twitch', '34')] })
+  const track = await getTrack(targets)
+  expect(track).toEqual({ title: 'Evening Drive', artist: 'Night Shift', imageUrl: expected })
+})
+
 test('refreshes current tracks and backs off after rate limiting without retaining stale data', async () => {
   let now = 0
   let trackRequests = 0

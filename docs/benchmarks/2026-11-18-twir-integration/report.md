@@ -5,6 +5,10 @@ Isolated Linux GUI checks covered saving the Twir switches independently, comman
 reload, and changing the current track during live chat. The screenshots use simulated platform and
 Twir data.
 
+The artwork follow-up reuses these measurements because the now-playing component is unmounted
+with the switch off. Focused native checks verified the artwork at 720 and 320 px, replacement on
+refresh, and the note placeholder when artwork is absent or cannot be loaded.
+
 ## Production target
 
 Three runs per revision used 50 channels, four panes, 200 retained messages per channel,

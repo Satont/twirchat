@@ -16,11 +16,28 @@ const log = logger('twir-now-playing')
 const TRACK_TTL_MS = 15_000
 const RATE_LIMIT_RETRY_MS = 60_000
 
+function parseArtworkUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 2_048) return undefined
+  const url = URL.parse(value)
+  if (!url || url.protocol !== 'https:' || url.username || url.password || url.port)
+    return undefined
+  if (
+    (url.hostname === 'i.scdn.co' && url.pathname.startsWith('/image/')) ||
+    (url.hostname === 'lastfm.freetls.fastly.net' && url.pathname.startsWith('/i/u/'))
+  )
+    return url.href
+  return undefined
+}
+
 const trackTextSchema = z
   .string()
   .max(512)
   .transform((value) => sanitizeDisplayText(value).trim())
-const trackSchema = z.object({ title: trackTextSchema, artist: trackTextSchema })
+const trackSchema = z.object({
+  title: trackTextSchema,
+  artist: trackTextSchema,
+  imageUrl: z.unknown().transform(parseArtworkUrl).optional(),
+})
 const nowPlayingSchema = z.object({ data: trackSchema.nullable() })
 
 export type TwirNowPlaying = z.infer<typeof trackSchema>
