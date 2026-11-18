@@ -37,6 +37,7 @@ export const ruChat = {
   'chat.room.uniqueChat': 'Уникальные сообщения',
 
   'chat.banner.pinned': 'Закреплено · {author}: {text}',
+  'chat.banner.nowPlaying': 'Сейчас играет · {track}',
   'chat.banner.poll.one': 'Опрос · {title} · {count} голос',
   'chat.banner.poll.few': 'Опрос · {title} · {count} голоса',
   'chat.banner.poll.many': 'Опрос · {title} · {count} голосов',

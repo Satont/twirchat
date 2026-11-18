@@ -35,6 +35,7 @@ export const chat = {
   'chat.room.uniqueChat': 'Unique chat',
 
   'chat.banner.pinned': 'Pinned · {author}: {text}',
+  'chat.banner.nowPlaying': 'Now playing · {track}',
   'chat.banner.poll.one': 'Poll · {title} · {count} vote',
   'chat.banner.poll.few': 'Poll · {title} · {count} votes',
   'chat.banner.poll.many': 'Poll · {title} · {count} votes',

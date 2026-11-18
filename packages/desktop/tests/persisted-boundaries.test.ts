@@ -35,6 +35,7 @@ test('persisted partial settings retain nested defaults and reject wrong externa
     const settings = SettingsStore.get()
     expect(settings.fontSize).toBe(18)
     expect(settings.twirIntegrationEnabled).toBe(true)
+    expect(settings.twirNowPlayingEnabled).toBe(false)
     expect(settings.fossabotIntegrationEnabled).toBe(true)
     expect(settings.nightbotIntegrationEnabled).toBe(true)
     expect(settings.potatIntegrationEnabled).toBe(true)
@@ -46,6 +47,7 @@ test('persisted partial settings retain nested defaults and reject wrong externa
     SettingsStore.set({
       ...settings,
       twirIntegrationEnabled: false,
+      twirNowPlayingEnabled: true,
       fossabotIntegrationEnabled: false,
       nightbotIntegrationEnabled: false,
       potatIntegrationEnabled: false,
@@ -55,6 +57,7 @@ test('persisted partial settings retain nested defaults and reject wrong externa
     })
     expect(SettingsStore.get()).toMatchObject({
       twirIntegrationEnabled: false,
+      twirNowPlayingEnabled: true,
       fossabotIntegrationEnabled: false,
       nightbotIntegrationEnabled: false,
       potatIntegrationEnabled: false,

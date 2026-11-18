@@ -287,6 +287,7 @@ export interface AppSettings {
   /** Auto-check for updates on startup */
   autoCheckUpdates?: boolean
   twirIntegrationEnabled?: boolean
+  twirNowPlayingEnabled?: boolean
   jeetbotIntegrationEnabled?: boolean
   fossabotIntegrationEnabled?: boolean
   nightbotIntegrationEnabled?: boolean
@@ -355,6 +356,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   themeMode: 'dark',
   twirIntegrationEnabled: true,
+  twirNowPlayingEnabled: false,
   jeetbotIntegrationEnabled: true,
   fossabotIntegrationEnabled: true,
   nightbotIntegrationEnabled: true,
