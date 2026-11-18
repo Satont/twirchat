@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import type { NativeWindowControls } from '../src/gpuix/native-window'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
+import { focusNativeQaWindow, getNativeQaWindowGeometry } from './qa-x11'
 
 assertGuiQaEnvironment()
 await import('../src/gpuix/native-bootstrap')
@@ -46,6 +47,8 @@ const state = createStore<CounterState>({
 const fixtureWidth = createStore(900)
 const showDenseHeader = createStore(false)
 const backend = getDesktopBackend()
+const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
+const removedTabs = createStore<string[]>([])
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
 let renderer: Renderer | undefined
@@ -128,6 +131,7 @@ function Content() {
   const value = useStore(state)
   const width = useStore(fixtureWidth)
   const dense = useStore(showDenseHeader)
+  const removed = useStore(removedTabs)
   React.useEffect(() => {
     assert(active instanceof NativeRenderer)
     renderer = nativeWindow(active)
@@ -154,13 +158,13 @@ function Content() {
       ) : (
         <ChannelTabBar
           tabs={{
-            watchedChannels: channels,
+            watchedChannels: channels.filter(({ id }) => !removed.includes(id)),
             activeTabId: value.active,
             watchedLiveStatuses: new Map([['c', { isLive: true }]]),
             unread,
             onSelectTab: (id) => state.modify((previous) => ({ ...previous, active: id })),
             onAddChannel: () => {},
-            onRemoveChannel: () => {},
+            onRemoveChannel: (id) => removedTabs.modify((previous) => [...previous, id]),
           }}
         />
       )}
@@ -232,7 +236,53 @@ async function until(check: () => boolean, label: string) {
     await Bun.sleep(20)
   }
 }
+async function clickNative(testId: string, button = 1) {
+  const window = getNativeQaWindowGeometry('TwirChat')
+  const { x, y, width, height } = bounds(testId)
+  const centerX = Math.round(window.x + x + width / 2)
+  const centerY = Math.round(window.y + y + height / 2)
+  await Bun.$`/usr/bin/xdotool mousemove ${centerX} ${centerY} click ${button}`.quiet()
+}
 const screenshots: string[] = []
+async function checkTabClose(width: number) {
+  await focusNativeQaWindow('TwirChat')
+  const dialog = () => nodeFor('tab-close-dialog')
+  const open = async () => {
+    await clickNative('tab-b', 2)
+    await until(() => !!dialog(), 'Middle click opens the close dialog')
+    assert.deepEqual(removedTabs.get(), [])
+    assert.equal(state.get().active, 'd', 'Middle click does not select the clicked tab')
+    assert(nodeFor('tab-b'), 'The clicked tab remains open until confirmation')
+    await until(
+      () => current().getPaintedText().includes('The tab “xqc” will be closed.'),
+      'Dialog names the clicked tab',
+    )
+  }
+  await open()
+  screenshots.push(await captureGuiQaDisplay(`tab-close-${width}`))
+  await clickNative('tab-close-cancel')
+  await until(() => !dialog(), 'Cancel dismisses the dialog')
+  await open()
+  await Bun.$`/usr/bin/xdotool key Escape`.quiet()
+  await until(() => !dialog(), 'Escape dismisses the dialog')
+  await open()
+  await Bun.$`/usr/bin/xdotool key Return`.quiet()
+  await until(() => !dialog(), 'Enter activates the focused Cancel button')
+  await open()
+  await clickNative('tab-close-confirm')
+  await until(() => !dialog() && !nodeFor('tab-b'), 'Confirm closes the clicked tab')
+  assert.deepEqual(removedTabs.get(), ['b'])
+  assert(nodeFor('tab-a') && nodeFor('tab-c') && nodeFor('tab-d'))
+
+  await clickNative('tab-c')
+  await until(() => state.get().active === 'c', 'Left click selects the remaining tab')
+  await Bun.$`/usr/bin/xdotool key Delete`.quiet()
+  await until(() => !nodeFor('tab-c'), 'Delete still closes directly')
+  assert(!dialog())
+  assert.deepEqual(removedTabs.get(), ['b', 'c'])
+  removedTabs.set([])
+  await until(() => !!nodeFor('tab-b') && !!nodeFor('tab-c'), 'Tabs reset for the next size')
+}
 const geometry: Array<{ width: number; baseline: ReturnType<typeof tabGeometry> }> = []
 async function setState(next: CounterState) {
   const previous = commits
@@ -240,6 +290,7 @@ async function setState(next: CounterState) {
   await until(() => commits > previous, 'counter commit')
   await Bun.sleep(70)
 }
+const unregisterHotkeys = registerHotkeyActions({ openAddChannel() {}, openTabSelector() {} })
 try {
   await manager.start()
   await until(() => !!renderer, 'renderer')
@@ -341,6 +392,7 @@ try {
     await until(() => state.get().active === 'd', 'keyboard selection on a wrapped tab')
     geometry.push({ width, baseline })
     screenshots.push(await captureGuiQaDisplay('tab-counts-' + width))
+    if (width === 900 || width === 320) await checkTabClose(width)
   }
   fixtureWidth.set(650)
   showDenseHeader.set(true)
@@ -370,6 +422,7 @@ try {
   )
   throw error
 } finally {
+  unregisterHotkeys()
   await manager.quit()
   backend.dispose?.()
 }
