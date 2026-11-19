@@ -5,7 +5,9 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { resolveTwirTargets, type TwirChannelTarget } from '../../services/twir-channels'
 import type { TwirNowPlaying } from '../../services/twir-now-playing'
 import { useBackend } from '../backend/context'
+import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../i18n'
+import { useDesktopWindows } from '../state/desktop-windows'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
@@ -37,6 +39,7 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
   watchedChannelId?: string
 }) {
   const { api } = useBackend()
+  const windows = useDesktopWindows()
   const { t } = useT()
   const theme = useTheme()
   const targets = useMemo(
@@ -77,6 +80,17 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
   if (playing?.targets !== targets) return null
   const { title, artist, imageUrl } = playing.track
   const label = t('chat.banner.nowPlaying', { track: artist ? `${title} · ${artist}` : title })
+  const openArtwork =
+    imageUrl && windows
+      ? () => {
+          runUiTask(
+            api.getChatImagePreview(imageUrl, AbortSignal.timeout(12_000)).then((result) => {
+              if (!result) throw new Error(t('chat.imagePreview.unavailable'))
+              return windows.openImage(result.full)
+            }),
+          )
+        }
+      : undefined
 
   return (
     <Tooltip delayDuration={250} style={{ width: '100%', flexShrink: 0 }}>
@@ -104,6 +118,24 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
         >
           <div
             testId="chat-twir-now-playing-artwork"
+            role={openArtwork ? 'button' : undefined}
+            aria-label={openArtwork ? t('chat.imagePreview.open') : undefined}
+            tabIndex={openArtwork ? 0 : undefined}
+            onClick={
+              openArtwork &&
+              ((event) => {
+                if (event.isRightClick || (event.button !== undefined && event.button !== 0)) return
+                if ((event.clickCount ?? 1) === 1) openArtwork()
+              })
+            }
+            onKeyDown={
+              openArtwork &&
+              ((event) => {
+                if (event.key !== 'enter' && event.key !== 'space') return
+                event.preventDefault()
+                openArtwork()
+              })
+            }
             style={{
               position: 'relative',
               display: 'flex',
@@ -115,6 +147,10 @@ export const ChatTwirNowPlaying = memo(function ChatTwirNowPlaying({
               borderRadius: 4,
               backgroundColor: theme.surface2,
               overflow: 'hidden',
+              cursor: openArtwork ? 'pointer' : undefined,
+              focusVisible: openArtwork
+                ? { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 }
+                : undefined,
             }}
           >
             <Icon name="music" size={14} color={theme.text2} />
