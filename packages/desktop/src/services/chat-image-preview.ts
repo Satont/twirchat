@@ -211,6 +211,7 @@ async function readBody(
 
 function readImageTarget(bytes: Uint8Array, pageUrl: URL): URL | undefined {
   const candidates = new Map<string, URL>()
+  let cardType: string | undefined
   new HTMLRewriter()
     .on('head meta', {
       element(meta) {
@@ -219,15 +220,21 @@ function readImageTarget(bytes: Uint8Array, pageUrl: URL): URL | undefined {
         )
           .trim()
           .toLowerCase()
-        if (!IMAGE_METADATA.includes(key) || candidates.has(key)) return
         const content = meta.getAttribute('content')
         if (!content) return
+        if (key === 'twitter:card') {
+          cardType ??= decodeHTMLAttribute(content).trim().toLowerCase() || undefined
+          return
+        }
+        if (!IMAGE_METADATA.includes(key) || candidates.has(key)) return
         const value = decodeHTMLAttribute(content).trim()
         const target = value ? parseTarget(value, pageUrl) : undefined
         if (target && target.href !== pageUrl.href) candidates.set(key, target)
       },
     })
     .transform(new TextDecoder().decode(bytes))
+  // Compact link cards often use avatars or site logos rather than attached media.
+  if (cardType === 'summary') return undefined
   for (const key of IMAGE_METADATA) {
     const target = candidates.get(key)
     if (target) return target

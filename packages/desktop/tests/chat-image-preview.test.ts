@@ -218,6 +218,44 @@ test('follows a cross-origin Open Graph thumbnail through the pinned image fetch
   })
 })
 
+test.each([
+  ['https://t.me/satont', 'https://cdn4.telesco.pe/file/avatar.jpg'],
+  [
+    'https://x.com/WallisDev/status/2122209087303700938',
+    'https://pbs.twimg.com/profile_images/avatar.jpg',
+  ],
+])('ignores the compact summary image for %s without downloading it', async (page, avatar) => {
+  const { fetchImage, requests } = fixture({
+    respond: (index) =>
+      index === 0
+        ? pageResponse(`
+            <meta property="og:image" content="${avatar}">
+            <meta name="twitter:card" content="summary">
+          `)
+        : imageResponse(),
+  })
+  expect(await fetchImage(page, new AbortController().signal)).toBeUndefined()
+  expect(requests).toHaveLength(1)
+})
+
+test('keeps large image cards reached through short links', async () => {
+  const { fetchImage, queries } = fixture({
+    respond: (index) =>
+      [
+        new Response(null, {
+          status: 301,
+          headers: { Location: 'https://twitter.com/user/status/123' },
+        }),
+        pageResponse(`
+          <meta property="og:image" content="https://pbs.twimg.com/media/attached.png">
+          <meta name="twitter:card" content="summary_large_image">
+        `),
+      ][index] ?? imageResponse(),
+  })
+  expect(await fetchImage('https://t.co/short', new AbortController().signal)).toEqual(PNG)
+  expect(queries).toEqual(['t.co', 'twitter.com', 'pbs.twimg.com'])
+})
+
 test('resolves Twitter metadata against the final page URL without following a second HTML page', async () => {
   const html = trackedBody({ 'Content-Type': 'text/html' })
   const { fetchImage, requests } = fixture({
