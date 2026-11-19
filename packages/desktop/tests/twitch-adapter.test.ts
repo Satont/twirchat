@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 
 import {
   TwitchAdapter,
@@ -9,6 +9,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
 import { compileChatSearch } from '../src/gpuix/chat-tools'
+import { createTwitchBadgeCatalog } from '../src/platforms/twitch/badge-catalog'
 import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
 import { onTwitchSendRejected } from '../src/platforms/twitch/send-outcomes'
 import { createTwitchSenderPool, type TwitchSenderPool } from '../src/platforms/twitch/sender-pool'
@@ -68,7 +69,7 @@ function readerFixture(login = 'satont', channel = 'satont', senders?: TwitchSen
     login,
     accountId: 'twitch:123',
     isConnected: true,
-    badgeCache: parseTwitchBadgeCatalog({
+    badges: parseTwitchBadgeCatalog({
       badges: {
         'broadcaster/1': 'https://example.com/broadcaster.png',
         'moderator/1': 'https://example.com/moderator.png',
@@ -432,39 +433,36 @@ describe('Twitch incoming message appearance', () => {
     },
   )
 
-  test('a delayed badge fetch cannot replace the next channel or account badge cache', async () => {
-    const adapter = new TwitchAdapter()
-    const response = Promise.withResolvers<Response>()
-    const fetcher = spyOn(globalThis, 'fetch').mockReturnValue(response.promise)
-    try {
-      Object.assign(adapter, { channelName: 'first' })
-      const pending = adapter['fetchBadges']()
-      Object.assign(adapter, { identityRevision: 1, channelName: 'second' })
-      response.resolve(
-        Response.json({ badges: { 'subscriber/12': 'https://example.com/old.png' } }),
-      )
-      await pending
-      expect(adapter['badgeCache'].size).toBe(0)
-    } finally {
-      fetcher.mockRestore()
-    }
-  })
-
-  test('live badge catalog fetch preserves backend titles and descriptions', async () => {
+  test('a badge catalog that arrives late applies to the next live message with metadata', async () => {
     const { adapter, client, messages } = readerFixture()
-    const fetcher = spyOn(globalThis, 'fetch').mockResolvedValue(
-      Response.json({
-        badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
-        badgeMetadata: {
-          'broadcaster/1': { title: 'Broadcaster', description: 'The channel owner.' },
-        },
-      }),
-    )
+    const response = Promise.withResolvers<Response>()
+    const catalog = createTwitchBadgeCatalog({
+      fetch: async (path) =>
+        path.includes('scope=channel')
+          ? response.promise
+          : Response.json({ badges: {} }, { status: 404 }),
+    })
     try {
-      await adapter['fetchBadges']()
-      client.irc.receiveLine(
-        '@badges=broadcaster/1;id=with-metadata;msg-id=announcement;msg-param-color=PRIMARY :tmi.twitch.tv USERNOTICE #satont :with metadata',
+      Object.assign(adapter, { badges: catalog.resolver('satont') })
+      const ready = catalog.ready('satont', 60_000)
+      const line = (id: string) =>
+        `@badges=broadcaster/1;id=${id};msg-id=announcement;msg-param-color=PRIMARY :tmi.twitch.tv USERNOTICE #satont :${id}`
+      client.irc.receiveLine(line('before-catalog'))
+      expect(messages.at(-1)?.author.badges[0]).toEqual({
+        id: 'broadcaster/1',
+        type: 'broadcaster',
+        text: 'broadcaster',
+      })
+      response.resolve(
+        Response.json({
+          badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
+          badgeMetadata: {
+            'broadcaster/1': { title: 'Broadcaster', description: 'The channel owner.' },
+          },
+        }),
       )
+      await ready
+      client.irc.receiveLine(line('after-catalog'))
       expect(messages.at(-1)?.author.badges[0]).toEqual({
         id: 'broadcaster/1',
         type: 'broadcaster',
@@ -473,7 +471,7 @@ describe('Twitch incoming message appearance', () => {
         imageUrl: 'https://example.com/broadcaster.png',
       })
     } finally {
-      fetcher.mockRestore()
+      catalog.dispose()
     }
   })
 })

@@ -156,7 +156,7 @@ test('history client reaches only backend and coalesces concurrent requests', as
 test('default history badge loading retains backend metadata in imported messages', async () => {
   const client = createTwitchHistoryClient({
     fetch: async (path) =>
-      path.startsWith('/api/twitch/badges?')
+      path.startsWith('/api/twitch/badges')
         ? Response.json({
             badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
             badgeMetadata: {

@@ -10,7 +10,6 @@ import { logger } from '@twirchat/shared/logger'
  *   refreshes it through the desktop OAuth client when it expires
  */
 import type {
-  Badge,
   ChatSendReceipt,
   NormalizedEvent,
   TwitchMembershipNoticeKind,
@@ -21,13 +20,13 @@ import { LogLevel } from '@twurple/chat'
 
 import { createTwitchChatAuthProvider } from '../../auth/twitch-access-token'
 import { t, tPlural } from '../../gpuix/i18n'
-import { getBackendUrl } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
 import { buildTwitchSystemMessage } from '../../services/twitch-system-message'
 import { AccountStore } from '../../store/account-store'
 import { BasePlatformAdapter } from '../base-adapter'
 import { resolveTwitchAvatarUrl } from './avatar-cache'
-import { parseTwitchBadgeCatalog } from './badge-data'
+import { createTwitchBadgeCatalog, type TwitchBadgeCatalog } from './badge-catalog'
+import type { TwitchBadgeResolver } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
 import { twitchIrcChannelName } from './send-outcomes'
 import { createDefaultTwitchSenderPool, type TwitchSenderPool } from './sender-pool'
@@ -36,6 +35,8 @@ const reconnectDelayMs = 5000
 const tokenRetryDelayMs = 30_000
 const membershipWindowMs = 1000
 const membershipBatchSize = 20
+/** Join chat after this even if the badge catalog is still loading; it applies once it lands. */
+const badgeWaitMs = 2000
 
 const log = logger('twitch')
 
@@ -90,7 +91,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
   readonly platform = 'twitch'
 
   private chatClient: ChatClient | null = null
-  private badgeRefreshInterval: ReturnType<typeof setInterval> | null = null
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   private membershipTimer: ReturnType<typeof setTimeout> | undefined
   private membershipBatches = new Map<TwitchMembershipNoticeKind, MembershipBatch>()
@@ -124,8 +124,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.emit('notice', buildTwitchSystemMessage({ ...input, notice: { kind: 'moderation' } }))
   }
 
-  /** "setId/version" → badge appearance and metadata from backend /api/twitch/badges */
-  private badgeCache = new Map<string, Badge>()
+  private badges: TwitchBadgeResolver = new Map()
+  private releaseBadges: (() => void) | undefined
 
   private anonymous = true
   private accountId: string | null = null
@@ -134,7 +134,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   private identityRevision = 0
 
-  constructor(private readonly senders: TwitchSenderPool = createDefaultTwitchSenderPool()) {
+  constructor(
+    private readonly senders: TwitchSenderPool = createDefaultTwitchSenderPool(),
+    private readonly badgeCatalog: TwitchBadgeCatalog = createTwitchBadgeCatalog(),
+  ) {
     super()
   }
 
@@ -143,7 +146,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.clearMembershipNotices()
     this.releaseWriter()
     this.channelName = twitchIrcChannelName(channelName)
-    this.badgeCache = new Map()
+    this.releaseBadges?.()
+    this.releaseBadges = this.badgeCatalog.acquire(this.channelName)
+    this.badges = this.badgeCatalog.resolver(this.channelName)
     this.roomState = undefined
     this.shouldReconnect = true
     this.isConnected = false
@@ -176,13 +181,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
       status: 'connecting',
     })
 
-    // Initial badge fetch + schedule refresh every 5 minutes
-    await this.fetchBadges()
+    await this.badgeCatalog.ready(this.channelName, badgeWaitMs)
     if (revision !== this.identityRevision) return
-    this.badgeRefreshInterval = setInterval(
-      () => runInBackground(this.fetchBadges(), 'adapter background operation failed'),
-      5 * 60 * 1000,
-    )
 
     await this.connectChatClient()
   }
@@ -390,7 +390,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         id: msg.tags.get('id') ?? `twitch:announcement:${crypto.randomUUID()}`,
         timestamp: msg.date,
         author: {
-          ...twitchAuthorAppearance(msg.tags, this.badgeCache),
+          ...twitchAuthorAppearance(msg.tags, this.badges),
           id: msg.tags.get('user-id') ?? '',
           username: user,
           displayName: msg.tags.get('display-name') ?? user,
@@ -697,7 +697,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     const avatarUrl = await resolveTwitchAvatarUrl({ authorId: msg.tags.get('user-id') })
-    const normalized = normalizeTwitchChatMessage(msg, this.badgeCache, {
+    const normalized = normalizeTwitchChatMessage(msg, this.badges, {
       avatarUrl,
       text: actionText,
       isAction: actionText !== undefined,
@@ -907,35 +907,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.emit('event', event)
   }
 
-  private async fetchBadges(): Promise<void> {
-    const revision = this.identityRevision
-    const channelName = this.channelName
-    const url = new URL(`${getBackendUrl()}/api/twitch/badges`)
-    if (channelName) {
-      url.searchParams.set('broadcasterLogin', channelName)
-    }
-
-    try {
-      const res = await fetch(url.toString())
-      if (!res.ok) {
-        log.warn(`[Twitch] Badge fetch failed: ${res.status}`)
-        return
-      }
-      const badges = parseTwitchBadgeCatalog(await res.json())
-      if (revision !== this.identityRevision || channelName !== this.channelName) return
-      this.badgeCache = badges
-      log.info(`[Twitch] Badge cache updated: ${this.badgeCache.size} entries`)
-    } catch (error) {
-      log.warn('[Twitch] Badge fetch error', { error: String(error) })
-    }
-  }
-
   private clearTimers(): void {
     this.clearMembershipNotices()
-    if (this.badgeRefreshInterval) {
-      clearInterval(this.badgeRefreshInterval)
-      this.badgeRefreshInterval = null
-    }
+    this.releaseBadges?.()
+    this.releaseBadges = undefined
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout)
       this.reconnectTimeout = null

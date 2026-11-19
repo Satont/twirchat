@@ -2,17 +2,18 @@ import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 import type { ChatMessage } from '@twurple/chat'
 
 import { codePointRangeToUtf16 } from '../../views/shared/utils/display-text'
+import type { TwitchBadgeResolver } from './badge-data'
 
 export function twitchAuthorAppearance(
   tags: ReadonlyMap<string, string>,
-  badgeCache: ReadonlyMap<string, Badge>,
+  badgeLookup: TwitchBadgeResolver,
 ): Pick<NormalizedChatMessage['author'], 'badges' | 'color'> {
   const badges: Badge[] = []
   for (const badge of (tags.get('badges') ?? '').split(',')) {
     const [type, version = '1'] = badge.split('/')
     if (!type) continue
     const id = `${type}/${version}`
-    badges.push(badgeCache.get(id) ?? { id, type, text: type })
+    badges.push(badgeLookup.get(id) ?? { id, type, text: type })
   }
   return { badges, color: tags.get('color') || undefined }
 }
@@ -52,7 +53,7 @@ interface TwitchMessageOptions {
 }
 export function normalizeTwitchChatMessage(
   msg: ChatMessage,
-  badgeCache: ReadonlyMap<string, Badge>,
+  badgeLookup: TwitchBadgeResolver,
   options: TwitchMessageOptions = {},
 ): NormalizedChatMessage {
   const channel = msg.target
@@ -95,7 +96,7 @@ export function normalizeTwitchChatMessage(
 
   const normalized: NormalizedChatMessage = {
     author: {
-      ...twitchAuthorAppearance(tags, badgeCache),
+      ...twitchAuthorAppearance(tags, badgeLookup),
       avatarUrl,
       displayName,
       id: userId,

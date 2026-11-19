@@ -212,7 +212,6 @@ export const notices = {
 
   'notices.twitchHistory.emptyResponse': 'The history backend returned an empty response.',
   'notices.twitchHistory.tooLarge': 'The history response is too large.',
-  'notices.twitchHistory.badgesUnavailable': 'Channel badges are unavailable.',
   'notices.twitchHistory.stopped': 'History loading stopped.',
   'notices.twitchHistory.tooManyRequests': 'Too many history requests. Retry shortly.',
   'notices.twitchHistory.backendUnavailable': 'Twitch history backend is unavailable ({status}).',

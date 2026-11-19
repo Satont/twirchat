@@ -230,5 +230,13 @@ function runMigrations(db: Database): void {
     )
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS twitch_badge_catalogs (
+      scope TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    )
+  `)
+
   log.info('Migrations applied')
 }
