@@ -1086,7 +1086,8 @@ export function ChatInput(props: ChatInputProps) {
         }),
       )
     } catch (error) {
-      if (mounted.current) setCommandError(error instanceof Error ? error.message : String(error))
+      if (mounted.current)
+        setCommandError(sanitizeDisplayText(error instanceof Error ? error.message : String(error)))
       if (options.propagateError) throw error
     } finally {
       executingRef.current = false

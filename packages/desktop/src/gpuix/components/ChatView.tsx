@@ -1267,10 +1267,8 @@ export function ChatView({
       .catch(showSendError)
   }
 
-  function onSendPlugin(payload: { channelId: string; text: string }): void {
-    backend.api
-      .sendPluginChannelMessage({ id: payload.channelId, text: payload.text })
-      .catch(showSendError)
+  function onSendPlugin(payload: { channelId: string; text: string }): Promise<void> {
+    return backend.api.sendPluginChannelMessage({ id: payload.channelId, text: payload.text })
   }
 
   function onPrepareSend(): void {

@@ -82,6 +82,7 @@ await Bun.write(
         emitMessage({ id: session + '-' + ++messages, author: { id: 'qa', name: 'QA' }, text: 'OPEN ' + channelId })
       },
       sendMessage(channelId, text, { emitMessage }) {
+        if (text === 'FAIL') throw new Error('transport rejected')
         emitMessage({ id: session + '-' + ++messages, author: { id: 'qa', name: 'QA' }, text: 'SENT ' + text })
       },
     })
@@ -361,6 +362,12 @@ try {
   await fill('chat-input', 'from mixed feed')
   current().simulateKeystrokes('enter')
   await until(() => painted('SENT from mixed feed'), 'sending to plugin target from combined feed')
+  await fill('chat-input', 'FAIL')
+  current().simulateKeystrokes('enter')
+  await until(
+    () => painted('transport rejected') && painted('FAIL'),
+    'failed plugin send surfaces error and retains draft',
+  )
   await captureGuiQaDisplay('plugins-custom-combined-feed')
 
   await settings()
