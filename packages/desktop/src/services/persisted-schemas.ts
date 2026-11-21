@@ -31,6 +31,7 @@ import type {
   NormalizedEvent,
   ModerationAction,
   ModerationOutcome,
+  UsernameDisplayMode,
 } from '@twirchat/shared/types'
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import type {
@@ -256,6 +257,9 @@ const timestampFormatSchema = z.union([
   z.literal('hh:MM A'),
   z.literal('hh:MM:SS A'),
 ])
+const usernameDisplayModeSchema = z.toZod<UsernameDisplayMode>()(
+  z.union([z.literal('localized-and-username'), z.literal('localized'), z.literal('username')]),
+)
 const paletteColorSchema = z.string().transform((input, ctx) => {
   const color = normalizePaletteColor(input)
   if (color) return color
@@ -286,6 +290,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showPlatformIcon: z.boolean(),
     showTimestamp: z.boolean(),
     timestampFormat: timestampFormatSchema.default('HH:MM:SS'),
+    usernameDisplayMode: usernameDisplayModeSchema.default(DEFAULT_SETTINGS.usernameDisplayMode),
     replyOnDoubleClick: z.boolean().default(true),
     showTwitchJoinPart: z.boolean().default(DEFAULT_SETTINGS.showTwitchJoinPart),
     showAvatars: z.boolean(),
@@ -585,6 +590,7 @@ export const partialAppSettingsSchema = appSettingsSchema.partial().extend({
   themeMode: themeModeSchema.optional().catch(DEFAULT_SETTINGS.themeMode),
   customPalette: customPaletteSchema.optional().catch(undefined),
   timestampFormat: timestampFormatSchema.optional(),
+  usernameDisplayMode: usernameDisplayModeSchema.optional().catch(undefined),
   replyOnDoubleClick: z.boolean().optional(),
   showTwitchJoinPart: z.boolean().optional(),
   overlay: overlayConfigSchema.partial().optional(),

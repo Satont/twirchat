@@ -150,6 +150,7 @@ export type SettingsSectionId =
   | 'updates'
   | 'notifications'
   | 'timestamps'
+  | 'usernames'
   | 'replies'
   | 'twitch-chat-events'
   | 'rules'
@@ -195,6 +196,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     searchPrefixes: ['settings.chat.showTimestamp', 'settings.chat.timestampFormat'],
     keywords:
       'timestamp time clock format seconds milliseconds 12-hour 24-hour AM PM showTimestamp timestampFormat HH:MM:SS HH:MM HH:MM:SS.sss hh:MM A hh:MM:SS A время часы минуты секунды формат отображать сообщения',
+  },
+  {
+    id: 'usernames',
+    category: 'chat',
+    title: 'Usernames',
+    saveMode: 'section',
+    searchPrefixes: ['settings.chat.usernameDisplayMode'],
+    keywords:
+      'username usernames nickname nicknames display name login localized cjk parentheses usernameDisplayMode ник ники никнейм логин локализованный обычный скобки отображение',
   },
   {
     id: 'replies',

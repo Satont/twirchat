@@ -84,6 +84,8 @@ export const ruSettings = {
   'settings.section.similarity.desc': 'Управляйте повторами и почти одинаковыми сообщениями',
   'settings.section.timestamps': 'Время сообщений',
   'settings.section.timestamps.desc': 'Настройте отображение времени в чате',
+  'settings.section.usernames': 'Ники в чате',
+  'settings.section.usernames.desc': 'Выберите, как отображать локализованные ники в чате',
   'settings.section.replies': 'Ответы',
   'settings.section.replies.desc': 'Выберите, как начинать ответ на сообщение',
   'settings.section.twitch-chat-events': 'События чата Twitch',
@@ -125,6 +127,12 @@ export const ruSettings = {
   'settings.chat.showTimestampHint': 'Показывать время рядом с каждым сообщением',
   'settings.chat.timestampFormat': 'Формат времени',
   'settings.chat.timestampFormatHint': 'Пример: {example}. 12-часовые форматы содержат AM/PM.',
+  'settings.chat.usernameDisplayMode': 'Локализованные ники',
+  'settings.chat.usernameDisplayModeHint':
+    'Пример: {example}. Применяется, если у пользователя задан локализованный ник.',
+  'settings.chat.usernameDisplayMode.localizedAndUsername': 'Локализованный (обычный)',
+  'settings.chat.usernameDisplayMode.localized': 'Только локализованный',
+  'settings.chat.usernameDisplayMode.username': 'Только обычный',
   'settings.chat.replyOnDoubleClick': 'Ответ двойным кликом',
   'settings.chat.replyOnDoubleClickHint':
     'Двойной клик по сообщению начинает ответ. Выключите, чтобы выделять слова двойным кликом.',

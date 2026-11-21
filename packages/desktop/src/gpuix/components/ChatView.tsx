@@ -2413,6 +2413,7 @@ export function ChatView({
                     showPlatformIcon={!singleChannel && !feedChannels && settings?.showPlatformIcon}
                     showTimestamp={settings?.showTimestamp}
                     timestampFormat={settings?.timestampFormat}
+                    usernameDisplayMode={settings?.usernameDisplayMode}
                     showAvatar={settings?.showAvatars}
                     showBadges={settings?.showBadges}
                     showImagePreviews={
