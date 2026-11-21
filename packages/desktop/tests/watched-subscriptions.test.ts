@@ -7,10 +7,12 @@ import { watchedChannelsStore } from '../src/gpuix/state/app'
 import { chatTabsStore } from '../src/gpuix/state/chat-tabs'
 import { chatWindowsStore } from '../src/gpuix/state/chat-windows'
 import {
+  createPluginChannelFeedObserver,
   homePluginChannelsStore,
   homePluginFeedStore,
   observeHomePluginFeed,
   setHomePluginChannel,
+  type HomePluginFeed,
 } from '../src/gpuix/state/home-plugin-channels'
 import { layoutStore } from '../src/gpuix/state/layout'
 import {
@@ -345,4 +347,78 @@ test('the combined plugin snapshot reuses rows and drops evicted and unselected 
   await settle()
   expect(observers.has(second.id)).toBe(false)
   expect(homePluginFeedStore.get().rows.map((row) => row.message.id)).toEqual(['late', 'kept'])
+})
+
+test('a combined feed activates plugin sources and tracks per-channel transport status', async () => {
+  const plugin = pluginChannel()
+  const twitch = channel('twitch')
+  const snapshot: WatchedReferenceSnapshot = {
+    ready: true,
+    tabIds: ['mixed-feed'],
+    channels: [twitch, plugin],
+    layouts: new Map<string, WatchedChannelsLayout>([
+      [
+        'mixed-feed',
+        {
+          version: 2,
+          root: {
+            type: 'panel',
+            id: 'combined',
+            flex: 100,
+            content: {
+              type: 'feed',
+              sources: [{ channelId: twitch.id }, { channelId: plugin.id }],
+            },
+          },
+        },
+      ],
+    ]),
+  }
+  expect(referencedWatchedChannels(snapshot)).toEqual([plugin.id, twitch.id].toSorted())
+
+  const observers = new Map<string, Observer>()
+  let latest: HomePluginFeed | undefined
+  const observer = createPluginChannelFeedObserver(
+    (id, listener) => {
+      observers.set(id, listener)
+      return () => {
+        observers.delete(id)
+      }
+    },
+    (feed) => {
+      latest = feed
+    },
+  )
+  cleanups.push(() => observer.stop())
+
+  observer.sync([plugin])
+  observers.get(plugin.id)?.({ messages: [], status: { status: 'connecting' }, canSend: false })
+  await settle()
+  expect(latest?.statuses.get(plugin.id)).toEqual({
+    status: { status: 'connecting' },
+    canSend: false,
+  })
+
+  observers.get(plugin.id)?.({ messages: [], status: { status: 'connected' }, canSend: true })
+  await settle()
+  expect(latest?.statuses.get(plugin.id)).toEqual({
+    status: { status: 'connected' },
+    canSend: true,
+  })
+  expect(latest?.rows).toEqual([])
+
+  observers.get(plugin.id)?.({
+    messages: [pluginMessage('hello', 10)],
+    status: { status: 'connected' },
+    canSend: true,
+  })
+  await settle()
+  expect(latest?.rows.map((row) => row.message.id)).toEqual(['hello'])
+  expect(latest?.total).toBe(1)
+
+  observer.stop()
+  expect(observers.size).toBe(0)
+  expect(latest?.channels).toEqual([])
+  expect(latest?.rows).toEqual([])
+  expect(latest?.statuses.size).toBe(0)
 })

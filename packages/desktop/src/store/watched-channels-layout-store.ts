@@ -91,7 +91,10 @@ export const WatchedChannelsLayoutStore = {
     let channelIds: Set<string> | undefined
     for (const panel of getAllPanels(parsed.root)) {
       if (panel.content.type !== 'feed') continue
-      const known = (channelIds ??= new Set(WatchedChannelStore.findAll().map(({ id }) => id)))
+      const known = (channelIds ??= new Set([
+        ...WatchedChannelStore.findAll().map(({ id }) => id),
+        ...PluginWatchedChannelsStore.findAll().map(({ id }) => id),
+      ]))
       panel.content = retainAvailableFeedSources(panel.content, (id) => known.has(id))
     }
     const layoutWithMeta: WatchedChannelsLayout = {

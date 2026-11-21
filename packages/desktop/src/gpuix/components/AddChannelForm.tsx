@@ -26,7 +26,6 @@ export function AddChannelForm({
   autoFocus = true,
   popup = false,
   popupContextId,
-  builtInOnly = false,
   confirmLabel,
   inputRef,
   onFocus,
@@ -37,7 +36,6 @@ export function AddChannelForm({
   autoFocus?: boolean
   popup?: boolean
   popupContextId?: string
-  builtInOnly?: boolean
   confirmLabel?: string
   inputRef?: Ref<PublicInstance>
   onFocus?: () => void
@@ -47,8 +45,7 @@ export function AddChannelForm({
   const theme = useTheme()
   const { t } = useT()
   const { api, plugins } = useBackend()
-  const readTransports = () =>
-    plugins && !builtInOnly ? api.getPluginTransports() : noPluginTransports
+  const readTransports = () => (plugins ? api.getPluginTransports() : noPluginTransports)
   const [transports, setTransports] = useState(readTransports)
   useBackendEvent('plugins_changed', () => setTransports(readTransports()))
   const [platform, setPlatform] = useState<WatchedPlatform>('twitch')

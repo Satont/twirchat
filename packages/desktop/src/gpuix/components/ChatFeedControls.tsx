@@ -1,21 +1,39 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
-import type { PlatformStatusInfo, WatchedChannel } from '@twirchat/shared/types'
+import type { PlatformStatusInfo } from '@twirchat/shared/types'
 import { useRef, useState } from 'react'
 
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
+import {
+  isPluginWatchedChannel,
+  type DesktopWatchedChannel,
+} from '../../watched-channels/plugin-channel-types'
 import { useT } from '../i18n'
 import { watchedStatusesStore } from '../state/app'
 import { useStoreSelector } from '../state/create-store'
+import type { PluginChannelFeedStatus } from '../state/home-plugin-channels'
 import { useOverlayClose } from '../state/overlays'
 import { useTheme } from '../theme-context'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { Text } from './ui/Text'
 
+function SourceIcon({
+  channel,
+  size,
+  color,
+}: {
+  channel: DesktopWatchedChannel
+  size: number
+  color: string
+}) {
+  if (isPluginWatchedChannel(channel)) return <Icon name="chat" size={size} color={color} />
+  return <PlatformIcon platform={channel.platform} size={size} />
+}
+
 export function ChatFeedHeader({
   channels,
   onEdit,
 }: {
-  channels: readonly WatchedChannel[]
+  channels: readonly DesktopWatchedChannel[]
   onEdit?: () => void
 }) {
   const theme = useTheme()
@@ -78,7 +96,7 @@ export function ChatFeedHeader({
               minWidth: 0,
             }}
           >
-            <PlatformIcon platform={channel.platform} size={12} />
+            <SourceIcon channel={channel} size={12} color={theme.text2} />
             <Text
               style={{
                 fontSize: 11,
@@ -117,12 +135,14 @@ function channelStatusColor(
 export function ChatFeedTargetPicker({
   channels,
   selected,
+  pluginStatuses,
   onPick,
   focusEditor,
   disabled,
 }: {
-  channels: readonly WatchedChannel[]
-  selected: WatchedChannel
+  channels: readonly DesktopWatchedChannel[]
+  selected: DesktopWatchedChannel
+  pluginStatuses?: ReadonlyMap<string, PluginChannelFeedStatus>
   onPick: (id: string) => void
   focusEditor: () => void
   disabled: boolean
@@ -135,9 +155,12 @@ export function ChatFeedTargetPicker({
   const options = useRef(new Map<string, number>())
   const dismissedAt = useRef(0)
   const statuses = useStoreSelector(watchedStatusesStore, (entries) => (open ? entries : undefined))
-  const selectedStatus = useStoreSelector(watchedStatusesStore, (entries) =>
-    entries.get(selected.id),
+  const selectedBuiltInStatus = useStoreSelector(watchedStatusesStore, (entries) =>
+    isPluginWatchedChannel(selected) ? undefined : entries.get(selected.id),
   )
+  const selectedStatus = isPluginWatchedChannel(selected)
+    ? pluginStatuses?.get(selected.id)?.status
+    : selectedBuiltInStatus
   const closeWithFocus = () => {
     setOpen(false)
     if (trigger.current) renderer.focusElement?.(trigger.current.id)
@@ -187,7 +210,7 @@ export function ChatFeedTargetPicker({
           focusVisible: { outlineWidth: 1, outlineColor: theme.link },
         }}
       >
-        <PlatformIcon platform={selected.platform} size={13} />
+        <SourceIcon channel={selected} size={13} color={theme.text2} />
         <Text
           style={{
             maxWidth: 104,
@@ -247,7 +270,10 @@ export function ChatFeedTargetPicker({
           >
             {channels.map((channel, index) => {
               const active = channel.id === selected.id
-              const status = statuses?.get(channel.id)?.status
+              const plugin = isPluginWatchedChannel(channel)
+              const status = plugin
+                ? pluginStatuses?.get(channel.id)?.status.status
+                : statuses?.get(channel.id)?.status
               return (
                 <div
                   ref={(element: PublicInstance | null) => {
@@ -286,7 +312,7 @@ export function ChatFeedTargetPicker({
                     focusVisible: { outlineWidth: 1, outlineColor: theme.link },
                   }}
                 >
-                  <PlatformIcon platform={channel.platform} size={14} />
+                  <SourceIcon channel={channel} size={14} color={theme.text2} />
                   <Text
                     style={{
                       flexGrow: 1,
@@ -300,6 +326,21 @@ export function ChatFeedTargetPicker({
                   >
                     {sanitizeDisplayText(channel.displayName)}
                   </Text>
+                  {plugin ? (
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: theme.text2,
+                        flexShrink: 0,
+                        maxWidth: 64,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {sanitizeDisplayText(channel.transportName)}
+                    </Text>
+                  ) : null}
                   <div
                     style={{
                       width: 5,

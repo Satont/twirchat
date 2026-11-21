@@ -467,12 +467,17 @@ export function App() {
     }
   }
 
+  const pluginChannelIds = useMemo(
+    () => new Set(watchedChannels.filter(isPluginWatchedChannel).map((ch) => ch.id)),
+    [watchedChannels],
+  )
   const visibleTabs =
     presentation.tabVisibility === 'liveOnly'
       ? tabWatchedChannels.filter(
           (tab) =>
             tab.id === activeWatchedTab ||
             (tab.platform !== undefined && isPluginPlatform(tab.platform)) ||
+            tab.sourceChannelIds?.some((id) => pluginChannelIds.has(id)) ||
             watchedLiveStatuses.get(tab.id)?.isLive,
         )
       : tabWatchedChannels

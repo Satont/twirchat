@@ -59,7 +59,7 @@ export function wireProviderChannelFocus(backend: DesktopBackend): () => void {
     const watched = sources.length
       ? sources
           .map(({ channelId }) => channels.find((channel) => channel.id === channelId))
-          .find(Boolean)
+          .find((channel) => channel && !isPluginWatchedChannel(channel))
       : channels.find((channel) => channel.id === tabId)
     const account =
       accountsStore.get().find((candidate) => candidate.platform === 'twitch') ??

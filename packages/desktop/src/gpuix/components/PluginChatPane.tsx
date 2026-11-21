@@ -33,6 +33,7 @@ interface PluginChatPaneProps {
   channel: PluginWatchedChannel
   paneId: string
   headerLeading?: ReactNode
+  onEditFeed?: () => void
   onChangeChannel: () => void
   onSplitRight: () => void
   onClosePanel: () => void
@@ -80,6 +81,7 @@ export function PluginChatPane({
   channel,
   paneId,
   headerLeading,
+  onEditFeed,
   onChangeChannel,
   onSplitRight,
   onClosePanel,
@@ -192,6 +194,11 @@ export function PluginChatPane({
           </Text>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+          {onEditFeed ? (
+            <ActionButton testId="plugin-chat-combine" onClick={onEditFeed}>
+              {t('chat.feed.combine')}
+            </ActionButton>
+          ) : null}
           <ActionButton
             testId="plugin-chat-move-home"
             disabled={moving}
