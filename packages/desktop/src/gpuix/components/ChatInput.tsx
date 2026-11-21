@@ -53,6 +53,7 @@ import {
 } from '../../views/main/utils/chat-send-targets'
 import { resolveUserCardCommand, type UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
+import type { PluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import { useBackend } from '../backend/context'
 import {
   commandApplies,
@@ -94,6 +95,7 @@ import { useStore, useStoreSelector } from '../state/create-store'
 import { customCommandsStore, loadCustomCommands } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
 import { homeComposerPlatformPreferences } from '../state/home-composer-platforms'
+import type { PluginChannelFeedStatus } from '../state/home-plugin-channels'
 import { resolvePaneAccount } from '../state/pane-accounts'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
@@ -157,6 +159,8 @@ export interface ChatInputProps {
   statuses: Partial<Record<import('@twirchat/shared/types').Platform, PlatformStatusInfo>>
   watchedChannel?: WatchedChannel | null
   watchedChannelStatus?: PlatformStatusInfo | null
+  pluginChannel?: PluginWatchedChannel | null
+  pluginChannelStatus?: PluginChannelFeedStatus | null
   /** The layout pane this composer belongs to; its account choice applies to that pane. */
   pane?: { tabId: string; panel: PanelNode }
   replyTarget?: NormalizedChatMessage | null
@@ -185,6 +189,7 @@ export interface ChatInputProps {
     channelId: string
     replyToMessageId?: string
   }) => void | Promise<void>
+  onSendPlugin?: (payload: { channelId: string; text: string }) => void | Promise<void>
   /** Called when the editor gains focus so the first message does not wait for a connection. */
   onPrepareSend?: () => void
   onOpenUserCard: (target: UserCardTarget) => void
@@ -360,7 +365,7 @@ export function ChatInput(props: ChatInputProps) {
   // ── Target chips (home tab: one per own platform) ────────────────────────
 
   const connectedPlatforms = useMemo(() => {
-    if (props.watchedChannel) return []
+    if (props.watchedChannel || props.pluginChannel) return []
     return ownChatSendTargets(props.accounts).map((target) => {
       const exactStatus = Object.values(props.statuses).find(
         (info) =>
@@ -375,9 +380,9 @@ export function ChatInput(props: ChatInputProps) {
         error: exactStatus?.error,
       }
     })
-  }, [props.accounts, props.statuses, props.watchedChannel])
+  }, [props.accounts, props.pluginChannel, props.statuses, props.watchedChannel])
 
-  const isHome = !props.watchedChannel
+  const isHome = !props.watchedChannel && !props.pluginChannel
   const disabledHomePlatforms = useStoreSelector(homeComposerPlatformPreferences.store, (state) =>
     isHome && state.loaded ? state.value : null,
   )
@@ -389,13 +394,25 @@ export function ChatInput(props: ChatInputProps) {
   const sendablePlatforms = connectedPlatforms.filter(
     (p) => p.mode === 'authenticated' && p.status === 'connected',
   )
-  const hasAnything = props.watchedChannel ? true : connectedPlatforms.length > 0
-  const isDisabled = props.watchedChannel
-    ? !watchedAccount || props.watchedChannelStatus?.status !== 'connected'
-    : disabledHomePlatforms === null ||
-      !sendablePlatforms.some(
-        (target) => !composer.activePlatform || target.platform === composer.activePlatform,
-      )
+  const pluginWritable = Boolean(
+    props.pluginChannel &&
+    props.pluginChannelStatus?.status.status === 'connected' &&
+    props.pluginChannelStatus.canSend,
+  )
+  const pluginCommandName = props.pluginChannel ? parsePluginCommand(text.trim())?.name : undefined
+  const hasPluginCommand = Boolean(
+    pluginCommandName && backend.plugins?.hasCommand(pluginCommandName),
+  )
+  const hasAnything =
+    props.watchedChannel || props.pluginChannel ? true : connectedPlatforms.length > 0
+  const isDisabled = props.pluginChannel
+    ? !pluginWritable
+    : props.watchedChannel
+      ? !watchedAccount || props.watchedChannelStatus?.status !== 'connected'
+      : disabledHomePlatforms === null ||
+        !sendablePlatforms.some(
+          (target) => !composer.activePlatform || target.platform === composer.activePlatform,
+        )
 
   const isEnabled = (platform: Platform): boolean => {
     const info = connectedPlatforms.find((p) => p.platform === platform)
@@ -418,26 +435,29 @@ export function ChatInput(props: ChatInputProps) {
 
   // Over-limit messages are rejected by the platform after the fact; catch
   // them here, against the tightest limit of every platform it would go to.
-  const targetPlatforms: Platform[] = props.watchedChannel
-    ? [props.watchedChannel.platform]
-    : sendablePlatforms
-        .filter(
-          (p) =>
-            isEnabled(p.platform) &&
-            (!props.replyTarget || p.platform === props.replyTarget.platform),
-        )
-        .map((p) => p.platform)
-  const lengthLimit = messageLengthLimit(targetPlatforms)
+  const targetPlatforms: Platform[] = props.pluginChannel
+    ? []
+    : props.watchedChannel
+      ? [props.watchedChannel.platform]
+      : sendablePlatforms
+          .filter(
+            (p) =>
+              isEnabled(p.platform) &&
+              (!props.replyTarget || p.platform === props.replyTarget.platform),
+          )
+          .map((p) => p.platform)
+  const lengthLimit = props.pluginChannel ? 4000 : messageLengthLimit(targetPlatforms)
   const length = messageLength(text.trim())
   const overLimit = lengthLimit !== null && length > lengthLimit
   const showLength = lengthLimit !== null && length > lengthLimit - LENGTH_WARNING_MARGIN
-  const canSend =
-    targetPlatforms.length > 0 &&
-    (!props.replyTarget || targetPlatforms.includes(props.replyTarget.platform)) &&
-    text.trim().length > 0 &&
-    !isDisabled &&
-    !executing &&
-    !overLimit
+  const canSend = props.pluginChannel
+    ? text.trim().length > 0 && !executing && !overLimit && (pluginWritable || hasPluginCommand)
+    : targetPlatforms.length > 0 &&
+      (!props.replyTarget || targetPlatforms.includes(props.replyTarget.platform)) &&
+      text.trim().length > 0 &&
+      !isDisabled &&
+      !executing &&
+      !overLimit
   const submit = () => {
     if (!canSend) return
     // `send` shows its errors in the composer; catch unexpected rejections.
@@ -646,6 +666,18 @@ export function ChatInput(props: ChatInputProps) {
     output: string,
     override: OutgoingTranslationOverride,
   ): Promise<PreparedAction> {
+    const pluginChannel = props.pluginChannel
+    if (pluginChannel) {
+      if (!pluginWritable)
+        throw new Error(
+          props.pluginChannelStatus?.status.status === 'connected'
+            ? t('misc.pluginChannels.readOnly')
+            : t('misc.pluginChannels.notConnected'),
+        )
+      if (!props.onSendPlugin) throw new Error(t('misc.pluginChannels.notConnected'))
+      const sendPlugin = props.onSendPlugin
+      return () => sendPlugin({ channelId: pluginChannel.id, text: output })
+    }
     if (isDisabled) throw new Error(t('composer.error.notConnected'))
     const targets = props.watchedChannel
       ? [
@@ -967,7 +999,7 @@ export function ChatInput(props: ChatInputProps) {
       const plugins = backend.plugins
       const invocation = parsePluginCommand(output)
       if (invocation) {
-        const watched = props.watchedChannel
+        const watched = props.watchedChannel ?? props.pluginChannel
         const target = commandTargets.length === 1 ? commandTargets[0] : undefined
         const channel = watched
           ? {
@@ -1218,6 +1250,20 @@ export function ChatInput(props: ChatInputProps) {
   }
 
   function placeholderText(): string {
+    if (props.pluginChannel) {
+      if (pluginWritable)
+        return t('composer.placeholder.message', { channel: props.pluginChannel.displayName })
+      const status = props.pluginChannelStatus?.status
+      if (status?.status === 'connected')
+        return `${props.pluginChannel.transportName} · ${t('plugins.readOnly')}`
+      return (
+        connectionStatusText(
+          status?.status ?? 'connecting',
+          props.pluginChannel.displayName,
+          status?.error,
+        ) || t('chat.empty.connecting')
+      )
+    }
     if (props.watchedChannel) {
       if (!watchedAccount) return t('composer.placeholder.login')
       const channel = props.watchedChannel.displayName
@@ -1611,6 +1657,54 @@ export function ChatInput(props: ChatInputProps) {
 
       {!props.settings.showChannelLabel &&
       !props.watchedChannel &&
+      props.pluginChannel &&
+      props.pluginChannelStatus &&
+      props.pluginChannelStatus.status.status !== 'connected' ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            color: undefined,
+          }}
+        >
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor:
+                props.pluginChannelStatus.status.status === 'connecting'
+                  ? theme.warningText
+                  : props.pluginChannelStatus.status.status === 'error'
+                    ? theme.dangerText
+                    : theme.text2,
+            }}
+          />
+          <Text
+            style={{
+              fontSize: 12,
+              color:
+                props.pluginChannelStatus.status.status === 'connecting'
+                  ? theme.warningText
+                  : props.pluginChannelStatus.status.status === 'error'
+                    ? theme.dangerText
+                    : theme.text2,
+            }}
+          >
+            {connectionStatusText(
+              props.pluginChannelStatus.status.status,
+              props.pluginChannel.displayName,
+              props.pluginChannelStatus.status.error,
+            )}
+          </Text>
+        </div>
+      ) : null}
+
+      {!props.settings.showChannelLabel &&
+      !props.watchedChannel &&
+      !props.pluginChannel &&
       homeConnectionStatuses.length > 0 ? (
         <div
           style={{
@@ -1757,7 +1851,7 @@ export function ChatInput(props: ChatInputProps) {
             paddingBottom: 4,
           }}
         >
-          {props.watchedChannel || connectedPlatforms.length ? (
+          {props.watchedChannel || props.pluginChannel || connectedPlatforms.length ? (
             <div
               testId="composer-targets"
               style={{

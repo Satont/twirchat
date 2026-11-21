@@ -1,3 +1,4 @@
+import type { PluginTransportStatus } from '../../plugins/api'
 import {
   HOME_PLUGIN_CHANNELS_KEY,
   homePluginChannelIdsSchema,
@@ -69,21 +70,36 @@ export interface HomePluginRow {
   key: string
 }
 
-interface HomePluginFeed {
+export interface PluginChannelFeedStatus {
+  status: PluginTransportStatus
+  canSend: boolean
+}
+
+export interface HomePluginFeed {
   channels: readonly PluginWatchedChannel[]
   rows: readonly HomePluginRow[]
   total: number
+  statuses: ReadonlyMap<string, PluginChannelFeedStatus>
 }
 
 interface Source {
   channel: PluginWatchedChannel
   messages: readonly PluginChannelMessage[]
+  status: PluginTransportStatus
+  canSend: boolean
   stop: () => void
 }
 
-const emptyFeed: HomePluginFeed = { channels: [], rows: [], total: 0 }
+const DISCONNECTED_STATUS: PluginTransportStatus = { status: 'disconnected' }
+const EMPTY_STATUSES: ReadonlyMap<string, PluginChannelFeedStatus> = new Map()
+export const EMPTY_PLUGIN_FEED: HomePluginFeed = {
+  channels: [],
+  rows: [],
+  total: 0,
+  statuses: EMPTY_STATUSES,
+}
 export const homePluginFeedStore = persistentResource('homePluginFeed', () =>
-  createStore<HomePluginFeed>(emptyFeed),
+  createStore<HomePluginFeed>(EMPTY_PLUGIN_FEED),
 )
 
 export function selectedHomePluginChannels(
@@ -109,18 +125,24 @@ function sameSource(left: PluginWatchedChannel, right: PluginWatchedChannel | un
   )
 }
 
-export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel']) {
+export function createPluginChannelFeedObserver(
+  observe: DesktopApi['observePluginChannel'],
+  onPublish: (feed: HomePluginFeed) => void,
+  initialTotal = 0,
+) {
   const sources = new Map<string, Source>()
   const added = new Map<string, HomePluginRow>()
   const removed = new Map<string, number>()
   let channels: readonly PluginWatchedChannel[] = []
+  let rows: readonly HomePluginRow[] = []
+  let statuses: ReadonlyMap<string, PluginChannelFeedStatus> = EMPTY_STATUSES
+  let statusesDirty = false
   let retained: HomePluginRow[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
-  let total = homePluginFeedStore.get().total
+  let total = initialTotal
 
   function publish() {
     timer = undefined
-    let rows = homePluginFeedStore.get().rows
     if (removed.size > 0 || added.size > 0) {
       for (const [key, timestamp] of removed) {
         const index = rowIndex(timestamp, key)
@@ -131,7 +153,21 @@ export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel'
       removed.clear()
       added.clear()
     }
-    homePluginFeedStore.set({ channels, rows, total })
+    if (statusesDirty) {
+      statuses = new Map(
+        channels.map((channel) => {
+          const source = sources.get(channel.id)
+          return [
+            channel.id,
+            source
+              ? { status: source.status, canSend: source.canSend }
+              : { status: DISCONNECTED_STATUS, canSend: false },
+          ]
+        }),
+      )
+      statusesDirty = false
+    }
+    onPublish({ channels, rows, total, statuses })
   }
 
   function precedes(row: HomePluginRow, timestamp: number, key: string): boolean {
@@ -178,17 +214,29 @@ export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel'
     const previous = source.messages
     const next = snapshot.messages
     const last = previous.at(-1)
-    if (last === next.at(-1) && previous.length === next.length) return
-    // Plugin snapshots append to a ring buffer. The unchanged tail object
-    // identifies overlap without revisiting messages still in the buffer.
-    const overlap = last ? next.lastIndexOf(last) + 1 : 0
-    dropRows(source, previous.length - overlap)
-    for (const message of next.slice(overlap)) {
-      const key = rowKey(source, message)
-      added.set(key, { channel: source.channel, message, key })
+    const messagesChanged = last !== next.at(-1) || previous.length !== next.length
+    const statusChanged =
+      source.status.status !== snapshot.status.status ||
+      source.status.error !== snapshot.status.error ||
+      source.canSend !== snapshot.canSend
+    if (!messagesChanged && !statusChanged) return
+    if (statusChanged) {
+      source.status = snapshot.status
+      source.canSend = snapshot.canSend
+      statusesDirty = true
     }
-    total += next.length - overlap
-    source.messages = next
+    if (messagesChanged) {
+      // Plugin snapshots append to a ring buffer. The unchanged tail object
+      // identifies overlap without revisiting messages still in the buffer.
+      const overlap = last ? next.lastIndexOf(last) + 1 : 0
+      dropRows(source, previous.length - overlap)
+      for (const message of next.slice(overlap)) {
+        const key = rowKey(source, message)
+        added.set(key, { channel: source.channel, message, key })
+      }
+      total += next.length - overlap
+      source.messages = next
+    }
     schedulePublish()
   }
 
@@ -207,11 +255,14 @@ export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel'
         sources.delete(id)
       }
       channels = selected.map((channel) => sources.get(channel.id)?.channel ?? channel)
+      statusesDirty = true
       for (const channel of channels) {
         if (sources.has(channel.id)) continue
         const source: Source = {
           channel,
           messages: [],
+          status: DISCONNECTED_STATUS,
+          canSend: false,
           stop: () => {},
         }
         sources.set(channel.id, source)
@@ -227,10 +278,23 @@ export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel'
       added.clear()
       removed.clear()
       retained = []
+      channels = []
+      rows = []
+      statuses = EMPTY_STATUSES
+      statusesDirty = false
       clearTimeout(timer)
-      homePluginFeedStore.set({ ...emptyFeed, total })
+      timer = undefined
+      onPublish({ ...EMPTY_PLUGIN_FEED, total })
     },
   }
+}
+
+export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel']) {
+  return createPluginChannelFeedObserver(
+    observe,
+    (feed) => homePluginFeedStore.set(feed),
+    homePluginFeedStore.get().total,
+  )
 }
 
 declare module './persistent-resources' {

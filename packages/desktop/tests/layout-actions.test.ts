@@ -40,6 +40,7 @@ import {
   updateSplitFlexes,
 } from '../src/gpuix/state/layout'
 import { getDb, initDb } from '../src/store/db'
+import { PluginWatchedChannelsStore } from '../src/store/plugin-watched-channels-store'
 import { WatchedChannelsLayoutStore } from '../src/store/watched-channels-layout-store'
 import { WatchedChannelStore } from '../src/store/watched-channels-store'
 import { getAllPanels } from '../src/views/main/utils/layout-tree'
@@ -174,6 +175,91 @@ test('a mixed-platform feed survives close and restore with its remaining saved 
   expect(await restoreClosedChatTab(backend, tabId)).toBe(tabId)
   expect(WatchedChannelsLayoutStore.get(tabId).root).toMatchObject({
     content: { type: 'watched', channelId: kick.id, accountId: 'kick:bot' },
+  })
+})
+
+test('a combined feed with a plugin channel survives persistence, close/restore, split reopen, and channel removal', async () => {
+  const twitch = WatchedChannelStore.upsert('twitch', 'etonelexot', 'etonelexot')
+  const plugin = PluginWatchedChannelsStore.upsert({
+    platform: 'plugin:streamx:chat',
+    channelSlug: 'le-xot',
+    transportName: 'StreamX',
+  })
+  const sources = [{ channelId: twitch.id }, { channelId: plugin.id }]
+  watchedChannelsStore.set([twitch, plugin])
+  const tabId = await createChatFeedTab(backend, sources)
+  expect(WatchedChannelsLayoutStore.get(tabId).root).toMatchObject({
+    content: { type: 'feed', sources },
+  })
+  expect(tabsForChannels([twitch, plugin], [tabId], {})).toMatchObject([
+    { displayName: 'etonelexot, le-xot', sourceChannelIds: [twitch.id, plugin.id] },
+  ])
+
+  // Split reopen retains both built-in and plugin feed sources.
+  const rootPanel = WatchedChannelsLayoutStore.get(tabId).root
+  expect(rootPanel.type).toBe('panel')
+  if (rootPanel.type !== 'panel') throw new Error('Expected panel root')
+  await backend.api.splitPanel({ tabId, panelId: rootPanel.id, direction: 'vertical' })
+  await loadLayout(backend, tabId)
+  await removePanel(backend, tabId, rootPanel.id)
+  const reopened = await reopenClosedSplit(backend)
+  expect(reopened?.tabId).toBe(tabId)
+  expect(
+    getAllPanels(WatchedChannelsLayoutStore.get(tabId).root).map((p) => p.content),
+  ).toContainEqual({
+    type: 'feed',
+    sources,
+  })
+
+  // Closing and restoring while both channels exist retains the plugin source.
+  await closeChatTab(backend, tabId)
+  expect(await restoreClosedChatTab(backend, tabId)).toBe(tabId)
+  expect(
+    getAllPanels(WatchedChannelsLayoutStore.get(tabId).root).map((p) => p.content),
+  ).toContainEqual({
+    type: 'feed',
+    sources,
+  })
+
+  // Removing the plugin channel collapses the feed to the remaining Twitch source.
+  PluginWatchedChannelsStore.remove(plugin.id)
+  WatchedChannelsLayoutStore.cleanupRemovedChannel(plugin.id)
+  watchedChannelsStore.set([twitch])
+  expect(
+    getAllPanels(WatchedChannelsLayoutStore.get(tabId).root).map((p) => p.content),
+  ).toContainEqual({
+    type: 'watched',
+    channelId: twitch.id,
+  })
+})
+
+test('combining a plugin pane with a built-in channel persists a mixed feed', async () => {
+  const twitch = WatchedChannelStore.upsert('twitch', 'etonelexot', 'etonelexot')
+  const plugin = PluginWatchedChannelsStore.upsert({
+    platform: 'plugin:streamx:chat',
+    channelSlug: 'le-xot',
+    transportName: 'StreamX',
+  })
+  const panelId = 'plugin-pane'
+  WatchedChannelsLayoutStore.set(plugin.id, {
+    version: 2,
+    root: {
+      type: 'panel',
+      id: panelId,
+      flex: 100,
+      content: { type: 'watched', channelId: plugin.id },
+    },
+  })
+  await setPanelSources(backend, plugin.id, panelId, [
+    { channelId: plugin.id },
+    { channelId: twitch.id },
+  ])
+  expect(WatchedChannelsLayoutStore.get(plugin.id).root).toMatchObject({
+    id: panelId,
+    content: {
+      type: 'feed',
+      sources: [{ channelId: plugin.id }, { channelId: twitch.id }],
+    },
   })
 })
 

@@ -557,7 +557,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
     const byId = new Map(watchedChannels.map((channel) => [channel.id, channel]))
     return panel.content.sources.flatMap((source) => {
       const channel = byId.get(source.channelId)
-      return channel && !isPluginWatchedChannel(channel) ? [channel] : []
+      return channel ? [channel] : []
     })
   }, [panel.content, watchedChannels])
 
@@ -835,6 +835,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
             channel={watchedChannel}
             paneId={`${tabId}:${panel.id}`}
             headerLeading={headerLeading}
+            onEditFeed={() => controls?.editFeed(panel.id)}
             onSplitRight={() => runUiTask(splitPanel(backend, tabId, panel.id, 'vertical', scope))}
             onChangeChannel={() => setShowAddForm(true)}
             onClosePanel={() => runUiTask(closePane())}
