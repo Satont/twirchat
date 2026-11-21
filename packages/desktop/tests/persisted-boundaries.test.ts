@@ -97,6 +97,34 @@ test('timestamp format defaults for old settings and persists supported values',
   }
 })
 
+test('username display mode defaults for old settings, persists all modes, and recovers invalid values', () => {
+  const f = fixture()
+  try {
+    f.database.run('INSERT INTO settings(key,value) VALUES(?,?)', [
+      'app_settings',
+      JSON.stringify({ fontSize: 18 }),
+    ])
+    expect(SettingsStore.get().usernameDisplayMode).toBe('localized-and-username')
+
+    SettingsStore.set({ ...SettingsStore.get(), usernameDisplayMode: 'localized' })
+    expect(SettingsStore.get().usernameDisplayMode).toBe('localized')
+
+    SettingsStore.set({ ...SettingsStore.get(), usernameDisplayMode: 'username' })
+    expect(SettingsStore.get().usernameDisplayMode).toBe('username')
+
+    f.database.run('UPDATE settings SET value=? WHERE key=?', [
+      JSON.stringify({ fontSize: 19, usernameDisplayMode: 'not-a-mode' }),
+      'app_settings',
+    ])
+    expect(SettingsStore.get()).toMatchObject({
+      fontSize: 19,
+      usernameDisplayMode: DEFAULT_SETTINGS.usernameDisplayMode,
+    })
+  } finally {
+    f.dispose()
+  }
+})
+
 test('reply on double-click defaults on for old settings and persists when disabled', () => {
   const f = fixture()
   try {

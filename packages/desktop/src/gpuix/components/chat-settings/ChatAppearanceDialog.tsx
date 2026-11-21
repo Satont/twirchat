@@ -1,18 +1,39 @@
 import { useGpuixRequired, useWindowSize } from '@gpuix/react'
-import type { AppSettings } from '@twirchat/shared/types'
+import type { AppSettings, UsernameDisplayMode } from '@twirchat/shared/types'
 import { useEffect } from 'react'
 
 import { useBackend } from '../../backend/context'
-import { useT } from '../../i18n'
+import { useT, type MessageKey } from '../../i18n'
 import { settingsStore } from '../../state/app'
 import { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN } from '../../state/chat-font-size'
 import { useTheme } from '../../theme-context'
+import { formatChatAuthorName, PREVIEW_LOCALIZED_AUTHOR } from '../../username-display'
 import { Icon } from '../ui/Icon'
 import { Modal } from '../ui/Modal'
 import { Slider } from '../ui/Slider'
 import { Switch } from '../ui/Switch'
 import { Text } from '../ui/Text'
 import { ChatAppearancePreview } from './ChatAppearancePreview'
+
+interface UsernameDisplayOption {
+  readonly value: UsernameDisplayMode
+  readonly labelKey: MessageKey
+}
+
+const USERNAME_DISPLAY_OPTIONS: readonly UsernameDisplayOption[] = [
+  {
+    value: 'localized-and-username',
+    labelKey: 'settings.chat.usernameDisplayMode.localizedAndUsername',
+  },
+  {
+    value: 'localized',
+    labelKey: 'settings.chat.usernameDisplayMode.localized',
+  },
+  {
+    value: 'username',
+    labelKey: 'settings.chat.usernameDisplayMode.username',
+  },
+]
 
 export function ChatAppearanceDialog({
   settings,
@@ -243,6 +264,72 @@ export function ChatAppearanceDialog({
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Username display */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 8 }}>
+                {t('chat.appearance.usernames').toUpperCase()}
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {USERNAME_DISPLAY_OPTIONS.map((option) => {
+                  const active = settings.usernameDisplayMode === option.value
+                  const label = t(option.labelKey)
+                  const example = formatChatAuthorName(PREVIEW_LOCALIZED_AUTHOR, option.value)
+                  return (
+                    <div
+                      key={option.value}
+                      testId={`appearance-username-display-${option.value}`}
+                      role="button"
+                      aria-label={label}
+                      aria-description={active ? t('misc.toggle.selected') : undefined}
+                      tabIndex={0}
+                      onClick={() => patch({ usernameDisplayMode: option.value })}
+                      onKeyDown={(event) => {
+                        if (event.key === 'enter' || event.key === 'space') {
+                          event.preventDefault()
+                          patch({ usernameDisplayMode: option.value })
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        paddingTop: 6,
+                        paddingBottom: 6,
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: active ? theme.accent.primary : theme.hairline,
+                        backgroundColor: active ? theme.accent.tint12 : theme.fill,
+                        cursor: 'pointer',
+                        hover: { backgroundColor: active ? theme.accent.tint20 : theme.fillHover },
+                        focusVisible: {
+                          outlineWidth: 1,
+                          outlineColor: theme.link,
+                          outlineOffset: -2,
+                        },
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: active ? 600 : 500,
+                          color: active ? theme.accent.primary : theme.text,
+                        }}
+                      >
+                        {label}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
+                        {example}
+                      </Text>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Theme cards */}

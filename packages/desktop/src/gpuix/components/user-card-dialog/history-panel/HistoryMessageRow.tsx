@@ -35,6 +35,7 @@ function HistoryMetaPill({ color, children }: { color: string; children: ReactNo
 
 export const HistoryMessageRow = memo(function HistoryMessageRow({
   message,
+  usernameDisplayMode,
   visible,
 }: HistoryMessageRowProps) {
   const theme = useTheme()
@@ -89,6 +90,7 @@ export const HistoryMessageRow = memo(function HistoryMessageRow({
           showTimestamp={false}
           showAvatar={false}
           showPlatformColorStripe={false}
+          usernameDisplayMode={usernameDisplayMode}
           visible={visible}
         />
       </div>

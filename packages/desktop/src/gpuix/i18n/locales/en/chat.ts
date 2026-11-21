@@ -148,6 +148,7 @@ export const chat = {
   'chat.appearance.fontSize': 'Font size',
   'chat.appearance.fontSizeHint': 'Ctrl + scroll over the chat to resize it.',
   'chat.appearance.display': 'Display',
+  'chat.appearance.usernames': 'Localized nicknames',
   'chat.appearance.layout': 'Layout',
   'chat.appearance.modern': 'Modern',
   'chat.appearance.compact': 'Compact',

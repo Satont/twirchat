@@ -154,6 +154,7 @@ export const ruChat = {
   'chat.appearance.fontSize': 'Размер шрифта',
   'chat.appearance.fontSizeHint': 'Ctrl + прокрутка над чатом меняет размер.',
   'chat.appearance.display': 'Отображение',
+  'chat.appearance.usernames': 'Локализованные ники',
   'chat.appearance.layout': 'Макет',
   'chat.appearance.modern': 'Современный',
   'chat.appearance.compact': 'Компактный',

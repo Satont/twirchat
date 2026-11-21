@@ -42,6 +42,7 @@ import { useOverlayClose } from '../state/overlays'
 import { bindSettingsSession, syncSettingsSession } from '../state/settings-session'
 import { DEFAULT_CUSTOM_PALETTE, normalizePaletteColor, resolvePresetPalette } from '../theme'
 import { useTheme } from '../theme-context'
+import { formatChatAuthorName, PREVIEW_LOCALIZED_AUTHOR } from '../username-display'
 import { ChatLoggingSettings } from './chat-settings/ChatLoggingSettings'
 import { ChatPauseSettings } from './chat-settings/ChatPauseSettings'
 import { ChatRulesSettings } from './chat-settings/ChatRulesSettings'
@@ -96,6 +97,7 @@ type AppSettingsSectionId = Extract<
   | 'appearance'
   | 'updates'
   | 'timestamps'
+  | 'usernames'
   | 'replies'
   | 'twitch-chat-events'
   | 'self-ping'
@@ -114,6 +116,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'appearance',
   'updates',
   'timestamps',
+  'usernames',
   'replies',
   'twitch-chat-events',
   'self-ping',
@@ -149,6 +152,8 @@ function appSectionFields(
         showTimestamp: source.showTimestamp,
         timestampFormat: source.timestampFormat,
       }
+    case 'usernames':
+      return { usernameDisplayMode: source.usernameDisplayMode }
     case 'replies':
       return { replyOnDoubleClick: source.replyOnDoubleClick }
     case 'twitch-chat-events':
@@ -1122,6 +1127,53 @@ export function SettingsPanel() {
                       }
                     />
                     {appFooter('timestamps')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="usernames"
+                    title={t('settings.section.usernames')}
+                    desc={t('settings.section.usernames.desc')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.chat.usernameDisplayMode')}
+                      hint={t('settings.chat.usernameDisplayModeHint', {
+                        example: formatChatAuthorName(
+                          PREVIEW_LOCALIZED_AUTHOR,
+                          local.usernameDisplayMode,
+                        ),
+                      })}
+                    >
+                      <SettingsRowControl>
+                        <ToggleGroup
+                          label={t('settings.chat.usernameDisplayMode')}
+                          value={local.usernameDisplayMode}
+                          options={[
+                            {
+                              value: 'localized-and-username',
+                              label: t('settings.chat.usernameDisplayMode.localizedAndUsername'),
+                              testId: 'username-display-localized-and-username',
+                            },
+                            {
+                              value: 'localized',
+                              label: t('settings.chat.usernameDisplayMode.localized'),
+                              testId: 'username-display-localized',
+                            },
+                            {
+                              value: 'username',
+                              label: t('settings.chat.usernameDisplayMode.username'),
+                              testId: 'username-display-username',
+                            },
+                          ]}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.usernameDisplayMode = value
+                            })
+                          }
+                        />
+                      </SettingsRowControl>
+                    </SettingsRow>
+                    {appFooter('usernames')}
                   </SettingsSection>
                   <SettingsSection
                     id="replies"

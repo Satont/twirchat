@@ -15,6 +15,7 @@ import type {
   Platform,
   SevenTvSystemAction,
   TimestampFormat,
+  UsernameDisplayMode,
   WatchedChannel,
 } from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
@@ -44,6 +45,7 @@ import { useStoreSelector } from '../state/create-store'
 import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
+import { formatChatAuthorName } from '../username-display'
 import { ChatAnnouncement } from './ChatAnnouncement'
 import { ChatImagePreviews } from './ChatImagePreview'
 import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
@@ -62,7 +64,6 @@ import { Text } from './ui/Text'
 import { hexMix } from './user-card/format'
 
 const DEFAULT_FONT_SIZE = 14
-const MAX_NAME_GRAPHEMES = 32
 
 function badgeSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.15))
@@ -122,10 +123,12 @@ export function Avatar({
   message,
   size,
   visible = true,
+  label,
 }: {
   message: NormalizedChatMessage
   size: number
   visible?: boolean
+  label?: string
 }) {
   const url = useStoreSelector(avatarRevisionStore, () => avatarUrlFor(message))
   useEffect(() => {
@@ -158,7 +161,7 @@ export function Avatar({
             color: 'rgba(255, 255, 255, 0.9)',
           }}
         >
-          {initialsOf(message.author.displayName)}
+          {initialsOf(label ?? message.author.displayName)}
         </Text>
       </div>
       {url ? (
@@ -273,10 +276,12 @@ export function BadgeList({
 function ReplyPreview({
   message,
   fontSize,
+  usernameDisplayMode,
   onOpenThread,
 }: {
   message: NormalizedChatMessage
   fontSize: number
+  usernameDisplayMode?: UsernameDisplayMode
   onOpenThread?: ChatMessageProps['onOpenThread']
 }) {
   const theme = useTheme()
@@ -333,7 +338,7 @@ function ReplyPreview({
           whiteSpace: 'nowrap',
         }}
       >
-        {displayName(reply.parentAuthor.displayName)}
+        {formatChatAuthorName(reply.parentAuthor, usernameDisplayMode)}
       </Text>
       <Text
         style={{ fontSize: Math.round(fontSize * 0.8), color: theme.text2, whiteSpace: 'nowrap' }}
@@ -519,6 +524,7 @@ export interface ChatMessageProps {
   showPlatformIcon?: boolean
   showTimestamp?: boolean
   timestampFormat?: TimestampFormat
+  usernameDisplayMode?: UsernameDisplayMode
   showAvatar?: boolean
   showBadges?: boolean
   visible?: boolean
@@ -732,7 +738,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
 
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
-  const authorName = displayName(props.alias ?? message.author.displayName)
+  const authorName = formatChatAuthorName(message.author, props.usernameDisplayMode, props.alias)
 
   if (props.hiddenLabel && !ignoredRevealed)
     return (
@@ -972,7 +978,12 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         {platformStripe}
 
         {message.reply && !isTombstone && !props.hideReplyPreview ? (
-          <ReplyPreview message={message} fontSize={fontSize} onOpenThread={props.onOpenThread} />
+          <ReplyPreview
+            message={message}
+            fontSize={fontSize}
+            usernameDisplayMode={props.usernameDisplayMode}
+            onOpenThread={props.onOpenThread}
+          />
         ) : null}
 
         <div
@@ -1009,6 +1020,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
                 message={message}
                 size={compactAvatarSize(fontSize)}
                 visible={props.visible}
+                label={authorName}
               />
             </div>
           ) : null}
@@ -1158,7 +1170,12 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
 
       {leading.avatar ? (
         <div style={{ position: 'absolute', left: leading.avatar.left, top: leading.avatar.top }}>
-          <Avatar message={message} size={leading.avatar.size} visible={props.visible} />
+          <Avatar
+            message={message}
+            size={leading.avatar.size}
+            visible={props.visible}
+            label={authorName}
+          />
         </div>
       ) : null}
 
@@ -1172,7 +1189,12 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         }}
       >
         {message.reply && !isTombstone && !props.hideReplyPreview ? (
-          <ReplyPreview message={message} fontSize={fontSize} onOpenThread={props.onOpenThread} />
+          <ReplyPreview
+            message={message}
+            fontSize={fontSize}
+            usernameDisplayMode={props.usernameDisplayMode}
+            onOpenThread={props.onOpenThread}
+          />
         ) : null}
 
         <div
@@ -1285,8 +1307,3 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
     </ImageLoadingContext.Provider>
   )
 })
-
-/** Names are untrusted too: no zalgo, no newlines, no row-wide 60-char nicks. */
-function displayName(name: string): string {
-  return truncateGraphemes(sanitizeDisplayText(name).trim(), MAX_NAME_GRAPHEMES)
-}

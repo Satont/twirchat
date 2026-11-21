@@ -1,4 +1,4 @@
-import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type { NormalizedChatMessage, Platform, UsernameDisplayMode } from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
@@ -14,6 +14,8 @@ import type { ChatHistoryQuery } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
 import { chatMessageKey, formatChatTranscript } from '../chat-tools'
 import { useT } from '../i18n'
+import { settingsStore } from '../state/app'
+import { useStoreSelector } from '../state/create-store'
 import { useTheme } from '../theme-context'
 import {
   HistoryButton as Button,
@@ -45,6 +47,7 @@ export function ChatHistoryPanel({
   const backend = useBackend()
   const theme = useTheme()
   const { t, tPlural, language } = useT()
+  const usernameDisplayMode = useStoreSelector(settingsStore, (s) => s?.usernameDisplayMode)
   const [platform, setPlatform] = useState<Platform | 'all'>(channel?.platform ?? 'all')
   const [channelId, setChannelId] = useState(channel?.channelId ?? '')
   const [author, setAuthor] = useState('')
@@ -327,6 +330,7 @@ export function ChatHistoryPanel({
                 <HistorySearchMessageRow
                   key={chatMessageKey(message)}
                   message={message}
+                  usernameDisplayMode={usernameDisplayMode}
                   visible={historyRowVisible(index, messages.length, visibleRange)}
                 />
               ))}
@@ -369,9 +373,11 @@ export function ChatHistoryPanel({
 
 const HistorySearchMessageRow = memo(function HistorySearchMessageRow({
   message,
+  usernameDisplayMode,
   visible,
 }: {
   message: NormalizedChatMessage
+  usernameDisplayMode?: UsernameDisplayMode
   visible: boolean
 }) {
   const theme = useTheme()
@@ -398,6 +404,7 @@ const HistorySearchMessageRow = memo(function HistorySearchMessageRow({
         fontSize={12}
         showTimestamp={false}
         showAvatar={false}
+        usernameDisplayMode={usernameDisplayMode}
         visible={visible}
       />
     </div>

@@ -12,6 +12,7 @@ import { useT, type MessageKey } from '../../i18n'
 import { platformColor, readableOn } from '../../theme'
 import { useFont, useTheme } from '../../theme-context'
 import { formatMessageTime, timestampColumnWidth } from '../../timestamp-format'
+import { formatChatAuthorName, PREVIEW_LOCALIZED_AUTHOR } from '../../username-display'
 import { PlatformIcon } from '../ui/Icon'
 import { Text } from '../ui/Text'
 
@@ -20,7 +21,8 @@ interface PreviewBadge {
 }
 
 interface PreviewAuthor {
-  name: string
+  displayName: string
+  username?: string
   color: string
 }
 
@@ -48,7 +50,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'welcome',
     platform: 'twitch',
-    author: { name: 'nightbot', color: '#7dd3fc' },
+    author: { displayName: 'nightbot', username: 'nightbot', color: '#7dd3fc' },
     badges: [{ text: 'MOD' }],
     time: previewTime(21, 41, 2),
     textKey: 'chat.preview.welcome',
@@ -56,7 +58,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'layout',
     platform: 'kick',
-    author: { name: 'pixelpanda', color: '#53fc18' },
+    author: { displayName: 'pixelpanda', username: 'pixelpanda', color: '#53fc18' },
     badges: [{ text: 'SUB' }],
     time: previewTime(21, 41, 18),
     textKey: 'chat.preview.layout',
@@ -64,7 +66,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'mention',
     platform: 'youtube',
-    author: { name: 'mod_maya', color: '#fca5a5' },
+    author: { displayName: 'mod_maya', color: '#fca5a5' },
     badges: [{ text: 'MOD' }],
     time: previewTime(21, 42, 3),
     textKey: 'chat.preview.mention',
@@ -72,7 +74,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'self-ping',
     platform: 'twitch',
-    author: { name: 'StreamerName', color: '#a78bfa' },
+    author: { displayName: 'StreamerName', username: 'streamername', color: '#a78bfa' },
     badges: [],
     time: previewTime(21, 42, 11),
     textKey: 'chat.preview.selfPing',
@@ -81,7 +83,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'guide',
     platform: 'kick',
-    author: { name: 'pixelpanda', color: '#53fc18' },
+    author: { displayName: 'pixelpanda', username: 'pixelpanda', color: '#53fc18' },
     badges: [{ text: 'SUB' }],
     time: previewTime(21, 42, 24),
     textKey: 'chat.preview.guide',
@@ -89,7 +91,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'viewer',
     platform: 'twitch',
-    author: { name: 'viewer42', color: '#fcd34d' },
+    author: { ...PREVIEW_LOCALIZED_AUTHOR, color: '#fcd34d' },
     badges: [],
     time: previewTime(21, 42, 31),
     textKey: 'chat.preview.viewer',
@@ -138,14 +140,14 @@ function compactAvatarSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.3))
 }
 
-function PreviewAvatar({ author, size }: { author: PreviewAuthor; size: number }) {
+function PreviewAvatar({ name, color, size }: { name: string; color: string; size: number }) {
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: author.color,
+        backgroundColor: color,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -159,7 +161,7 @@ function PreviewAvatar({ author, size }: { author: PreviewAuthor; size: number }
           color: 'rgba(255, 255, 255, 0.9)',
         }}
       >
-        {initialsOf(author.name)}
+        {initialsOf(name)}
       </Text>
     </div>
   )
@@ -235,6 +237,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
   const text = t(message.textKey)
   const fontSize = settings.fontSize
   const time = formatMessageTime(message.time, settings.timestampFormat)
+  const authorName = formatChatAuthorName(message.author, settings.usernameDisplayMode)
   const authorColor = readableOn(message.author.color, theme.bg)
   const showStripe = settings.showPlatformColorStripe
   const highlighted = message.highlighted === true && settings.selfPing?.enabled === true
@@ -293,7 +296,11 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
         ) : null}
         {settings.showAvatars ? (
           <div style={{ marginRight: 4, flexShrink: 0, display: 'flex' }}>
-            <PreviewAvatar author={message.author} size={compactAvatarSize(fontSize)} />
+            <PreviewAvatar
+              name={authorName}
+              color={message.author.color}
+              size={compactAvatarSize(fontSize)}
+            />
           </div>
         ) : null}
         {settings.showPlatformIcon ? (
@@ -306,8 +313,11 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
             <PreviewBadges badges={message.badges} fontSize={fontSize} />
           </div>
         ) : null}
-        <Text style={{ fontSize, fontWeight: 600, color: authorColor, flexShrink: 0 }}>
-          {message.author.name}
+        <Text
+          testId={`appearance-preview-author-${message.id}`}
+          style={{ fontSize, fontWeight: 600, color: authorColor, flexShrink: 0 }}
+        >
+          {authorName}
         </Text>
         <Text style={{ fontSize, color: theme.text }}>: </Text>
         <PreviewTokens text={text} fontSize={fontSize} />
@@ -351,7 +361,11 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
           ) : null}
           {settings.showAvatars ? (
             <div style={{ marginTop: 1 }}>
-              <PreviewAvatar author={message.author} size={modernAvatarSize(fontSize)} />
+              <PreviewAvatar
+                name={authorName}
+                color={message.author.color}
+                size={modernAvatarSize(fontSize)}
+              />
             </div>
           ) : null}
         </div>
@@ -377,8 +391,11 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
           {settings.showBadges ? (
             <PreviewBadges badges={message.badges} fontSize={fontSize} />
           ) : null}
-          <Text style={{ fontSize, fontWeight: 600, color: authorColor }}>
-            {message.author.name}
+          <Text
+            testId={`appearance-preview-author-${message.id}`}
+            style={{ fontSize, fontWeight: 600, color: authorColor }}
+          >
+            {authorName}
           </Text>
           {settings.showTimestamp ? (
             <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>{time}</Text>
