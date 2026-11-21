@@ -35,6 +35,12 @@ import { buildChattersTargets } from '../../views/main/utils/chatters'
 import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
 import { publicChannelURL } from '../../views/main/utils/public-channel-url'
 import { initialsOf, sanitizeDisplayText } from '../../views/shared/utils/display-text'
+import {
+  isPluginWatchedChannel,
+  type DesktopWatchedChannel,
+  type PluginWatchedChannel,
+} from '../../watched-channels/plugin-channel-types'
+import type { DesktopApi } from '../backend/api'
 import { useBackend } from '../backend/context'
 import {
   autoModSearchMessage,
@@ -99,8 +105,11 @@ import { useTextInputFocusTracking } from '../state/focus'
 import { highlightFlashStore } from '../state/highlight-notifications'
 import { notificationPreferences } from '../state/highlight-notifications'
 import {
+  createPluginChannelFeedObserver,
+  EMPTY_PLUGIN_FEED,
   homePluginFeedStore,
   setHomePluginChannel,
+  type HomePluginFeed,
   type HomePluginRow,
 } from '../state/home-plugin-channels'
 import { invokeHotkeyUiAction } from '../state/hotkeys'
@@ -147,6 +156,7 @@ import { UserCardDialog } from './UserCardDialog'
 
 const EMPTY_MESSAGES: NormalizedChatMessage[] = []
 const EMPTY_CHANNEL_IDS: readonly string[] = []
+const EMPTY_PLUGIN_CHANNELS: readonly PluginWatchedChannel[] = []
 const MIN_TAIL_ROWS = 24
 const TAIL_OVERSCAN_ROWS = 8
 /** One Ctrl+wheel font step per interval lets a trackpad gesture settle. */
@@ -154,7 +164,33 @@ const FONT_WHEEL_INTERVAL_MS = 50
 /** The list scrolls before the wrapper's listener, so snapshot its settled range. */
 const FONT_WHEEL_SETTLE_MS = 120
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
-const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
+
+function usePluginChannelFeed(
+  observe: DesktopApi['observePluginChannel'],
+  channels: readonly PluginWatchedChannel[],
+): HomePluginFeed {
+  const [feed, setFeed] = useState<HomePluginFeed>(EMPTY_PLUGIN_FEED)
+  const observerRef = useRef<ReturnType<typeof createPluginChannelFeedObserver> | null>(null)
+  const active = channels.length > 0
+  useEffect(() => {
+    if (!active) {
+      observerRef.current?.stop()
+      observerRef.current = null
+      setFeed(EMPTY_PLUGIN_FEED)
+      return
+    }
+    const observer = createPluginChannelFeedObserver(observe, setFeed)
+    observerRef.current = observer
+    return () => {
+      observer.stop()
+      if (observerRef.current === observer) observerRef.current = null
+    }
+  }, [observe, active])
+  useEffect(() => {
+    if (active) observerRef.current?.sync(channels)
+  }, [active, channels, observe])
+  return active ? feed : EMPTY_PLUGIN_FEED
+}
 
 /** Twitch: "The user specified in the user_id field is not banned." */
 function isNotBannedError(error: unknown): boolean {
@@ -333,7 +369,7 @@ export interface ChatViewProps {
   layoutPanelId?: string
   /** Omit both channel props for the "My channels" pane. */
   watchedChannel?: WatchedChannel | null
-  feedChannels?: readonly WatchedChannel[]
+  feedChannels?: readonly DesktopWatchedChannel[]
   isMain?: boolean
   onGoToPlatforms?: () => void
   onSplitRight?: () => void
@@ -364,27 +400,55 @@ export function ChatView({
   const presentation = useWindowPresentation()
   const activityKey = feedChannels ? 'feed' : (singleChannel?.id ?? 'home')
   const paneKey = paneId ? `${paneId}:${activityKey}` : activityKey
-  const feedChannelIds = useMemo(
-    () => feedChannels?.map((channel) => channel.id) ?? EMPTY_CHANNEL_IDS,
+  const builtInFeedChannels = useMemo(
+    () => feedChannels?.filter((channel) => !isPluginWatchedChannel(channel)),
     [feedChannels],
+  )
+  const pluginFeedChannels = useMemo(
+    () => feedChannels?.filter(isPluginWatchedChannel) ?? EMPTY_PLUGIN_CHANNELS,
+    [feedChannels],
+  )
+  const feedChannelIds = useMemo(
+    () => builtInFeedChannels?.map((channel) => channel.id) ?? EMPTY_CHANNEL_IDS,
+    [builtInFeedChannels],
   )
   const feedChannelsById = useMemo(
     () => feedChannels && new Map(feedChannels.map((channel) => [channel.id, channel])),
     [feedChannels],
+  )
+  const builtInFeedChannelsById = useMemo(
+    () =>
+      builtInFeedChannels && new Map(builtInFeedChannels.map((channel) => [channel.id, channel])),
+    [builtInFeedChannels],
+  )
+  const customPluginFeed = usePluginChannelFeed(
+    backend.api.observePluginChannel,
+    pluginFeedChannels,
   )
   const activeDestination = useStoreSelector(composerStore, (states) => {
     const composer = states.get(paneKey)
     return feedChannels ? composer?.activeWatchedChannelId : composer?.activePlatform
   })
   const [reply, setReply] = useState<ChatReply | null>(null)
-  const replyChannel = reply?.sourceId ? feedChannelsById?.get(reply.sourceId) : undefined
+  const replyChannel = reply?.sourceId ? builtInFeedChannelsById?.get(reply.sourceId) : undefined
   const replyTarget = !feedChannels || replyChannel ? (reply?.message ?? null) : null
-  const watchedChannel = feedChannels
+  const selectedFeedChannel = feedChannels
     ? (replyChannel ??
       (activeDestination ? feedChannelsById?.get(activeDestination) : undefined) ??
+      builtInFeedChannels?.[0] ??
+      feedChannels.find((channel) => customPluginFeed.statuses.get(channel.id)?.canSend) ??
       feedChannels[0])
+    : undefined
+  const watchedChannel = feedChannels
+    ? selectedFeedChannel && !isPluginWatchedChannel(selectedFeedChannel)
+      ? selectedFeedChannel
+      : undefined
     : singleChannel
-  const isHome = !feedChannels && !watchedChannel
+  const selectedPluginChannel =
+    selectedFeedChannel && isPluginWatchedChannel(selectedFeedChannel)
+      ? selectedFeedChannel
+      : undefined
+  const isHome = !feedChannels && !singleChannel
 
   const baseSettings = useStore(settingsStore)
   const settings = useMemo(
@@ -410,14 +474,14 @@ export function ChatView({
   const paneAccountId = watchedChannel ? chatAccount?.id : undefined
   // Mentions of, and messages from, the account this chat sends with count as the user's own.
   const feedAccounts = useMemo(() => {
-    if (!feedChannels) return undefined
+    if (!builtInFeedChannels) return undefined
     const result = new Map<string, Account>()
-    for (const channel of feedChannels) {
+    for (const channel of builtInFeedChannels) {
       const account = resolvePaneAccount(channel, layoutPanel, savedAccounts, accounts)
       if (account) result.set(channel.id, account)
     }
     return result
-  }, [feedChannels, layoutPanel, savedAccounts, accounts])
+  }, [builtInFeedChannels, layoutPanel, savedAccounts, accounts])
   const ownAccounts = useMemo(() => {
     if (feedAccounts) {
       const own = new Map(accounts.map((account) => [account.id, account]))
@@ -440,9 +504,10 @@ export function ChatView({
   const homeMessages = useStoreSelector(homeMessagesStore, (messages) =>
     isHome ? messages : EMPTY_MESSAGES,
   )
-  const pluginFeed = useStoreSelector(homePluginFeedStore, (feed) =>
+  const homePluginFeed = useStoreSelector(homePluginFeedStore, (feed) =>
     isHome ? feed : EMPTY_PLUGIN_FEED,
   )
+  const pluginFeed = isHome ? homePluginFeed : customPluginFeed
   const ownDonations = useStoreSelector(donationFeed.store, (feed) =>
     !isHome || layoutTabId !== 'home' ? EMPTY_DONATION_FEED : feed,
   )
@@ -619,18 +684,18 @@ export function ChatView({
   readingFeed.current = readingFeedSources
   const getFeedSource = useCallback(
     (message: NormalizedChatMessage): WatchedChannel | undefined => {
-      if (!feedChannelsById) return undefined
+      if (!builtInFeedChannelsById) return undefined
       const id = readingFeed.current.get(chatMessageIdentity(message))
-      return id === undefined ? undefined : feedChannelsById.get(id)
+      return id === undefined ? undefined : builtInFeedChannelsById.get(id)
     },
-    [feedChannelsById],
+    [builtInFeedChannelsById],
   )
   const getChannelSlugForMessage = useCallback(
     (message: NormalizedChatMessage) =>
-      feedChannelsById
+      builtInFeedChannelsById
         ? getFeedSource(message)?.channelSlug
         : (watchedChannel?.channelSlug ?? statuses[message.platform]?.channelLogin),
-    [feedChannelsById, getFeedSource, statuses, watchedChannel?.channelSlug],
+    [builtInFeedChannelsById, getFeedSource, statuses, watchedChannel?.channelSlug],
   )
   const readingPluginRows = paused?.pluginRows ?? pluginFeed.rows
   const readingDonations = paused?.donations ?? donations.rows
@@ -978,7 +1043,7 @@ export function ChatView({
   const [openThread, setOpenThread] = useState<OpenChatThread | null>(null)
   const threadMessage = openThread?.activityKey === activityKey ? openThread.message : null
   const threadChannel = openThread?.sourceId
-    ? feedChannelsById?.get(openThread.sourceId)
+    ? builtInFeedChannelsById?.get(openThread.sourceId)
     : undefined
   const showThread = useCallback(
     (message: NormalizedChatMessage) => {
@@ -1202,6 +1267,12 @@ export function ChatView({
       .catch(showSendError)
   }
 
+  function onSendPlugin(payload: { channelId: string; text: string }): void {
+    backend.api
+      .sendPluginChannelMessage({ id: payload.channelId, text: payload.text })
+      .catch(showSendError)
+  }
+
   function onPrepareSend(): void {
     const preparing = watchedChannel
       ? chatAccount
@@ -1212,9 +1283,11 @@ export function ChatView({
             }),
           ]
         : []
-      : [...new Set(allChannels.map((target) => target.platform))].map((platform) =>
-          backend.api.prepareSend({ platform }),
-        )
+      : isHome
+        ? [...new Set(allChannels.map((target) => target.platform))].map((platform) =>
+            backend.api.prepareSend({ platform }),
+          )
+        : []
     for (const task of preparing)
       task.catch((error: unknown) => console.warn('[chat] could not prepare sending', error))
   }
@@ -1270,10 +1343,10 @@ export function ChatView({
           ))
   const chattersTargets = useMemo(
     () =>
-      feedChannels
-        ? feedChannels.flatMap((channel) => buildChattersTargets(channel, accounts))
+      builtInFeedChannels
+        ? builtInFeedChannels.flatMap((channel) => buildChattersTargets(channel, accounts))
         : buildChattersTargets(watchedChannel, accounts),
-    [feedChannels, watchedChannel, accounts],
+    [builtInFeedChannels, watchedChannel, accounts],
   )
 
   const displayedChannels = allChannels.map((ch) => {
@@ -1408,12 +1481,14 @@ export function ChatView({
       openViewerList: chattersTargets.length ? () => setChattersOpen(true) : null,
       pickFilters: () => setFiltersOpen(true),
       reconnect: feedChannels
-        ? () =>
-            Promise.all(
-              feedChannels.map((channel) =>
-                backend.api.reconnectChat({ watchedChannelId: channel.id }),
-              ),
-            ).then(() => undefined)
+        ? builtInFeedChannels?.length
+          ? () =>
+              Promise.all(
+                builtInFeedChannels.map((channel) =>
+                  backend.api.reconnectChat({ watchedChannelId: channel.id }),
+                ),
+              ).then(() => undefined)
+          : null
         : watchedChannel
           ? () => backend.api.reconnectChat({ watchedChannelId: watchedChannel.id })
           : () => backend.api.reconnectChat({}),
@@ -1500,7 +1575,9 @@ export function ChatView({
       changeMultichannelContext:
         feedChannels && feedChannels.length > 1
           ? ([argument]) => {
-              const index = feedChannels.findIndex((channel) => channel.id === watchedChannel?.id)
+              const index = feedChannels.findIndex(
+                (channel) => channel.id === selectedFeedChannel?.id,
+              )
               const next =
                 argument === 'next'
                   ? (index + 1) % feedChannels.length
@@ -2366,7 +2443,7 @@ export function ChatView({
                       key={message.key}
                       message={message.message}
                       source={
-                        pluginFeed.channels.length > 1
+                        feedChannels || pluginFeed.channels.length > 1
                           ? `${message.channel.transportName} · ${message.channel.displayName}`
                           : message.channel.transportName
                       }
@@ -2555,7 +2632,7 @@ export function ChatView({
         </div>
 
         {/* Composer */}
-        {settings && (watchedChannel || isHome) ? (
+        {settings && (watchedChannel || selectedPluginChannel || isHome) ? (
           <ChatInput
             hotkeyContextId={`input:${paneKey}`}
             hotkeyParentContextIds={[splitContextId, 'window']}
@@ -2569,15 +2646,22 @@ export function ChatView({
             statuses={statuses}
             watchedChannel={watchedChannel}
             watchedChannelStatus={watchedChannelStatus}
+            pluginChannel={selectedPluginChannel}
+            pluginChannelStatus={
+              selectedPluginChannel
+                ? customPluginFeed.statuses.get(selectedPluginChannel.id)
+                : undefined
+            }
             pane={paneTarget}
             replyTarget={replyTarget}
             messages={feedChannels ? watchedMessages : activeMessages}
             renderWatchedTarget={
-              feedChannels && watchedChannel
+              feedChannels && selectedFeedChannel
                 ? (focusEditor, disabled) => (
                     <ChatFeedTargetPicker
                       channels={feedChannels}
-                      selected={watchedChannel}
+                      selected={selectedFeedChannel}
+                      pluginStatuses={customPluginFeed.statuses}
                       onPick={pickFeedChannel}
                       focusEditor={focusEditor}
                       disabled={disabled}
@@ -2589,6 +2673,7 @@ export function ChatView({
             onOpenUserCard={setUserCardTarget}
             onSend={onSend}
             onSendWatched={onSendWatched}
+            onSendPlugin={onSendPlugin}
             onPrepareSend={onPrepareSend}
             onClearMessages={clearMessages}
             onCopyMessages={copyMessages}

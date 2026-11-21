@@ -6,7 +6,7 @@ import { MAX_FEED_SOURCES } from '../../views/main/utils/layout-tree'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import {
   isPluginPlatform,
-  isPluginWatchedChannel,
+  type DesktopWatchedChannel,
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import { useBackend } from '../backend/context'
@@ -22,7 +22,11 @@ import { Icon, PlatformIcon } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 
-type NewSource = Pick<WatchedChannel, 'platform' | 'channelSlug'>
+interface NewSource {
+  platform: WatchedPlatform
+  channelSlug: string
+  transportName?: string
+}
 type SourceDraft =
   | { kind: 'saved'; source: WatchedPaneSource }
   | { kind: 'new'; channel: NewSource }
@@ -35,13 +39,19 @@ const platformLabels: Record<WatchedChannel['platform'], string> = {
 }
 const noSources: readonly WatchedPaneSource[] = []
 
-function sourceKey(channel: NewSource): string {
+function sourceKey(channel: Pick<DesktopWatchedChannel, 'platform' | 'channelSlug'>): string {
   return `${channel.platform}:${channel.channelSlug}`
+}
+
+function sourcePlatformLabel(channel: NewSource | DesktopWatchedChannel): string {
+  if (isPluginPlatform(channel.platform))
+    return ('transportName' in channel && channel.transportName) || channel.platform
+  return platformLabels[channel.platform]
 }
 
 function availableSources(
   drafts: ReadonlyMap<string, SourceDraft>,
-  channels: ReadonlyMap<string, WatchedChannel>,
+  channels: ReadonlyMap<string, DesktopWatchedChannel>,
 ): Map<string, SourceDraft> {
   return new Map(
     [...drafts].filter(([, draft]) => draft.kind === 'new' || channels.has(draft.source.channelId)),
@@ -64,12 +74,10 @@ export function FeedSourcesModal({
   const theme = useTheme()
   const { height } = useWindowSize()
   const watched = useStore(watchedChannelsStore)
-  const saved = useMemo(() => {
-    const channels = new Map<string, WatchedChannel>()
-    for (const channel of watched)
-      if (!isPluginWatchedChannel(channel)) channels.set(channel.id, channel)
-    return channels
-  }, [watched])
+  const saved = useMemo(
+    () => new Map<string, DesktopWatchedChannel>(watched.map((channel) => [channel.id, channel])),
+    [watched],
+  )
   const [selection, setSelection] = useState<ReadonlyMap<string, SourceDraft>>(() => {
     const sources = new Map<string, SourceDraft>()
     for (const source of initialSources) {
@@ -109,8 +117,11 @@ export function FeedSourcesModal({
   }
 
   const addChannel = (platform: WatchedPlatform, channelSlug: string) => {
-    if (atLimit || inFlight.current || isPluginPlatform(platform)) return
-    const channel = { platform, channelSlug }
+    if (atLimit || inFlight.current) return
+    const transportName = isPluginPlatform(platform)
+      ? api.getPluginTransports().find((item) => item.platform === platform)?.name
+      : undefined
+    const channel: NewSource = { platform, channelSlug, transportName }
     const key = sourceKey(channel)
     if (selected.has(key)) {
       setError(t('app.feed.alreadySelected'))
@@ -141,7 +152,10 @@ export function FeedSourcesModal({
       const sources = await Promise.all(
         drafts.map(async (draft) => {
           if (draft.kind === 'saved') return draft.source
-          const channel = await api.addWatchedChannel(draft.channel)
+          const channel = await api.addWatchedChannel({
+            platform: draft.channel.platform,
+            channelSlug: draft.channel.channelSlug,
+          })
           return { channelId: channel.id }
         }),
       )
@@ -157,9 +171,15 @@ export function FeedSourcesModal({
     }
   }
 
-  const row = (id: string, channel: NewSource, name: string, draft: SourceDraft, first = false) => {
+  const row = (
+    id: string,
+    channel: NewSource | DesktopWatchedChannel,
+    name: string,
+    draft: SourceDraft,
+    first = false,
+  ) => {
     const key = sourceKey(channel)
-    const platform = platformLabels[channel.platform]
+    const platform = sanitizeDisplayText(sourcePlatformLabel(channel))
     const checked = selected.has(key)
     const disabled = saving || (atLimit && !checked)
     return (
@@ -192,7 +212,11 @@ export function FeedSourcesModal({
           focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
         }}
       >
-        <PlatformIcon platform={channel.platform} size={15} />
+        {isPluginPlatform(channel.platform) ? (
+          <Icon name="chat" size={15} color={theme.text2} />
+        ) : (
+          <PlatformIcon platform={channel.platform} size={15} />
+        )}
         <Text
           style={{
             color: theme.text,
@@ -233,7 +257,7 @@ export function FeedSourcesModal({
     (channel) =>
       selected.get(sourceKey(channel))?.kind !== 'new' &&
       (!search ||
-        `${channel.displayName} ${channel.channelSlug} ${platformLabels[channel.platform]}`
+        `${channel.displayName} ${channel.channelSlug} ${sourcePlatformLabel(channel)}`
           .toLowerCase()
           .includes(search)),
   )
@@ -295,7 +319,6 @@ export function FeedSourcesModal({
           </div>
           {adding ? (
             <AddChannelForm
-              builtInOnly
               cancelable
               confirmLabel={t('app.feed.addToSelection')}
               onConfirm={addChannel}

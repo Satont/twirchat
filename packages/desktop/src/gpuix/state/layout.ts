@@ -30,7 +30,6 @@ import {
   panelWatchedSources,
   retainAvailableFeedSources,
 } from '../../views/main/utils/layout-tree'
-import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import { t } from '../i18n'
 import {
   dockPanel,
@@ -431,9 +430,7 @@ export function reopenClosedSplit(
       const next = structuredClone(layout)
       const panel = { ...structuredClone(entry.panel), id: entry.restorePanelId }
       panel.content = retainAvailableFeedSources(panel.content, (id) =>
-        watchedChannelsStore
-          .get()
-          .some((channel) => channel.id === id && !isPluginWatchedChannel(channel)),
+        watchedChannelsStore.get().some((channel) => channel.id === id),
       )
       const parent = entry.parent && findNodeById(next.root, entry.parent.id)
       if (parent?.type === 'split' && parent.direction === entry.parent?.direction) {

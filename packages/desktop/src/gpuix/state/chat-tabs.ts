@@ -15,10 +15,9 @@ import {
   retainAvailableFeedSources,
 } from '../../views/main/utils/layout-tree'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
-import {
-  isPluginWatchedChannel,
-  type DesktopWatchedChannel,
-  type WatchedPlatform,
+import type {
+  DesktopWatchedChannel,
+  WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { t } from '../i18n'
@@ -403,7 +402,7 @@ export function createChatTabController(
         const channels = environment.channels()
         for (const panel of getAllPanels(closed.layout.root))
           panel.content = retainAvailableFeedSources(panel.content, (sourceId) =>
-            channels.some((channel) => channel.id === sourceId && !isPluginWatchedChannel(channel)),
+            channels.some((channel) => channel.id === sourceId),
           )
         await api.setWatchedChannelsLayout({ tabId: closed.id, layout: closed.layout })
         value.openIds.splice(Math.min(closed.index, value.openIds.length), 0, closed.id)
