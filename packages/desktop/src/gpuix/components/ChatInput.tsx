@@ -1970,12 +1970,13 @@ export function ChatInput(props: ChatInputProps) {
               }
               if (!autocomplete.isOpen) {
                 if (
-                  event.key === 'tab' &&
+                  (event.key === 'tab' || event.key === 'backtab') &&
                   !event.modifiers?.ctrl &&
-                  !event.modifiers?.shift &&
                   !event.modifiers?.alt &&
                   !event.modifiers?.cmd &&
-                  autocomplete.completeBareEmote()
+                  autocomplete.completeBareWord(
+                    event.key === 'backtab' || event.modifiers?.shift ? -1 : 1,
+                  )
                 ) {
                   event.preventDefault()
                   return

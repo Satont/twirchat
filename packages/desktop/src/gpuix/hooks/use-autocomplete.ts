@@ -34,6 +34,12 @@ import {
   type ParsedToken,
 } from '../../views/main/utils/autocompleteUtils'
 import {
+  rankBareTabCompletions,
+  reconcileBareTabCycle,
+  stepBareTabCompletion,
+  type BareTabCycleState,
+} from '../../views/main/utils/bareTabCompletion'
+import {
   argumentHintText,
   argumentSignature,
   argumentSummary,
@@ -47,7 +53,7 @@ import {
   twitchMentionArguments,
   type SignaturePart,
 } from '../../views/main/utils/botCommandArguments'
-import { bareEmoteQuery, rankEmoteMatches } from '../../views/main/utils/emoteCompletion'
+import { rankEmoteMatches } from '../../views/main/utils/emoteCompletion'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
@@ -133,35 +139,100 @@ function isComposerOnlyCommand(name: string): boolean {
   )
 }
 
-/** Recent chat authors, newest first, one entry per platform user. */
-function recentAuthors(
+export interface BroadcasterCandidate {
+  readonly platform: Platform
+  readonly displayName: string
+  readonly username: string
+}
+
+export function channelBroadcasters(
+  watchedChannel: WatchedChannel | null | undefined,
+  statuses: Partial<Record<Platform, PlatformStatusInfo>>,
+): BroadcasterCandidate[] {
+  if (watchedChannel) {
+    if (watchedChannel.platform === 'youtube') return []
+    const username = watchedChannel.channelSlug.trim()
+    if (!username) return []
+    return [
+      {
+        platform: watchedChannel.platform,
+        displayName: watchedChannel.displayName.trim() || username,
+        username,
+      },
+    ]
+  }
+  const broadcasters: BroadcasterCandidate[] = []
+  for (const info of Object.values(statuses)) {
+    if (!info || info.status !== 'connected' || info.platform === 'youtube') continue
+    const login = info.channelLogin?.trim()
+    if (!login) continue
+    broadcasters.push({ platform: info.platform, displayName: login, username: login })
+  }
+  return broadcasters
+}
+
+/** Recent chat authors, newest first, one entry per platform user, followed by channel broadcasters. */
+export function recentAuthors(
   messages: readonly NormalizedChatMessage[],
   aliasMap: AliasMap | undefined,
+  broadcasters: readonly BroadcasterCandidate[] = [],
 ): MentionSuggestion[] {
   const seen = new Set<string>()
+  const seenNames = new Set<string>()
   const result: MentionSuggestion[] = []
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
     if (!msg) continue
-    const displayName = msg.author.displayName
-    const lower = displayName.toLowerCase()
+    if (msg.type === 'system' && (!msg.author.username || msg.author.id === '7tv-system')) {
+      continue
+    }
+    const displayName = msg.author.displayName.trim()
+    const username = msg.author.username?.trim()
+    if (!displayName && !username) continue
+    const primaryName = displayName || username || ''
+    const lower = primaryName.toLowerCase()
     const dedupKey = msg.author.id ? `${msg.platform}:${msg.author.id}` : `${msg.platform}:${lower}`
     if (seen.has(dedupKey)) continue
     seen.add(dedupKey)
+    if (lower) seenNames.add(`${msg.platform}:${lower}`)
+    if (username) seenNames.add(`${msg.platform}:${username.toLowerCase()}`)
 
     const alias = msg.author.id ? aliasMap?.get(msg.platform)?.get(msg.author.id) : undefined
     result.push({
       type: 'mention',
-      label: alias || displayName,
-      insertLabel: displayName,
+      label: alias || primaryName,
+      insertLabel: primaryName,
       color: msg.author.color ?? null,
-      description: msg.author.username ? `@${msg.author.username} • ${msg.platform}` : msg.platform,
+      description: username ? `@${username} • ${msg.platform}` : msg.platform,
       platform: msg.platform,
       platformUserId: msg.author.id,
-      displayName,
-      username: msg.author.username,
+      displayName: primaryName,
+      username,
       avatarUrl: msg.author.avatarUrl,
       currentAlias: alias,
+    })
+  }
+  for (const broadcaster of broadcasters) {
+    const lowerLogin = broadcaster.username.toLowerCase()
+    const lowerDisplay = broadcaster.displayName.toLowerCase()
+    if (
+      seenNames.has(`${broadcaster.platform}:${lowerLogin}`) ||
+      seenNames.has(`${broadcaster.platform}:${lowerDisplay}`)
+    ) {
+      continue
+    }
+    seenNames.add(`${broadcaster.platform}:${lowerLogin}`)
+    seenNames.add(`${broadcaster.platform}:${lowerDisplay}`)
+    result.push({
+      type: 'mention',
+      label: broadcaster.displayName,
+      insertLabel: broadcaster.displayName,
+      color: null,
+      description: `@${broadcaster.username} • ${broadcaster.platform}`,
+      platform: broadcaster.platform,
+      platformUserId: '',
+      displayName: broadcaster.displayName,
+      username: broadcaster.username,
     })
   }
   return result
@@ -551,10 +622,19 @@ export function useAutocomplete(params: {
   const platform = watchedChannel?.platform ?? connectedChannel?.platform
   const channelId = watchedChannel?.channelSlug ?? connectedChannel?.channelLogin
 
-  const mentionSuggestions = useMemo((): MentionSuggestion[] => {
-    if (!mentionCompletionActive && !mentionArgumentActive) return EMPTY_MENTION_SUGGESTIONS
-    return recentAuthors(messages, aliasMap)
-  }, [mentionCompletionActive, mentionArgumentActive, messages, aliasMap])
+  const getMentionSuggestions = useCallback(
+    (): MentionSuggestion[] =>
+      recentAuthors(messages, aliasMap, channelBroadcasters(watchedChannel, statuses)),
+    [messages, aliasMap, watchedChannel, statuses],
+  )
+
+  const mentionSuggestions = useMemo(
+    (): MentionSuggestion[] =>
+      mentionCompletionActive || mentionArgumentActive
+        ? getMentionSuggestions()
+        : EMPTY_MENTION_SUGGESTIONS,
+    [mentionCompletionActive, mentionArgumentActive, getMentionSuggestions],
+  )
 
   const partialArgument = invocation?.partial ?? ''
   const argumentSuggestions = useMemo((): ArgumentSuggestion[] => {
@@ -688,8 +768,9 @@ export function useAutocomplete(params: {
 
   const isOpen = suggestions.length > 0 && queryKey !== closedQuery
 
-  // Reset the closed memory on every edit.
+  // Reset the closed memory on every edit and reconcile any active bare Tab cycle.
   const prevText = useRef(text)
+  const bareCycleRef = useRef<BareTabCycleState | null>(null)
   useEffect(() => {
     if (prevText.current !== text) {
       prevText.current = text
@@ -697,7 +778,13 @@ export function useAutocomplete(params: {
       setSelectedIndex(0)
       setNavigated(false)
     }
+    bareCycleRef.current = reconcileBareTabCycle(bareCycleRef.current, text)
   }, [text])
+
+  // Clear bare Tab cycle when switching channels or panes.
+  useEffect(() => {
+    bareCycleRef.current = null
+  }, [platform, channelId, watchedChannel?.id])
 
   // Load emotes for the active channel.
   useEffect(() => {
@@ -708,19 +795,32 @@ export function useAutocomplete(params: {
   function selectSuggestion(index: number): void {
     const s = suggestions[index]
     if (!s) return
+    bareCycleRef.current = null
     setText(s.type === 'command' ? `${s.insertText} ` : replaceToken(text, s))
     setSelectedIndex(0)
     setNavigated(false)
     setClosedQuery('')
   }
 
-  function completeBareEmote(): boolean {
+  function completeBareWord(direction: 1 | -1 = 1): boolean {
     if (mode !== null) return false
-    const bareQuery = bareEmoteQuery(text)
-    if (!bareQuery) return false
-    const match = rankEmoteMatches(getEmoteSuggestions(), bareQuery)[0]
-    if (!match) return false
-    setText(`${text.slice(0, -bareQuery.length)}${match.label} `)
+    const result = stepBareTabCompletion({
+      text,
+      direction,
+      cycle: bareCycleRef.current,
+      resolveCandidates: (bareQuery) =>
+        rankBareTabCompletions({
+          emotes: getEmoteSuggestions(),
+          mentions: getMentionSuggestions(),
+          query: bareQuery,
+        }),
+    })
+    if (!result) {
+      bareCycleRef.current = null
+      return false
+    }
+    bareCycleRef.current = result.nextCycle
+    setText(result.nextText)
     return true
   }
 
@@ -737,6 +837,7 @@ export function useAutocomplete(params: {
   }
 
   function close(): void {
+    bareCycleRef.current = null
     setClosedQuery(queryKey)
     setSelectedIndex(0)
     setNavigated(false)
@@ -749,7 +850,7 @@ export function useAutocomplete(params: {
     selectedIndex: activeIndex,
     mode,
     selectSuggestion,
-    completeBareEmote,
+    completeBareWord,
     moveUp,
     moveDown,
     close,
