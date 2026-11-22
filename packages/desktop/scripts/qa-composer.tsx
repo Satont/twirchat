@@ -134,6 +134,38 @@ root.render(
             displayName: 'Alpha',
           },
           watchedChannelStatus: { platform: 'twitch', status: 'connected', mode: 'authenticated' },
+          messages: [
+            {
+              id: 'qa-msg-1',
+              platform: 'twitch',
+              channelId: 'alpha',
+              type: 'message',
+              text: 'hi',
+              timestamp: new Date(1_700_000_000_000),
+              emotes: [],
+              author: { id: 'u-sasha', username: 'sasha', displayName: 'Sasha', badges: [] },
+            },
+            {
+              id: 'qa-msg-2',
+              platform: 'twitch',
+              channelId: 'alpha',
+              type: 'message',
+              text: 'hey',
+              timestamp: new Date(1_700_000_001_000),
+              emotes: [],
+              author: { id: 'u-loc', username: 'viewer42', displayName: 'テスト', badges: [] },
+            },
+            {
+              id: 'qa-msg-3',
+              platform: 'twitch',
+              channelId: 'alpha',
+              type: 'message',
+              text: 'yo',
+              timestamp: new Date(1_700_000_002_000),
+              emotes: [],
+              author: { id: 'u-satont', username: 'satont', displayName: 'Satont', badges: [] },
+            },
+          ],
           onSend: (targets) => sent.push(...targets),
           onSendWatched: (target) => sent.push(target),
           onCopyMessages: () => copied.push('chat transcript'),
@@ -450,7 +482,51 @@ async function checkEmoteCompletion() {
   await Bun.sleep(100)
   assert.equal(state().text, 'zzzzNoEmoteMatch', 'unmatched Tab leaves text intact')
   assert(!has('autocomplete-popup'))
-  console.log(JSON.stringify({ result: 'pass', emoteCompletion: true, compact }))
+  await draft('')
+  await focus()
+  pressNativeKeys('h', 'i', 'space', 's', 'a')
+  await until(() => state().text === 'hi sa', 'bare username prefix typed')
+  assert(!has('autocomplete-popup'), 'bare username typing does not open a popup')
+  pressNativeKeys('Tab')
+  await until(() => state().text === 'hi Satont ', 'bare Tab completes newest matching chatter')
+  pressNativeKeys('Tab')
+  await until(() => state().text === 'hi Sasha ', 'second Tab cycles to next matching chatter')
+  pressNativeKeys('shift+Tab')
+  await until(() => state().text === 'hi Satont ', 'Shift+Tab cycles backward through candidates')
+  assert.equal(
+    renderer.getFocusedElementId(),
+    find('chat-input').id,
+    'Shift+Tab during cycle keeps composer focus',
+  )
+  await draft('')
+  await focus()
+  pressNativeKeys('a', 'l', 'p')
+  await until(() => state().text === 'alp', 'broadcaster prefix typed')
+  pressNativeKeys('Tab')
+  await until(() => state().text === 'Alpha ', 'bare Tab falls back to channel broadcaster')
+  await draft('')
+  await focus()
+  pressNativeKeys('v', 'i', 'e', 'w')
+  await until(() => state().text === 'view', 'localized login prefix typed')
+  pressNativeKeys('Tab')
+  await until(() => state().text === 'viewer42 ', 'bare Tab completes localized Twitch login')
+  await draft('')
+  await focus()
+  pressNativeKeys('at', 's', 'a', 't')
+  await until(
+    () => state().text === '@sat' && has('autocomplete-selected'),
+    '@ mention completion opens',
+  )
+  pressNativeKeys('Tab')
+  await until(() => state().text === '@Satont ', '@ mention Tab keeps @ prefix')
+  console.log(
+    JSON.stringify({
+      result: 'pass',
+      emoteCompletion: true,
+      bareUsernameCompletion: true,
+      compact,
+    }),
+  )
 }
 
 async function checkComposer() {

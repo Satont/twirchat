@@ -1,6 +1,13 @@
+export type EmoteMatchTier = 0 | 1 | 2 | 3
+
+export interface RankedEmoteMatch<T> {
+  readonly item: T
+  readonly tier: EmoteMatchTier
+}
+
 interface EmoteMatch<T> {
   item: T
-  tier: number
+  tier: EmoteMatchTier
   span: number
   caseMatches: number
   length: number
@@ -8,10 +15,10 @@ interface EmoteMatch<T> {
 }
 
 /** Rank before limiting results; stable ties retain favorite and catalog ordering. */
-export function rankEmoteMatches<T extends { label: string }>(
+export function rankEmoteMatchesWithTier<T extends { readonly label: string }>(
   items: readonly T[],
   query: string,
-): T[] {
+): RankedEmoteMatch<T>[] {
   if (!query) return []
   const foldedQuery = query.toLowerCase()
   const matches: EmoteMatch<T>[] = []
@@ -50,7 +57,15 @@ export function rankEmoteMatches<T extends { label: string }>(
     if (matched)
       matches.push({ item, tier: 3, span: end - start, caseMatches, length: label.length, start })
   }
-  return matches.toSorted(compareMatches).map((match) => match.item)
+  return matches.toSorted(compareMatches).map(({ item, tier }) => ({ item, tier }))
+}
+
+/** Rank before limiting results; stable ties retain favorite and catalog ordering. */
+export function rankEmoteMatches<T extends { readonly label: string }>(
+  items: readonly T[],
+  query: string,
+): T[] {
+  return rankEmoteMatchesWithTier(items, query).map((match) => match.item)
 }
 
 function compareMatches<T>(a: EmoteMatch<T>, b: EmoteMatch<T>): number {
@@ -64,5 +79,5 @@ function compareMatches<T>(a: EmoteMatch<T>, b: EmoteMatch<T>): number {
 }
 
 export function bareEmoteQuery(text: string): string | undefined {
-  return text.match(/(?:^|\s)([\p{L}\p{N}_]+)$/u)?.[1]
+  return text.match(/(?:^|\s)([\p{L}\p{N}_][\p{L}\p{N}_-]*)$/u)?.[1]
 }
