@@ -1,6 +1,6 @@
 export interface NoteInline {
   text: string
-  style?: 'strong' | 'emphasis' | 'code' | 'link'
+  style?: 'strong' | 'emphasis' | 'strike' | 'code' | 'link'
   url?: string
 }
 export interface NoteLine {
@@ -13,14 +13,15 @@ export interface NoteLine {
 export function parseNoteInline(source: string): NoteInline[] {
   const result: NoteInline[] = []
   const pattern =
-    /\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g
+    /\*\*([^*\n]+)\*\*|~~([^~\n]+)~~|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g
   let position = 0
   for (const match of source.matchAll(pattern)) {
     if (match.index > position) result.push({ text: source.slice(position, match.index) })
     if (match[1]) result.push({ text: match[1], style: 'strong' })
-    else if (match[2]) result.push({ text: match[2], style: 'emphasis' })
-    else if (match[3]) result.push({ text: match[3], style: 'code' })
-    else result.push({ text: match[4]!, style: 'link', url: match[5] })
+    else if (match[2]) result.push({ text: match[2], style: 'strike' })
+    else if (match[3]) result.push({ text: match[3], style: 'emphasis' })
+    else if (match[4]) result.push({ text: match[4], style: 'code' })
+    else result.push({ text: match[5]!, style: 'link', url: match[6] })
     position = match.index + match[0].length
   }
   if (position < source.length) result.push({ text: source.slice(position) })

@@ -42,7 +42,11 @@ function fixture(request: () => Promise<TwitchActivitiesSnapshot>) {
   const events = createDesktopEvents()
   const backend: Parameters<typeof wireTwitchActivities>[0] = {
     events,
-    api: { getTwitchActivities: request },
+    api: {
+      getTwitchActivities: request,
+      getUiState: async () => null,
+      setUiState: async () => {},
+    },
   }
   stops.push(wireTwitchActivities(backend))
   return backend

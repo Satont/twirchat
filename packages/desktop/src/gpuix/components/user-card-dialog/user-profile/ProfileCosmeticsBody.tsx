@@ -1,3 +1,4 @@
+import { useActionToast } from '@gpuix/components/action-toast'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
@@ -17,6 +18,7 @@ export const ProfileCosmeticsBody = memo(function ProfileCosmeticsBody({
 }: ProfileCosmeticsBodyProps) {
   const theme = useTheme()
   const { t } = useT()
+  const { showToast } = useActionToast()
 
   return (
     <div
@@ -54,7 +56,14 @@ export const ProfileCosmeticsBody = memo(function ProfileCosmeticsBody({
           {badgesEnabled ? (
             <BadgeInventory badges={cosmetics.badges} inventoryBadges={cosmetics.inventoryBadges} />
           ) : null}
-          <GhostButton icon="externalLink" onClick={() => runUiTask(openSevenTvProfile())}>
+          <GhostButton
+            icon="externalLink"
+            onClick={(event) =>
+              runUiTask(
+                openSevenTvProfile().then(() => showToast(t('userCard.feedback.opened'), event)),
+              )
+            }
+          >
             {t('userCard.profile.openSevenTv')}
           </GhostButton>
         </div>

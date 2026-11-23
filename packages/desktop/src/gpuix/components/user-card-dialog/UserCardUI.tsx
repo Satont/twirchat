@@ -1,5 +1,7 @@
+import type { ActionClickEvent } from '@gpuix/components/action-toast'
 import { Icon, type IconName } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
+import { useWindowSize } from '@gpuix/react'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 import type { ReactNode } from 'react'
@@ -53,6 +55,9 @@ export function SectionHeader({
   tone?: 'accent' | 'neutral'
 }) {
   const theme = useTheme()
+  const windowSize = useWindowSize()
+  const narrow = windowSize.width < 832
+
   return (
     <div
       style={{
@@ -87,7 +92,19 @@ export function SectionHeader({
           ) : null}
         </div>
       </div>
-      {action}
+      {action ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            minWidth: 0,
+            width: narrow ? '100%' : undefined,
+          }}
+        >
+          {action}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -129,7 +146,7 @@ export function GhostButton({
   active = false,
 }: {
   disabled?: boolean
-  onClick: () => void
+  onClick: (event?: ActionClickEvent) => void
   children: ReactNode
   style?: Record<string, unknown>
   icon?: IconName
@@ -143,7 +160,9 @@ export function GhostButton({
   return (
     <div
       tabIndex={disabled ? undefined : 0}
-      onClick={disabled ? undefined : onClick}
+      onClick={(event) => {
+        if (!disabled) onClick(event)
+      }}
       onKeyDown={(event) => {
         if (!disabled && (event.key === 'enter' || event.key === 'space')) {
           event.preventDefault()

@@ -6,7 +6,6 @@ import { ProfileCosmetics } from './ProfileCosmetics'
 import { ProfileDescriptionBlock } from './ProfileDescriptionBlock'
 import { ProfileDetails } from './ProfileDetails'
 import { ProfileHeading } from './ProfileHeading'
-import { ProfileNameHistory } from './ProfileNameHistory'
 import type { UserProfileViewProps } from './types'
 
 export const UserProfileView = memo(function UserProfileView({
@@ -49,15 +48,14 @@ export const UserProfileView = memo(function UserProfileView({
         }}
       >
         <ProfileAvatar avatarUrl={avatarUrl} displayName={displayName} />
-
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
             flexGrow: 1,
             flexBasis: 280,
             minWidth: 0,
+            gap: 12,
           }}
         >
           <ProfileHeading
@@ -69,11 +67,10 @@ export const UserProfileView = memo(function UserProfileView({
             openAvatarUrl={openAvatarUrl}
           />
           <ProfileDescriptionBlock description={profile?.description} loading={loading} />
-          <ProfileDetails profile={profile} loading={loading} error={error} copyText={copyText} />
         </div>
       </div>
 
-      <ProfileNameHistory profile={profile} loading={loading} />
+      <ProfileDetails profile={profile} loading={loading} error={error} copyText={copyText} />
 
       <ProfileCosmetics
         cosmetics={cosmetics}

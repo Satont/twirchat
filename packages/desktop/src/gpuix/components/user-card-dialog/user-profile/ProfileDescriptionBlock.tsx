@@ -15,9 +15,10 @@ export const ProfileDescriptionBlock = memo(function ProfileDescriptionBlock({
     return (
       <div
         style={{
-          width: '100%',
-          height: 40,
+          width: '20%',
+          height: 10,
           borderRadius: 8,
+          paddingLeft: 5,
           backgroundColor: skel.valueBar,
         }}
       />

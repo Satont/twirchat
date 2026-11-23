@@ -43,6 +43,32 @@ function normalizedUrl(value: string | undefined): string | undefined {
   return normalized || undefined
 }
 
+export function avatarUrlForUser(platform: ModerationPlatform, userId: string): string | undefined {
+  return avatarUrls.get(`${platform}:${userId}`)
+}
+
+export function ensureAvatarForUser(
+  platform: ModerationPlatform,
+  userId: string,
+  username?: string,
+): void {
+  const key = `${platform}:${userId}`
+  if (!avatarLookup || avatarUrls.has(key) || avatarRequested.has(key)) return
+  avatarRequested.add(key)
+  runInBackground(
+    avatarLookup({ platform, authorId: userId, ...(username ? { username } : {}) })
+      .then((resolution) => {
+        const url = normalizedUrl(resolution.avatarUrl)
+        if (url) {
+          avatarUrls.set(key, url)
+          avatarRevisionStore.modify((value) => value + 1)
+        }
+      })
+      .catch(() => undefined),
+    'caches background operation failed',
+  )
+}
+
 export function avatarUrlFor(message: NormalizedChatMessage): string | undefined {
   const supplied = normalizedUrl(message.author.avatarUrl)
   if (supplied) return supplied

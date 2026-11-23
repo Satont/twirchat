@@ -1,3 +1,4 @@
+import { useActionToast } from '@gpuix/components/action-toast'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
@@ -21,6 +22,7 @@ export const ProfileDetails = memo(function ProfileDetails({
 }: ProfileDetailsProps) {
   const theme = useTheme()
   const { t, language } = useT()
+  const { showToast } = useActionToast()
 
   const entries = useMemo<ProfileEntry[]>(() => {
     const result: ProfileEntry[] = []
@@ -110,7 +112,13 @@ export const ProfileDetails = memo(function ProfileDetails({
             <Tooltip delayDuration={200} style={{ width: 28, height: 28, flexShrink: 0 }}>
               <TooltipTrigger asChild>
                 <div
-                  onClick={() => runUiTask(copyText(chatColor))}
+                  onClick={(event) =>
+                    runUiTask(
+                      copyText(chatColor).then(() =>
+                        showToast(t('userCard.feedback.copied'), event),
+                      ),
+                    )
+                  }
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -159,7 +167,7 @@ export const ProfileDetails = memo(function ProfileDetails({
     }
 
     return result
-  }, [profile, t, language, theme, copyText])
+  }, [profile, t, language, theme, copyText, showToast])
 
   if (loading) {
     const skel = getSkeletonColors(theme)
@@ -168,6 +176,7 @@ export const ProfileDetails = memo(function ProfileDetails({
         style={{
           display: 'flex',
           flexDirection: 'column',
+          marginTop: 12,
           borderWidth: 1,
           borderColor: theme.hairline,
           borderRadius: 12,
@@ -251,6 +260,7 @@ export const ProfileDetails = memo(function ProfileDetails({
         borderWidth: 1,
         borderColor: theme.hairline,
         borderRadius: 12,
+        marginTop: 12,
         overflow: 'hidden',
         backgroundColor: userCardWellColor(theme),
       }}

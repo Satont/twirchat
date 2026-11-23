@@ -5,7 +5,7 @@ import { memo } from 'react'
 import { UserCardMetadataSection } from './metadata-section'
 import { TwitchBadgeCollection } from './TwitchBadgeCollection'
 import type { MetadataItem } from './types'
-import { UserProfileView } from './user-profile'
+import { ProfileNameHistory, UserProfileView } from './user-profile'
 
 interface UserCardProfileTabProps {
   target: UserCardTarget
@@ -36,6 +36,7 @@ export const UserCardProfileTab = memo(function UserCardProfileTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <UserProfileView target={target} hideAvatar={hideAvatar} state={profileState} />
+      <ProfileNameHistory profile={profileState.profile} loading={profileState.loading} />
       {platform === 'twitch' && username ? (
         <TwitchBadgeCollection
           username={username}

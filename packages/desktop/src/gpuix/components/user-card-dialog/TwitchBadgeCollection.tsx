@@ -1,3 +1,4 @@
+import { ActionButton } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
 import { useTwitchUserBadges } from '@gpuix/hooks/user-card-dialog/use-twitch-user-badges'
 import { useT } from '@gpuix/i18n'
@@ -5,7 +6,7 @@ import { useTheme } from '@gpuix/theme-context'
 import { memo } from 'react'
 
 import { Badge } from './Badge'
-import { InlineButton, MetadataState, SectionHeader, UserCardPanel } from './UserCardUI'
+import { MetadataState, SectionHeader, UserCardPanel } from './UserCardUI'
 
 interface TwitchBadgeCollectionProps {
   username: string
@@ -22,10 +23,9 @@ export const TwitchBadgeCollection = memo(function TwitchBadgeCollection({
   const theme = useTheme()
   const { state, retry } = useTwitchUserBadges({ username, channelSlug, channelId })
 
-  return (
-    <UserCardPanel>
-      <SectionHeader icon="twitch" title={t('userCard.badges.title')} />
-      {state.kind === 'loaded' && state.badges.length > 0 ? (
+  const render = () => {
+    if (state.kind === 'loaded' && state.badges.length > 0) {
+      return (
         <div
           testId="twitch-badge-collection-grid"
           style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
@@ -34,18 +34,44 @@ export const TwitchBadgeCollection = memo(function TwitchBadgeCollection({
             <Badge key={badge.id} badge={badge} size={24} showTooltip />
           ))}
         </div>
-      ) : state.kind === 'error' ? (
+      )
+    }
+    if (state.kind === 'error') {
+      return (
         <MetadataState error>
           <Text style={{ color: theme.dangerText, fontSize: 13 }}>
             {t('userCard.badges.unavailable')}
           </Text>
-          <InlineButton onClick={retry}>{t('common.retry')}</InlineButton>
+          <ActionButton onClick={retry}>{t('common.retry')}</ActionButton>
         </MetadataState>
-      ) : (
-        <Text style={{ color: theme.text2, fontSize: 13 }}>
-          {t(state.kind === 'loading' ? 'userCard.badges.loading' : 'userCard.badges.empty')}
-        </Text>
-      )}
+      )
+    }
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          fontSize: 14,
+          paddingTop: 4,
+          paddingBottom: 4,
+          paddingLeft: 12,
+          paddingRight: 12,
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: 12,
+          backgroundColor: theme.bg,
+          color: theme.text2,
+        }}
+      >
+        {state.kind === 'loading' ? t('common.loading') : t('userCard.badges.empty')}
+      </div>
+    )
+  }
+
+  return (
+    <UserCardPanel>
+      <SectionHeader icon="twitch" title={t('userCard.badges.title')} />
+      {render()}
     </UserCardPanel>
   )
 })
