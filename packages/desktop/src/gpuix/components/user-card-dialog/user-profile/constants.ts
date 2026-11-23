@@ -8,4 +8,4 @@ export const SKELETON_ROWS: readonly { label: string; hasColor?: boolean }[] = [
   { label: 'Roles' },
 ]
 
-export const NAME_HISTORY_SKELETON_ROWS: readonly string[] = ['first', 'second', 'third', 'fourth']
+export const NAME_HISTORY_SKELETON_ROWS: readonly string[] = ['first', 'second']

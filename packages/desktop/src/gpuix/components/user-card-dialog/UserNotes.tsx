@@ -2,9 +2,11 @@ import { useBackend } from '@gpuix/backend/context'
 import { ActionButton, FormInput } from '@gpuix/components/ui/Form'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
+import { formatNote, type NoteFormat } from '@gpuix/components/user-card/note-format'
 import { parseNoteMarkdown } from '@gpuix/components/user-card/note-markdown'
 import { useUserCardAlias } from '@gpuix/hooks/user-card-dialog/use-user-card-alias'
 import { useT } from '@gpuix/i18n'
+import type { IconName } from '@gpuix/icons'
 import { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
@@ -137,6 +139,7 @@ export function UserNotes({
                   color: theme.accent.onDeep,
                   backgroundColor: theme.accent.primary,
                   gap: 4,
+                  fontSize: 12,
 
                   paddingLeft: 12,
                   paddingRight: 12,
@@ -149,7 +152,7 @@ export function UserNotes({
                 onClick={() => void handleSaveAlias()}
               >
                 <div style={{ marginTop: 4 }}>
-                  <Icon name="check" size={14} color={theme.accent.onDeep} />
+                  <Icon name="check" size={12} color={theme.accent.onDeep} />
                 </div>
                 {t('common.save')}
               </div>
@@ -346,6 +349,7 @@ export function UserNotes({
                             ? { fontFamily: 'monospace' }
                             : {}),
                           ...(part.style === 'emphasis' ? { fontStyle: 'italic' } : {}),
+                          ...(part.style === 'strike' ? { textDecoration: 'line-through' } : {}),
                         }}
                       >
                         {part.text}
@@ -360,13 +364,34 @@ export function UserNotes({
               )}
             </div>
           ) : (
-            <FormInput
-              multiline
-              value={text}
-              onChange={setText}
-              placeholder={t('userCard.notes.placeholder')}
-              testId="user-notes-editor"
-            />
+            <>
+              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {(
+                  [
+                    ['bold', t('userCard.notes.format.bold'), 'bold'],
+                    ['strike', t('userCard.notes.format.strike'), 'strike'],
+                    ['list', t('userCard.notes.format.list'), 'list'],
+                    ['quote', t('userCard.notes.format.quote'), 'quote'],
+                    ['code', t('userCard.notes.format.code'), 'code'],
+                  ] satisfies Array<[NoteFormat, string, IconName]>
+                ).map(([format, label, icon]) => (
+                  <ActionButton
+                    key={format}
+                    icon={icon}
+                    onClick={() => setText((current) => formatNote(current, format))}
+                  >
+                    {label}
+                  </ActionButton>
+                ))}
+              </div>
+              <FormInput
+                multiline
+                value={text}
+                onChange={setText}
+                placeholder={t('userCard.notes.placeholder')}
+                testId="user-notes-editor"
+              />
+            </>
           )}
         </div>
       </UserCardPanel>

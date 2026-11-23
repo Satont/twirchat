@@ -1,7 +1,10 @@
+import type { ActionClickEvent } from '@gpuix/components/action-toast'
+import { withAlpha } from '@gpuix/theme'
 import { useState, type ReactNode } from 'react'
 
 import { useTextInputFocusTracking } from '../../state/focus'
 import { useTheme } from '../../theme-context'
+import { Icon, type IconName } from './Icon'
 import { Text } from './Text'
 
 export function ActionButton({
@@ -10,29 +13,35 @@ export function ActionButton({
   disabled,
   primary,
   danger,
+  active,
+  icon,
   autoFocus,
   testId,
   style,
   textStyle,
 }: {
   children: ReactNode
-  onClick: () => void
+  onClick: (event?: ActionClickEvent) => void
   disabled?: boolean
   primary?: boolean
   danger?: boolean
+  active?: boolean
+  icon?: IconName
   autoFocus?: boolean
   testId?: string
   style?: Record<string, unknown>
   textStyle?: Record<string, unknown>
 }) {
   const theme = useTheme()
+  const foreground =
+    danger || active ? theme.dangerText : primary ? theme.accent.onPrimary : theme.text
   return (
     <div
       testId={testId}
       tabIndex={disabled ? undefined : 0}
       autoFocus={!disabled && autoFocus}
-      onClick={() => {
-        if (!disabled) onClick()
+      onClick={(event) => {
+        if (!disabled) onClick(event)
       }}
       onKeyDown={(event) => {
         if (!disabled && (event.key === 'enter' || event.key === 'space')) {
@@ -41,32 +50,43 @@ export function ActionButton({
         }
       }}
       style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
         paddingTop: 6,
         paddingBottom: 6,
         paddingLeft: 10,
         paddingRight: 10,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: primary ? theme.accent.primary : theme.border,
-        backgroundColor: primary ? theme.accent.primary : theme.fill,
+        borderColor: active
+          ? withAlpha(theme.dangerText, 0.35)
+          : primary
+            ? theme.accent.primary
+            : theme.border,
+        backgroundColor: active
+          ? withAlpha(theme.dangerText, 0.12)
+          : primary
+            ? theme.accent.primary
+            : theme.fill,
         opacity: disabled ? 0.45 : 1,
         cursor: disabled ? 'default' : 'pointer',
         flexShrink: 0,
         hover: disabled
           ? {}
-          : { backgroundColor: primary ? theme.accent.primary : theme.fillHover },
+          : {
+              backgroundColor: active
+                ? withAlpha(theme.dangerText, 0.2)
+                : primary
+                  ? theme.accent.primary
+                  : theme.fillHover,
+            },
         ...style,
       }}
     >
-      <Text
-        style={{
-          fontSize: 12,
-          color: primary ? theme.accent.onPrimary : danger ? theme.dangerText : theme.text,
-          ...textStyle,
-        }}
-      >
-        {children}
-      </Text>
+      {icon ? <Icon name={icon} size={14} color={foreground} /> : null}
+      <Text style={{ fontSize: 12, color: foreground, ...textStyle }}>{children}</Text>
     </div>
   )
 }
@@ -74,12 +94,14 @@ export function ActionButton({
 export function FormInput({
   value,
   onChange,
+  onSubmit,
   placeholder,
   multiline,
   testId,
 }: {
   value: string
   onChange: (value: string) => void
+  onSubmit?: () => void
   placeholder?: string
   multiline?: boolean
   testId?: string
@@ -91,6 +113,7 @@ export function FormInput({
     value,
     placeholder,
     testId,
+    onSubmit,
     ...focus,
     onChange: (event: { value?: string }) => onChange(event.value ?? ''),
     theme: { caret: theme.accent.primary },
@@ -114,14 +137,16 @@ export function FormField({
   children,
   hint,
 }: {
-  label: string
+  label?: string
   children: ReactNode
   hint?: string
 }) {
   const theme = useTheme()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-      <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text }}>{label}</Text>
+      {label ? (
+        <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text }}>{label}</Text>
+      ) : null}
       {children}
       {hint ? <Text style={{ fontSize: 11, color: theme.text2 }}>{hint}</Text> : null}
     </div>

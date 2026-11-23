@@ -17,6 +17,7 @@ test('native note preview supports headings, inline emphasis, links, lists and l
   ])
   expect(required(lines[1]).content).toContainEqual({ text: 'Bold', style: 'strong' })
   expect(required(lines[1]).content).toContainEqual({ text: 'soft', style: 'emphasis' })
+  expect(parseNoteInline('~~gone~~')).toContainEqual({ text: 'gone', style: 'strike' })
   expect(required(lines[4]).content).toEqual([{ text: '<script>literal</script> **unchanged**' }])
   expect(required(lines[5]).content).toEqual([
     { text: 'Profile', style: 'link', url: 'https://example.org/user' },

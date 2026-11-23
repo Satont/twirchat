@@ -13,7 +13,7 @@ interface TwitchBadgesIdentity {
 }
 
 type TwitchBadgesState =
-  | { kind: 'loading'; key: string }
+  | { kind: 'loading'; key: string; badges: Badge[] }
   | { kind: 'error'; key: string }
   | { kind: 'loaded'; key: string; badges: Badge[] }
 
@@ -26,7 +26,6 @@ const CACHE_TTL_MS = 5 * 60_000
 const CACHE_CAPACITY = 32
 const cache = new Map<string, TwitchBadgesCacheEntry>()
 
-/** Twitch logins are case-insensitive, so normalize the identity before hashing it. */
 function identityKey({ username, channelSlug, channelId }: TwitchBadgesIdentity): string {
   return [
     username.trim().toLowerCase(),
@@ -56,14 +55,9 @@ function cacheBadges(key: string, badges: Badge[]): void {
 
 function cachedState(key: string): TwitchBadgesState {
   const badges = cachedBadges(key)
-  return badges ? { kind: 'loaded', key, badges } : { kind: 'loading', key }
+  return badges ? { kind: 'loaded', key, badges } : { kind: 'loading', key, badges: [] }
 }
 
-/**
- * Loads the Twitch badge collection for one identity and keeps the result for
- * five minutes. Remounting the profile tab (or reopening the card) reuses the
- * cached badges instead of hitting Twitch GQL again.
- */
 export function useTwitchUserBadges(identity: TwitchBadgesIdentity): {
   state: TwitchBadgesState
   retry: () => void
@@ -90,10 +84,9 @@ export function useTwitchUserBadges(identity: TwitchBadgesIdentity): {
           if (request.signal.aborted) return
           cacheBadges(key, badges)
           setStored({ kind: 'loaded', key, badges })
-        } catch (err) {
+        } catch {
           if (!request.signal.aborted) {
-            log.warn('Failed to load Twitch badge collection', { error: String(err), key })
-            setStored({ kind: 'error', key })
+            log.warn('Failed to load Twitch badge collection')
           }
         }
       })(),
@@ -117,7 +110,7 @@ export function useTwitchUserBadges(identity: TwitchBadgesIdentity): {
   }, [key, load])
 
   const retry = useCallback(() => {
-    setStored({ kind: 'loading', key })
+    setStored({ kind: 'loading', key, badges: [] })
     load()
   }, [key, load])
 

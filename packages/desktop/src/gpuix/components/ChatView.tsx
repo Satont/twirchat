@@ -144,6 +144,8 @@ import { RemoteImage } from './ui/RemoteImage'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 import { UserCardDialog } from './UserCardDialog'
+import { WhisperConversationsDialog } from './WhisperConversationsDialog'
+import { WhisperThreadPanel } from './WhisperThreadPanel'
 
 const EMPTY_MESSAGES: NormalizedChatMessage[] = []
 const EMPTY_CHANNEL_IDS: readonly string[] = []
@@ -1017,6 +1019,13 @@ export function ChatView({
   )
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
   const closeUserCard = useCallback(() => setUserCardTarget(null), [])
+  const [whisperTarget, setWhisperTarget] = useState<UserCardTarget | null>(null)
+  const [whisperListOpen, setWhisperListOpen] = useState(false)
+  const closeWhispers = useCallback(() => setWhisperTarget(null), [])
+  const openWhispers = useCallback((target: UserCardTarget) => {
+    setUserCardTarget(null)
+    setWhisperTarget(target)
+  }, [])
   const [chattersOpen, setChattersOpen] = useState(false)
   const [chatSettingsOpen, setChatSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1800,6 +1809,13 @@ export function ChatView({
               </HeaderButton>
             ) : null}
             <HeaderButton
+              testId="whispers-button"
+              title={t('activities.tab.whispers')}
+              onClick={() => setWhisperListOpen(true)}
+            >
+              <Icon name="reply" size={14} color={theme.text2} />
+            </HeaderButton>
+            <HeaderButton
               testId="chat-filters-button"
               title={t('chat.tooltip.filters')}
               onClick={() => setFiltersOpen((value) => !value)}
@@ -2551,6 +2567,9 @@ export function ChatView({
               />
             </PaneAccountContext.Provider>
           ) : null}
+          {whisperTarget ? (
+            <WhisperThreadPanel target={whisperTarget} onClose={closeWhispers} />
+          ) : null}
         </div>
 
         {/* Composer */}
@@ -2679,11 +2698,22 @@ export function ChatView({
             }}
           />
         ) : null}
+        {whisperListOpen ? (
+          <WhisperConversationsDialog
+            channelSlug={twitchChannel ?? undefined}
+            onClose={() => setWhisperListOpen(false)}
+            onOpen={(target) => {
+              setWhisperListOpen(false)
+              setWhisperTarget(target)
+            }}
+          />
+        ) : null}
         {userCardTarget ? (
           <UserCardDialog
             target={userCardTarget}
             currentAlias={currentAlias}
             onClose={closeUserCard}
+            onOpenWhispers={openWhispers}
           />
         ) : null}
       </div>

@@ -5,7 +5,7 @@ import { useTheme } from '@gpuix/theme-context'
 import { memo } from 'react'
 
 import { Badge } from './Badge'
-import { InlineButton, MetadataState, SectionHeader, UserCardPanel } from './UserCardUI'
+import { MetadataState, SectionHeader, UserCardPanel } from './UserCardUI'
 
 interface TwitchBadgeCollectionProps {
   username: string
@@ -20,12 +20,11 @@ export const TwitchBadgeCollection = memo(function TwitchBadgeCollection({
 }: TwitchBadgeCollectionProps) {
   const { t } = useT()
   const theme = useTheme()
-  const { state, retry } = useTwitchUserBadges({ username, channelSlug, channelId })
+  const { state } = useTwitchUserBadges({ username, channelSlug, channelId })
 
-  return (
-    <UserCardPanel>
-      <SectionHeader icon="twitch" title={t('userCard.badges.title')} />
-      {state.kind === 'loaded' && state.badges.length > 0 ? (
+  const render = () => {
+    if (state.kind === 'loaded' && state.badges.length > 0) {
+      return (
         <div
           testId="twitch-badge-collection-grid"
           style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
@@ -34,18 +33,47 @@ export const TwitchBadgeCollection = memo(function TwitchBadgeCollection({
             <Badge key={badge.id} badge={badge} size={24} showTooltip />
           ))}
         </div>
-      ) : state.kind === 'error' ? (
+      )
+    } else if (state.kind === 'loading' && state.badges.length === 0) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            fontSize: 14,
+
+            paddingTop: 4,
+            paddingBottom: 4,
+            paddingLeft: 12,
+            paddingRight: 12,
+
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: 12,
+
+            backgroundColor: theme.bg,
+
+            color: theme.text2,
+          }}
+        >
+          {t('userCard.badges.empty')}
+        </div>
+      )
+    } else {
+      return (
         <MetadataState error>
           <Text style={{ color: theme.dangerText, fontSize: 13 }}>
-            {t('userCard.badges.unavailable')}
+            {t('userCard.badges.unavailable')}1
           </Text>
-          <InlineButton onClick={retry}>{t('common.retry')}</InlineButton>
         </MetadataState>
-      ) : (
-        <Text style={{ color: theme.text2, fontSize: 13 }}>
-          {t(state.kind === 'loading' ? 'userCard.badges.loading' : 'userCard.badges.empty')}
-        </Text>
-      )}
+      )
+    }
+  }
+
+  return (
+    <UserCardPanel>
+      <SectionHeader icon="twitch" title={t('userCard.badges.title')} />
+      {render()}
     </UserCardPanel>
   )
 })

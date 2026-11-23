@@ -94,16 +94,8 @@ export function UserCardHeader({
     : theme.isLight
       ? withAlpha(theme.accent.deep, 0.18)
       : withAlpha('#ffffff', 0.14)
-  const headerButtonBg = showBanner
-    ? withAlpha('#000000', 0.34)
-    : theme.isLight
-      ? withAlpha('#ffffff', 0.6)
-      : withAlpha('#000000', 0.2)
-  const headerButtonHover = showBanner
-    ? withAlpha('#000000', 0.48)
-    : theme.isLight
-      ? withAlpha('#ffffff', 0.82)
-      : withAlpha('#000000', 0.3)
+  const headerButtonBg = showBanner ? '#000000' : theme.isLight ? '#ffffff' : '#000000'
+  const headerButtonHover = showBanner ? '#000000' : theme.isLight ? '#ffffff' : '#000000'
   const avatarBorder = showBanner
     ? withAlpha('#ffffff', 0.6)
     : theme.isLight
@@ -342,10 +334,8 @@ export function UserCardHeader({
                 paddingLeft: 8,
                 paddingRight: 8,
                 borderRadius: 999,
-                backgroundColor: withAlpha(
-                  platformColor(target.platform),
-                  theme.isLight ? 0.14 : 0.24,
-                ),
+                backgroundColor: platformColor(target.platform),
+
                 borderWidth: 1,
                 borderColor: withAlpha(platformColor(target.platform), 0.36),
               }}
