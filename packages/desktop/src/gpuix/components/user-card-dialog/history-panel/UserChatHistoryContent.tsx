@@ -2,6 +2,8 @@ import { chatMessageKey } from '@gpuix/chat-tools'
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useT } from '@gpuix/i18n'
+import { settingsStore } from '@gpuix/state/app'
+import { useStoreSelector } from '@gpuix/state/create-store'
 import { useTheme } from '@gpuix/theme-context'
 import {
   HISTORY_DISPLAY_LIMIT,
@@ -33,6 +35,7 @@ export function UserChatHistoryContent({
 }: UserChatHistoryProps) {
   const theme = useTheme()
   const { t, language } = useT()
+  const usernameDisplayMode = useStoreSelector(settingsStore, (s) => s?.usernameDisplayMode)
   const {
     messages,
     loadingInitial,
@@ -144,6 +147,7 @@ export function UserChatHistoryContent({
               <HistoryMessageRow
                 key={chatMessageKey(message)}
                 message={message}
+                usernameDisplayMode={usernameDisplayMode}
                 visible={historyRowVisible(
                   index,
                   messages.length,

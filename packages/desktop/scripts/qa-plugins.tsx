@@ -82,6 +82,7 @@ await Bun.write(
         emitMessage({ id: session + '-' + ++messages, author: { id: 'qa', name: 'QA' }, text: 'OPEN ' + channelId })
       },
       sendMessage(channelId, text, { emitMessage }) {
+        if (text === 'FAIL') throw new Error('transport rejected')
         emitMessage({ id: session + '-' + ++messages, author: { id: 'qa', name: 'QA' }, text: 'SENT ' + text })
       },
     })
@@ -305,10 +306,78 @@ try {
   await until(() => !painted('PLUGIN HISTORY') && !painted('PLUGIN LIVE'), 'plugin source removed')
   assert(painted('BUILTIN MESSAGE'))
 
+  // Combine a plugin channel with a built-in Twitch channel in a custom feed.
+  const loopChannel = (await backend.api.getWatchedChannels()).find(
+    (channel) => channel.channelSlug === 'CaseSensitive',
+  )
+  assert(loopChannel)
+  await click(`tab-${loopChannel.id}`)
+  await until(() => Boolean(bounds('plugin-chat-combine')), 'combine button on plugin pane')
+  await click('plugin-chat-combine')
+  await until(
+    () =>
+      Boolean(bounds('feed-editor')) &&
+      Boolean(bounds(`feed-source-${feed.id}`)) &&
+      painted('1 selected'),
+    'feed editor opens from plugin pane with plugin sources listed',
+  )
+  await click('feed-add-source')
+  await until(() => Boolean(bounds('add-platform-twitch')), 'Twitch platform in feed add form')
+  await click('add-platform-twitch')
+  await fill('add-channel-input', 'qa_twitch')
+  await click('add-channel-confirm')
+  await until(() => painted('2 selected'), 'Twitch channel staged alongside plugin channel')
+  await click('feed-save')
+  await until(
+    () => Boolean(bounds('chat-feed-manage')) && !bounds('feed-editor'),
+    'plugin pane becomes a custom combined feed',
+  )
+  const twitchChannel = (await backend.api.getWatchedChannels()).find(
+    (channel) => channel.platform === 'twitch' && channel.channelSlug === 'qa_twitch',
+  )
+  assert(twitchChannel)
+  backend.events.emit('watched_channel_message', {
+    channelId: twitchChannel.id,
+    message: {
+      id: 'twitch-in-plugin-feed',
+      platform: 'twitch',
+      channelId: twitchChannel.channelSlug,
+      author: { id: 'viewer', username: 'viewer', displayName: 'Viewer', badges: [] },
+      text: 'TWITCH IN PLUGIN FEED',
+      emotes: [],
+      timestamp: new Date(),
+      type: 'message',
+    },
+  })
+  await until(
+    () => painted('OPEN CaseSensitive') && painted('TWITCH IN PLUGIN FEED'),
+    'combined feed renders both plugin and Twitch messages',
+  )
+  await click('chat-feed-send-target')
+  await until(
+    () => Boolean(bounds(`chat-feed-target-${loopChannel.id}`)),
+    'plugin channel appears in send target picker',
+  )
+  await click(`chat-feed-target-${loopChannel.id}`)
+  await fill('chat-input', 'from mixed feed')
+  current().simulateKeystrokes('enter')
+  await until(() => painted('SENT from mixed feed'), 'sending to plugin target from combined feed')
+  await fill('chat-input', 'FAIL')
+  current().simulateKeystrokes('enter')
+  await until(
+    () => painted('transport rejected') && painted('FAIL'),
+    'failed plugin send surfaces error and retains draft',
+  )
+  await captureGuiQaDisplay('plugins-custom-combined-feed')
+
   await settings()
   await click('plugin-remove-qa-plugin')
   await until(() => plugins.list().length === 0, 'removed')
-  assert.equal((await backend.api.getWatchedChannels())[0]?.channelSlug, 'CaseSensitive')
+  assert(
+    (await backend.api.getWatchedChannels()).some(
+      (channel) => channel.channelSlug === 'CaseSensitive',
+    ),
+  )
   assert(await Bun.file(manifest).exists(), 'Removing a plugin preserves its source')
   await Bun.write(
     join(directory, 'plugins-result.json'),

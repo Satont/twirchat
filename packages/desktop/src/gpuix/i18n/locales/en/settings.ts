@@ -78,6 +78,8 @@ export const settings = {
   'settings.section.similarity.desc': 'Control repeated and almost identical messages',
   'settings.section.timestamps': 'Message Timestamps',
   'settings.section.timestamps.desc': 'Choose how chat timestamps look',
+  'settings.section.usernames': 'Usernames',
+  'settings.section.usernames.desc': 'Choose how localized nicknames appear in chat',
   'settings.section.replies': 'Replies',
   'settings.section.replies.desc': 'Choose how to start a reply to a message',
   'settings.section.twitch-chat-events': 'Twitch Chat Events',
@@ -120,6 +122,12 @@ export const settings = {
   'settings.chat.showTimestampHint': 'Display the time next to each chat message',
   'settings.chat.timestampFormat': 'Timestamp format',
   'settings.chat.timestampFormatHint': 'Example: {example}. 12-hour formats include AM/PM.',
+  'settings.chat.usernameDisplayMode': 'Localized nicknames',
+  'settings.chat.usernameDisplayModeHint':
+    'Example: {example}. Applies when a user has a localized display name.',
+  'settings.chat.usernameDisplayMode.localizedAndUsername': 'Localized (username)',
+  'settings.chat.usernameDisplayMode.localized': 'Localized only',
+  'settings.chat.usernameDisplayMode.username': 'Username only',
   'settings.chat.replyOnDoubleClick': 'Reply on double-click',
   'settings.chat.replyOnDoubleClickHint':
     'Double-click a chat message to reply to it. Turn off to select words with a double-click.',

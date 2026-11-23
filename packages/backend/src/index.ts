@@ -31,15 +31,17 @@ const twitchHistoryRoutes = createTwitchHistoryRoutes(
 
 await runMigrations()
 
-// Prefetch global Twitch badges at startup so the first request is instant
-
+// Warm the global Twitch badge cache so the first clients after a restart don't wait on Helix
 handleTwitchBadges(new URL('http://localhost/api/twitch/badges')).catch((error) => {
   log.warn('Failed to prefetch global Twitch badges', { err: String(error) })
 })
 
 const server = Bun.serve<WsData>({
+  // Bun closes a request after 10 idle seconds by default and the proxy reports that as 502.
+  // `routes` handlers never reach `fetch`, so they need a server-wide limit.
+  idleTimeout: 60,
   async fetch(req, server) {
-    // disable bun 10 seconds timeout
+    // Proxied media and other `fetch` requests may stream for longer than idleTimeout.
     server.timeout(req, 0)
 
     const url = new URL(req.url)

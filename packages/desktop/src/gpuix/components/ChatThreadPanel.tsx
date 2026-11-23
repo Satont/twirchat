@@ -107,6 +107,7 @@ export function ChatThreadPanel({
         channelSlug={channelSlug}
         showTimestamp={!preview && settings?.showTimestamp}
         timestampFormat={settings?.timestampFormat}
+        usernameDisplayMode={settings?.usernameDisplayMode}
         showAvatar={!preview && settings?.showAvatars}
         showBadges={settings?.showBadges}
         showPlatformColorStripe={false}

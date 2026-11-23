@@ -259,6 +259,9 @@ export type Language = 'en' | 'ru'
 /** Message timestamp formats supported by the desktop chat. */
 export type TimestampFormat = 'HH:MM:SS' | 'HH:MM' | 'HH:MM:SS.sss' | 'hh:MM A' | 'hh:MM:SS A'
 
+/** How localized chat author display names are shown alongside their login. */
+export type UsernameDisplayMode = 'localized-and-username' | 'localized' | 'username'
+
 export interface AppSettings {
   /** UI language; new installs start in English. */
   language: Language
@@ -272,6 +275,7 @@ export interface AppSettings {
   showPlatformIcon: boolean
   showTimestamp: boolean
   timestampFormat: TimestampFormat
+  usernameDisplayMode: UsernameDisplayMode
   /** Double-clicking a chat message starts a reply to it. */
   replyOnDoubleClick: boolean
   showTwitchJoinPart: boolean
@@ -353,6 +357,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPlatformIcon: true,
   showTimestamp: true,
   timestampFormat: 'HH:MM:SS',
+  usernameDisplayMode: 'localized-and-username',
   replyOnDoubleClick: true,
   showTwitchJoinPart: true,
   theme: 'dark',

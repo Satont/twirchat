@@ -1,5 +1,5 @@
 import type { PublicInstance } from '@gpuix/react'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import type { NormalizedChatMessage, UsernameDisplayMode } from '@twirchat/shared/types'
 import type { HistoryUserTarget } from '@views/main/utils/history-display'
 import type { ReactNode } from 'react'
 
@@ -26,5 +26,6 @@ export interface HistoryLoadOlderButtonProps {
 
 export interface HistoryMessageRowProps {
   message: NormalizedChatMessage
+  usernameDisplayMode?: UsernameDisplayMode
   visible: boolean
 }

@@ -4,7 +4,11 @@ import { handleChannelsStatus, InvalidChannelsStatusRequestError } from '../api/
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
 import { handleSearchCategories } from '../api/search-categories.ts'
 import { handleStreamStatus } from '../api/stream-status.ts'
-import { handleTwitchBadges, handleTwitchUserBadges } from '../api/twitch-badges.ts'
+import {
+  handleTwitchBadges,
+  handleTwitchUserBadges,
+  TwitchBadgesRequestError,
+} from '../api/twitch-badges.ts'
 import { fetchTwitchUserById, fetchTwitchUserByLogin } from '../api/twitch-users.ts'
 import { handleUpdateStream } from '../api/update-stream.ts'
 import { json, requireClient } from './utils.ts'
@@ -75,8 +79,12 @@ export const streamRoutes = {
     async GET(req: Request) {
       try {
         const result = await handleTwitchBadges(new URL(req.url))
-        return json(result)
+        // Public, slow-changing data: let the edge absorb release-time bursts and outages.
+        return json(result, 200, {
+          'Cache-Control': 'public, max-age=300, stale-if-error=86400',
+        })
       } catch (err) {
+        if (err instanceof TwitchBadgesRequestError) return json({ error: err.message }, 400)
         log.error('twitch/badges failed', { err: String(err) })
         return json({ error: String(err) }, 500)
       }

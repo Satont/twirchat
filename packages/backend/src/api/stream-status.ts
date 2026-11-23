@@ -16,8 +16,12 @@ import { config } from '../config.ts'
 // Twitch App Token (cached in-memory with expiry)
 // ----------------------------------------------------------------
 
+// Bun.serve answers in `routes` must finish well within its idleTimeout.
+const TWITCH_REQUEST_TIMEOUT_MS = 8000
+
 let twitchAppToken: string | null = null
 let twitchAppTokenExpiresAt = 0
+let pendingTwitchAppToken: Promise<string> | null = null
 
 function invalidateTwitchAppToken(): void {
   twitchAppToken = null
@@ -36,7 +40,14 @@ async function getTwitchAppToken(): Promise<string> {
   if (twitchAppToken && Date.now() < twitchAppTokenExpiresAt - 60_000) {
     return twitchAppToken
   }
+  // Concurrent requests after a restart or expiry share one token request.
+  pendingTwitchAppToken ??= requestTwitchAppToken().finally(() => {
+    pendingTwitchAppToken = null
+  })
+  return pendingTwitchAppToken
+}
 
+async function requestTwitchAppToken(): Promise<string> {
   const res = await fetch('https://id.twitch.tv/oauth2/token', {
     body: new URLSearchParams({
       client_id: config.TWITCH_CLIENT_ID,
@@ -45,6 +56,7 @@ async function getTwitchAppToken(): Promise<string> {
     }),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     method: 'POST',
+    signal: AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -70,6 +82,7 @@ async function fetchTwitchHelixWithAppToken(
   const response = await fetch(input, {
     ...init,
     headers: getTwitchHelixHeaders(token, init.headers),
+    signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 
   if (response.status !== 401) {
@@ -82,6 +95,7 @@ async function fetchTwitchHelixWithAppToken(
   return fetch(input, {
     ...init,
     headers: getTwitchHelixHeaders(refreshedToken, init.headers),
+    signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 }
 

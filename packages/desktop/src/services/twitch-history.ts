@@ -8,7 +8,11 @@ import { ChatMessage, extractMessageText, parseTwitchMessage } from '@twurple/ch
 import { z } from 'zod'
 
 import { t } from '../gpuix/i18n'
-import { parseTwitchBadgeCatalog } from '../platforms/twitch/badge-data'
+import {
+  createTwitchBadgeCatalog,
+  type TwitchBadgeCatalog,
+} from '../platforms/twitch/badge-catalog'
+import type { TwitchBadgeResolver } from '../platforms/twitch/badge-data'
 import { normalizeTwitchChatMessage } from '../platforms/twitch/normalize-message'
 import { backendFetch } from '../runtime-config'
 
@@ -57,13 +61,17 @@ interface QueuedRequest {
 export interface TwitchHistoryClientOptions {
   fetch?: typeof backendFetch
   now?: () => number
-  loadBadges?: (channel: string) => Promise<ReadonlyMap<string, Badge>>
+  /** Catalog shared with the live adapters; without one the client keeps its own over `fetch`. */
+  badges?: TwitchBadgeCatalog
+  loadBadges?: (channel: string) => Promise<TwitchBadgeResolver>
 }
+
+const BADGE_WAIT_MS = 3000
 
 export function parseTwitchHistoryLine(
   line: string,
   channel: string,
-  badges: ReadonlyMap<string, Badge> = new Map(),
+  badges: TwitchBadgeResolver = new Map(),
 ): NormalizedChatMessage | null {
   try {
     const parsed = parseTwitchMessage(line)
@@ -114,28 +122,12 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
   const pending = new Map<string, Promise<TwitchHistoryBatch>>()
   const queue: QueuedRequest[] = []
   const lifetime = new AbortController()
-  const badgeCache = new Map<string, { badges: ReadonlyMap<string, Badge>; expiresAt: number }>()
+  const badgeCatalog = options.badges ?? createTwitchBadgeCatalog({ fetch: request, now })
   const loadBadges =
     options.loadBadges ??
     (async (channel: string) => {
-      const cached = badgeCache.get(channel)
-      if (cached && cached.expiresAt > now()) return cached.badges
-      const response = await request(
-        `/api/twitch/badges?broadcasterLogin=${encodeURIComponent(channel)}`,
-        {
-          signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(3000)]),
-        },
-      )
-      if (!response.ok) throw new Error(t('notices.twitchHistory.badgesUnavailable'))
-      const badges = parseTwitchBadgeCatalog(await response.json())
-      badgeCache.delete(channel)
-      badgeCache.set(channel, { badges, expiresAt: now() + 30 * 60 * 1000 })
-      while (badgeCache.size > 64) {
-        const oldest = badgeCache.keys().next().value
-        if (oldest === undefined) break
-        badgeCache.delete(oldest)
-      }
-      return badges
+      await badgeCatalog.ready(channel, BADGE_WAIT_MS)
+      return badgeCatalog.resolver(channel)
     })
   let active = 0
   let cachedMessages = 0
@@ -229,7 +221,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
         entry.reject(new Error(t('notices.twitchHistory.stopped')))
       pending.clear()
       cache.clear()
-      badgeCache.clear()
+      if (!options.badges) badgeCatalog.dispose()
       cachedMessages = 0
     },
   }

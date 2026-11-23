@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 
 import type { NormalizedChatMessage, WatchedChannel } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
+import type { TwirNowPlaying } from '../src/services/twir-now-playing'
 import { focusNativeQaWindow, getNativeQaWindowGeometry } from './qa-x11'
 
 assertGuiQaEnvironment()
@@ -51,13 +55,21 @@ const bytes = await sharp({
 })
   .png()
   .toBuffer()
+const artworkUrl = 'https://i.scdn.co/image/now-playing-qa'
+const { getDbPath } = await import('../src/runtime-config')
+const imageCache = join(dirname(getDbPath()), 'image-cache')
+await mkdir(imageCache, { recursive: true })
+const artworkHash = createHash('sha256').update(artworkUrl).digest('hex').slice(0, 32)
+await Bun.write(join(imageCache, `${artworkHash}.png`), bytes)
+let track: TwirNowPlaying = { title: 'Track without artwork', artist: 'Twir QA' }
 const previewRequests: string[] = []
 backend.api.getChatImagePreview = createChatImagePreviewCache({
   load: async (url) => {
     previewRequests.push(url)
-    return url === 'https://example.com/short' ? bytes : undefined
+    return url === 'https://example.com/short' || url === artworkUrl ? bytes : undefined
   },
 })
+backend.api.getTwirNowPlaying = async () => track
 backend.api.getChannelEmotes = async () => []
 backend.api.getModerationCapabilities = async () => ({ canModerate: false })
 app.accountsStore.set([
@@ -174,6 +186,32 @@ function incoming(id: string, text: string) {
   return message
 }
 
+async function verifyViewer(screenshotName: string) {
+  await until(
+    () =>
+      viewer &&
+      nativeWindow(viewer).isWindowOpen() &&
+      viewer.getAutomationTree().includes('chat-image-viewer'),
+    'native floating image viewer',
+  )
+  await focusNativeQaWindow('TwirChat — Image preview')
+  await Bun.sleep(250)
+  const screenshot = await captureGuiQaDisplay(screenshotName)
+  const { x, y, width, height } = getNativeQaWindowGeometry('TwirChat — Image preview')
+  const center = await sharp(screenshot)
+    .extract({
+      left: Math.round(x + width / 2),
+      top: Math.round(y + height / 2),
+      width: 1,
+      height: 1,
+    })
+    .raw()
+    .toBuffer()
+  assert((center[1] ?? 0) > 130 && (center[0] ?? 255) < 75, 'viewer paints the test image')
+  input('key', 'Escape')
+  await until(() => viewer && !nativeWindow(viewer).isWindowOpen(), 'close image window')
+}
+
 try {
   await manager.start()
   await until(() => renderer && find('chat-input'), 'normal chat pane')
@@ -181,6 +219,42 @@ try {
   incoming('disabled', 'https://example.com/disabled')
   await until(() => painted('https://example.com/disabled'), 'original link with previews off')
   assert.equal(previewRequests.length, 0)
+
+  const artworkId = 'chat-twir-now-playing-artwork'
+  const nowPlayingSettings = { ...DEFAULT_SETTINGS, showAvatars: false }
+  app.settingsStore.set({ ...nowPlayingSettings, twirNowPlayingEnabled: true })
+  await until(() => painted('Track without artwork'), 'track without artwork')
+  click(artworkId)
+  app.settingsStore.set({ ...nowPlayingSettings, twirNowPlayingEnabled: false })
+  await until(() => !find(artworkId), 'now playing banner unmounted')
+  assert.equal(previewRequests.length, 0)
+  assert.equal(viewer, undefined)
+
+  track = { title: 'Track with artwork', artist: 'Twir QA', imageUrl: artworkUrl }
+  app.settingsStore.set({ ...nowPlayingSettings, twirNowPlayingEnabled: true })
+  await until(() => painted('Track with artwork'), 'track with artwork')
+  click('chat-twir-now-playing')
+  click(artworkId, 3)
+  await captureGuiQaDisplay('twir-now-playing-banner')
+  assert.equal(previewRequests.length, 0)
+  click(artworkId)
+  await until(() => previewRequests.includes(artworkUrl), 'request track artwork preview')
+  await verifyViewer('twir-now-playing-artwork')
+  assert.deepEqual(previewRequests, [artworkUrl])
+
+  await nativeWindow(current()).setWindowBounds({ width: 320, height: 300 })
+  await focusNativeQaWindow('TwirChat')
+  for (let index = 0; index < 60; index++) incoming(`artwork-traffic-${index}`, `ARTWORK_${index}`)
+  await until(() => painted('ARTWORK_59'), 'live chat in small viewport')
+  const artwork = find(artworkId)
+  assert(artwork)
+  current().focusElement(artwork.id)
+  await until(() => current().getFocusedElementId() === artwork.id, 'focus track artwork')
+  input('key', 'space')
+  await verifyViewer('twir-now-playing-artwork-keyboard')
+
+  await nativeWindow(current()).setWindowBounds({ width: 900, height: 600 })
+  await focusNativeQaWindow('TwirChat')
   const enablePreviews = (chatTheme: 'modern' | 'compact') =>
     app.settingsStore.set({
       ...DEFAULT_SETTINGS,
@@ -201,27 +275,7 @@ try {
   assert.equal(nodes().filter(({ testId }) => testId === 'chat-image-thumbnail-modern').length, 1)
   await captureGuiQaDisplay('chat-image-preview-modern')
   click('chat-image-thumbnail-modern')
-  await until(
-    () => viewer?.getAutomationTree().includes('chat-image-viewer'),
-    'native floating image viewer',
-  )
-  assert(viewer)
-  await focusNativeQaWindow('TwirChat — Image preview')
-  await Bun.sleep(250)
-  const screenshot = await captureGuiQaDisplay('chat-image-preview-window')
-  const { x, y, width, height } = getNativeQaWindowGeometry('TwirChat — Image preview')
-  const center = await sharp(screenshot)
-    .extract({
-      left: Math.round(x + width / 2),
-      top: Math.round(y + height / 2),
-      width: 1,
-      height: 1,
-    })
-    .raw()
-    .toBuffer()
-  assert((center[1] ?? 0) > 130 && (center[0] ?? 255) < 75, 'viewer paints the test image')
-  input('key', 'Escape')
-  await until(() => viewer && !nativeWindow(viewer).isWindowOpen(), 'close image window')
+  await verifyViewer('chat-image-preview-window')
 
   enablePreviews('compact')
   await nativeWindow(current()).setWindowBounds({ width: 320, height: 300 })
