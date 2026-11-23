@@ -1,3 +1,4 @@
+import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { FormField, FormInput, ActionButton } from '@gpuix/components/ui/Form'
 import { useT } from '@gpuix/i18n'
 import type { IconName } from '@gpuix/icons'
@@ -40,9 +41,19 @@ function ModerationBlock({ icon, title, hint, bg, children }: ModerationBlockPro
 
 export function ModerationSection({ target, channel, moderation, bg }: ModerationSectionProps) {
   const { t } = useT()
+  const { showToast } = useActionToast()
   const { settings, reason, setReason, busy, run, command, moderate } = moderation
   const [seconds, setSeconds] = useState('600')
   const identity = target.platformUserId
+
+  async function execute(
+    action: () => Promise<unknown>,
+    message: string,
+    event?: ActionClickEvent,
+  ) {
+    const result = await run(action, message)
+    if (!result.ok) showToast(result.message, event)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -69,11 +80,12 @@ export function ModerationSection({ target, channel, moderation, bg }: Moderatio
           <ActionButton
             icon="alert"
             disabled={busy || !reason.trim()}
-            onClick={() =>
-              void run(
+            onClick={(event) =>
+              void execute(
                 () => command(`/warn ${identity} ${reason.trim()}`),
                 t('userCard.feedback.warningIssued'),
-              )
+                event,
+              ).catch(() => {})
             }
           >
             {t('userCard.actions.warn')}
@@ -93,11 +105,12 @@ export function ModerationSection({ target, channel, moderation, bg }: Moderatio
               key={index}
               icon="clock"
               disabled={busy || (target.platform === 'kick' && item.seconds < 60)}
-              onClick={() =>
-                void run(
+              onClick={(event) =>
+                void execute(
                   () => moderate('timeout', item.seconds),
                   t('userCard.feedback.timedOut', { duration: item.label }),
-                )
+                  event,
+                ).catch(() => {})
               }
             >
               {item.label}
@@ -115,11 +128,12 @@ export function ModerationSection({ target, channel, moderation, bg }: Moderatio
           <ActionButton
             icon="clock"
             disabled={busy}
-            onClick={() =>
-              void run(
+            onClick={(event) =>
+              void execute(
                 () => moderate('timeout', Number(seconds)),
                 t('userCard.feedback.timeoutApplied'),
-              )
+                event,
+              ).catch(() => {})
             }
           >
             {t('userCard.actions.customTimeout')}
@@ -128,14 +142,22 @@ export function ModerationSection({ target, channel, moderation, bg }: Moderatio
             icon="lock"
             danger
             disabled={busy}
-            onClick={() => void run(() => moderate('ban'), t('userCard.feedback.banned'))}
+            onClick={(event) =>
+              void execute(() => moderate('ban'), t('userCard.feedback.banned'), event).catch(
+                () => {},
+              )
+            }
           >
             {t('userCard.actions.ban')}
           </ActionButton>
           <ActionButton
             icon="check"
             disabled={busy}
-            onClick={() => void run(() => moderate('unban'), t('userCard.feedback.unbanned'))}
+            onClick={(event) =>
+              void execute(() => moderate('unban'), t('userCard.feedback.unbanned'), event).catch(
+                () => {},
+              )
+            }
           >
             {t('userCard.actions.unban')}
           </ActionButton>

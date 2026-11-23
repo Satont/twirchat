@@ -87,6 +87,7 @@ export function useTwitchUserBadges(identity: TwitchBadgesIdentity): {
         } catch {
           if (!request.signal.aborted) {
             log.warn('Failed to load Twitch badge collection')
+            setStored({ kind: 'error', key })
           }
         }
       })(),

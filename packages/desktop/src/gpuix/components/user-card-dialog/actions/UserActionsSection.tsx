@@ -99,21 +99,23 @@ export function UserActionsSection({ target, moderation, bg }: UserActionsSectio
         >
           {blocked ? t('userCard.actions.unblock') : t('userCard.actions.block')}
         </ActionButton>
-        <ActionButton
-          icon={following ? 'close' : 'plus'}
-          active={following}
-          style={{
-            flexShrink: 1,
-            flexGrow: 1,
-            flexBasis: 0,
-          }}
-          disabled={busy || !target.username}
-          onClick={(event) => {
-            void toggleFollow(event).catch(() => {})
-          }}
-        >
-          {following ? t('userCard.actions.unfollow') : t('userCard.actions.follow')}
-        </ActionButton>
+        {target.platform === 'twitch' ? (
+          <ActionButton
+            icon={following ? 'close' : 'plus'}
+            active={following}
+            style={{
+              flexShrink: 1,
+              flexGrow: 1,
+              flexBasis: 0,
+            }}
+            disabled={busy || !target.username}
+            onClick={(event) => {
+              void toggleFollow(event).catch(() => {})
+            }}
+          >
+            {following ? t('userCard.actions.unfollow') : t('userCard.actions.follow')}
+          </ActionButton>
+        ) : null}
       </div>
     </div>
   )

@@ -48,6 +48,7 @@ export function rememberWhisperRecipient(username: string): void {
 const WHISPER_HISTORY_KEY = 'whisper_history_v1'
 const WHISPER_CONTACTS_KEY = 'whisper_contacts_v1'
 const MAX_WHISPERS = 1000
+const MAX_CONTACTS = 500
 const whisperContactsSchema = z.array(
   z.object({
     userId: z.string(),
@@ -73,10 +74,13 @@ function currentTwitchAccountId(): string | undefined {
   return accountsStore.get().find((account) => account.platform === 'twitch')?.id
 }
 
-export async function loadWhisperHistory(api: Pick<DesktopApi, 'getUiState'>): Promise<void> {
-  const accountId = currentTwitchAccountId()
+export async function loadWhisperHistory(
+  api: Pick<DesktopApi, 'getUiState'>,
+  accountId: string | undefined = currentTwitchAccountId(),
+): Promise<void> {
   if (!accountId) return
   const raw = await api.getUiState({ key: `${WHISPER_HISTORY_KEY}:${accountId}` })
+  if (currentTwitchAccountId() !== accountId) return
   if (!raw) return
   let saved: z.infer<typeof whisperHistorySchema>
   try {
@@ -91,10 +95,13 @@ export async function loadWhisperHistory(api: Pick<DesktopApi, 'getUiState'>): P
   })
 }
 
-export async function loadWhisperContacts(api: Pick<DesktopApi, 'getUiState'>): Promise<void> {
-  const accountId = currentTwitchAccountId()
+export async function loadWhisperContacts(
+  api: Pick<DesktopApi, 'getUiState'>,
+  accountId: string | undefined = currentTwitchAccountId(),
+): Promise<void> {
   if (!accountId) return
   const raw = await api.getUiState({ key: `${WHISPER_CONTACTS_KEY}:${accountId}` })
+  if (currentTwitchAccountId() !== accountId) return
   if (!raw) return
   let saved: z.infer<typeof whisperContactsSchema>
   try {
@@ -105,7 +112,7 @@ export async function loadWhisperContacts(api: Pick<DesktopApi, 'getUiState'>): 
   whisperContactsStore.modify((current) => {
     const byId = new Map(current.map((contact) => [contact.userId, contact]))
     for (const contact of saved) byId.set(contact.userId, contact)
-    return [...byId.values()]
+    return [...byId.values()].slice(-MAX_CONTACTS)
   })
 }
 
@@ -113,11 +120,20 @@ export function rememberWhisperContact(
   api: Pick<DesktopApi, 'setUiState'>,
   contact: WhisperContact,
 ): void {
-  whisperContactsStore.modify((current) =>
-    current.some((existing) => existing.userId === contact.userId)
-      ? current.map((existing) => (existing.userId === contact.userId ? contact : existing))
-      : [...current, contact],
-  )
+  const before = whisperContactsStore.get()
+  whisperContactsStore.modify((current) => {
+    const existing = current.find((item) => item.userId === contact.userId)
+    if (
+      existing?.login === contact.login &&
+      existing.displayName === contact.displayName &&
+      existing.avatarUrl === contact.avatarUrl
+    )
+      return current
+    return [...current.filter((item) => item.userId !== contact.userId), contact].slice(
+      -MAX_CONTACTS,
+    )
+  })
+  if (whisperContactsStore.get() === before) return
   const accountId = currentTwitchAccountId()
   if (!accountId) return
   whisperWrites = whisperWrites
@@ -272,8 +288,18 @@ export function wireTwitchActivities(backend: {
   events: DesktopBackend['events']
   api: Pick<DesktopApi, 'getTwitchActivities' | 'getUiState' | 'setUiState'>
 }): () => void {
-  void loadWhisperHistory(backend.api).catch(() => {})
-  void loadWhisperContacts(backend.api).catch(() => {})
+  let loadedAccountId = currentTwitchAccountId()
+  const offAccountStore = accountsStore.subscribe(() => {
+    const accountId = currentTwitchAccountId()
+    if (accountId === loadedAccountId) return
+    loadedAccountId = accountId
+    whispersStore.set([])
+    whisperContactsStore.set([])
+    lastWhisperRecipientStore.set(null)
+    if (!accountId) return
+    void loadWhisperHistory(backend.api, accountId).catch(() => {})
+    void loadWhisperContacts(backend.api, accountId).catch(() => {})
+  })
   const offAccounts = backend.events.on('accounts_changed', ({ platform, identityChanged }) => {
     if (platform !== 'twitch' || !identityChanged) return
     requestRevision++
@@ -286,8 +312,6 @@ export function wireTwitchActivities(backend: {
     whispersStore.set([])
     whisperContactsStore.set([])
     lastWhisperRecipientStore.set(null)
-    void loadWhisperHistory(backend.api).catch(() => {})
-    void loadWhisperContacts(backend.api).catch(() => {})
   })
   const offWebSession = backend.events.on('twitch_web_session_changed', () => {
     requestRevision++
@@ -343,6 +367,7 @@ export function wireTwitchActivities(backend: {
     rememberWhisper(backend.api, message)
   })
   return () => {
+    offAccountStore()
     offAccounts()
     offWebSession()
     offActivity()

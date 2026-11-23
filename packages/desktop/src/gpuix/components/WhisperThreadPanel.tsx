@@ -39,6 +39,10 @@ export function WhisperThreadPanel({ target, onClose }: WhisperThreadPanelProps)
     accountsStore,
     (accounts) => accounts.find((account) => account.platform === 'twitch')?.displayName,
   )
+  const ownUsername = useStoreSelector(
+    accountsStore,
+    (accounts) => accounts.find((account) => account.platform === 'twitch')?.username,
+  )
   const badge = target.badges?.[0]
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -75,7 +79,7 @@ export function WhisperThreadPanel({ target, onClose }: WhisperThreadPanelProps)
     try {
       await backend.api.executeTwitchActivityAction({
         action: 'send_whisper',
-        channelSlug: target.channelSlug ?? '',
+        channelSlug: target.channelSlug ?? ownUsername ?? '',
         username: target.username ?? target.displayName,
         text: message,
       })

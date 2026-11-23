@@ -34,7 +34,7 @@ export function UserCardActions({ target, moderation, onOpenWhispers }: UserCard
         <ActiveActionsSection target={target} moderation={moderation} bg={blockBg} />
         <UserActionsSection target={target} moderation={moderation} bg={blockBg} />
       </div>
-      {target.platform === 'twitch' && !isSelf ? (
+      {target.platform === 'twitch' && !isSelf && onOpenWhispers ? (
         <WhisperSection
           target={target}
           moderation={moderation}

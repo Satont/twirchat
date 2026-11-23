@@ -1,4 +1,5 @@
 import { useBackend } from '@gpuix/backend/context'
+import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { ActionButton } from '@gpuix/components/ui/Form'
 import { useT } from '@gpuix/i18n'
 import type { IconName } from '@gpuix/icons'
@@ -14,10 +15,6 @@ import type { TwitchModerationActionsProps } from './types'
 interface RoleState {
   moderator: boolean
   vip: boolean
-  restricted: boolean
-  monitored: boolean
-  editor: boolean
-  leadModerator: boolean
 }
 
 interface RoleOption {
@@ -26,8 +23,14 @@ interface RoleOption {
   icon: IconName
   key?: keyof RoleState
   next?: boolean
-  activity?: boolean
 }
+
+const ACTIVITY_ACTIONS = [
+  'add_editor',
+  'remove_editor',
+  'assign_lead_moderator',
+  'unassign_lead_moderator',
+]
 
 export function TwitchModerationActions({
   target,
@@ -35,6 +38,7 @@ export function TwitchModerationActions({
   moderation,
 }: TwitchModerationActionsProps) {
   const backend = useBackend()
+  const { showToast } = useActionToast()
   const theme = useTheme()
   const { t } = useT()
   const { run, command, busy } = moderation
@@ -55,33 +59,32 @@ export function TwitchModerationActions({
   const [roles, setRoles] = useState<RoleState>(() => ({
     moderator: target.badges?.some((badge) => badge.type === 'moderator') ?? false,
     vip: target.badges?.some((badge) => badge.type === 'vip') ?? false,
-    restricted: false,
-    monitored: false,
-    editor: false,
-    leadModerator: false,
   }))
   const identity = target.platformUserId
 
-  async function apply(option: RoleOption, message: string) {
+  async function apply(option: RoleOption, message: string, event?: ActionClickEvent) {
     const result = await run(async () => {
-      if (option.activity && option.key) {
-        const action =
-          option.key === 'editor'
-            ? option.next
-              ? 'add_editor'
-              : 'remove_editor'
-            : option.next
-              ? 'assign_lead_moderator'
-              : 'unassign_lead_moderator'
-        await backend.api.executeTwitchActivityAction(
-          action === 'add_editor' || action === 'remove_editor'
-            ? { action, channelSlug: channel, username: target.username ?? '' }
-            : { action, channelSlug: channel, userId: identity },
-        )
+      if (ACTIVITY_ACTIONS.some((name) => name === option.command)) {
+        if (option.command === 'add_editor' || option.command === 'remove_editor')
+          await backend.api.executeTwitchActivityAction({
+            action: option.command,
+            channelSlug: channel,
+            username: target.username ?? '',
+          })
+        else
+          await backend.api.executeTwitchActivityAction({
+            action:
+              option.command === 'assign_lead_moderator'
+                ? 'assign_lead_moderator'
+                : 'unassign_lead_moderator',
+            channelSlug: channel,
+            userId: identity,
+          })
         return
       }
       await command(option.command)
     }, message)
+    if (!result.ok) showToast(result.message, event)
     const key = option.key
     const next = option.next
     if (result.ok && key !== undefined && next !== undefined)
@@ -122,54 +125,24 @@ export function TwitchModerationActions({
   ]
 
   const suspiciousOptions: RoleOption[] = [
-    roles.restricted
-      ? {
-          command: `/unrestrict ${identity}`,
-          label: t('userCard.role.unrestrict'),
-          icon: 'check',
-          key: 'restricted',
-          next: false,
-        }
-      : {
-          command: `/restrict ${identity}`,
-          label: t('userCard.role.restrict'),
-          icon: 'lock',
-          key: 'restricted',
-          next: true,
-        },
-    roles.monitored
-      ? {
-          command: `/unmonitor ${identity}`,
-          label: t('userCard.role.unmonitor'),
-          icon: 'close',
-          key: 'monitored',
-          next: false,
-        }
-      : {
-          command: `/monitor ${identity}`,
-          label: t('userCard.role.monitor'),
-          icon: 'eye',
-          key: 'monitored',
-          next: true,
-        },
+    { command: `/restrict ${identity}`, label: t('userCard.role.restrict'), icon: 'lock' },
+    { command: `/unrestrict ${identity}`, label: t('userCard.role.unrestrict'), icon: 'check' },
+    { command: `/monitor ${identity}`, label: t('userCard.role.monitor'), icon: 'eye' },
+    { command: `/unmonitor ${identity}`, label: t('userCard.role.unmonitor'), icon: 'close' },
   ]
 
   const channelOptions: RoleOption[] = [
+    { command: 'add_editor', label: t('userCard.role.addEditor'), icon: 'plus' },
+    { command: 'remove_editor', label: t('userCard.role.removeEditor'), icon: 'close' },
     {
-      command: '',
-      label: roles.editor ? t('userCard.role.removeEditor') : t('userCard.role.addEditor'),
-      icon: roles.editor ? 'close' : 'plus',
-      key: 'editor',
-      next: !roles.editor,
-      activity: true,
+      command: 'assign_lead_moderator',
+      label: t('userCard.role.assignLead'),
+      icon: 'star',
     },
     {
-      command: '',
-      label: roles.leadModerator ? t('userCard.role.unassignLead') : t('userCard.role.assignLead'),
-      icon: roles.leadModerator ? 'close' : 'star',
-      key: 'leadModerator',
-      next: !roles.leadModerator,
-      activity: true,
+      command: 'unassign_lead_moderator',
+      label: t('userCard.role.unassignLead'),
+      icon: 'close',
     },
   ]
 
@@ -182,11 +155,17 @@ export function TwitchModerationActions({
             <ActionButton
               key={option.label}
               icon={option.icon}
-              disabled={busy || (option.key === 'editor' && !target.username)}
-              onClick={() =>
-                void apply(option, t('userCard.feedback.accepted', { action: option.label })).catch(
-                  () => {},
-                )
+              disabled={
+                busy ||
+                ((option.command === 'add_editor' || option.command === 'remove_editor') &&
+                  !target.username)
+              }
+              onClick={(event) =>
+                void apply(
+                  option,
+                  t('userCard.feedback.accepted', { action: option.label }),
+                  event,
+                ).catch(() => {})
               }
             >
               {option.label}
