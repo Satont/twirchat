@@ -90,12 +90,12 @@ export function ChangelogActions({ version, onClose }: ChangelogActionsProps) {
             flexDirection: 'row',
             fontWeight: 800,
             alignItems: 'center',
-            color: theme.text2,
+            color: theme.accent.onDeep,
             gap: 4,
           }}
         >
           {t('common.close')}
-          <Icon size={14} name="check" color={theme.text2} />
+          <Icon size={14} name="check" color={theme.accent.onDeep} />
         </div>
       </div>
     </div>
