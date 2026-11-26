@@ -776,14 +776,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         testId={`mention-avatar-${message.id}`}
         style={{
           display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 4,
           flexShrink: 0,
           marginLeft: 3,
-          paddingRight: 4,
-          borderRadius: 8,
-          backgroundColor: theme.accent.tint12,
         }}
       >
         <RemoteImage
@@ -814,15 +808,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             </div>
           }
         />
-        <Text
-          style={{
-            fontSize: Math.round(fontSize * 0.85),
-            color: theme.accent.primary,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {`@${mentionedUser.username}`}
-        </Text>
       </div>
     ) : null
 
