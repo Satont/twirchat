@@ -1,0 +1,35 @@
+name: Token probe
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  job-level-write:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: curl releases with job-level write token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code="$(curl -s -o "$RUNNER_TEMP/body.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=1")"
+          echo "http=$code"
+          head -c 300 "$RUNNER_TEMP/body.json"; echo
+      - name: gh releases with job-level write token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1" -q 'length' 2>&1 | head -3
+  workflow-level-read:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: gh releases with workflow-level read token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1" -q 'length' 2>&1 | head -3
