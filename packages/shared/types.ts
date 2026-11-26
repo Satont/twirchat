@@ -281,7 +281,7 @@ export interface AppSettings {
   showTwitchJoinPart: boolean
   showAvatars: boolean
   showBadges: boolean
-  /** Show the mentioner's avatar and @login on messages that ping you. */
+  /** Show the mentioned user's avatar and @login inline in chat messages. */
   showMentionAvatar?: boolean
   showChannelLabel: boolean
   showChatImagePreviews?: boolean

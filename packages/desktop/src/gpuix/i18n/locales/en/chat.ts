@@ -155,7 +155,7 @@ export const chat = {
   'chat.appearance.toggle.stripe': 'Color stripe',
   'chat.appearance.toggle.platformIcon': 'Platform icon',
   'chat.appearance.toggle.avatars': 'Avatars',
-  'chat.appearance.toggle.mentionAvatar': 'Mention avatars',
+  'chat.appearance.toggle.mentionAvatar': 'Mentioned user avatar',
   'chat.appearance.toggle.badges': 'Badges',
   'chat.appearance.toggle.timestamp': 'Timestamp',
   'chat.imagePreview.setting': 'Image previews',

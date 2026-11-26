@@ -39,6 +39,7 @@ import {
   isMessageRowContextMenu,
   isMessageRowDoubleClick,
 } from '../message-row-click'
+import { buildMessageTokens } from '../message-tokens'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
@@ -635,7 +636,36 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const [ignoredRevealed, setIgnoredRevealed] = useState(false)
   const [menuRequest, setMenuRequest] = useState(0)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  const [mentionedUser, setMentionedUser] = useState<{
+    username: string
+    avatarUrl?: string
+  } | null>(null)
   const clearMenuPosition = useCallback(() => setMenuPosition(null), [])
+  const mentionedUsername = useMemo(
+    () => buildMessageTokens(message).find((token) => token.kind === 'mention')?.username,
+    [message],
+  )
+  useEffect(() => {
+    if (props.showMentionAvatar === false || !mentionedUsername) {
+      setMentionedUser(null)
+      return
+    }
+    let active = true
+    backend.api
+      .resolveMentionUser({ platform: message.platform, username: mentionedUsername })
+      .then((user) => {
+        if (!active) return
+        setMentionedUser(
+          user ? { username: user.username ?? mentionedUsername, avatarUrl: user.avatarUrl } : null,
+        )
+      })
+      .catch(() => {
+        if (active) setMentionedUser(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [backend, mentionedUsername, message.platform, props.showMentionAvatar])
   const cosmetics = useAuthorCosmetics(
     message,
     props.visible !== false && (!props.hiddenLabel || ignoredRevealed),
@@ -741,7 +771,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
   const authorName = formatChatAuthorName(message.author, props.usernameDisplayMode, props.alias)
   const mentionChip =
-    isSelfPing && props.showMentionAvatar !== false && !isTombstone ? (
+    props.showMentionAvatar !== false && mentionedUser && !isTombstone ? (
       <div
         testId={`mention-avatar-${message.id}`}
         style={{
@@ -750,18 +780,39 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           alignItems: 'center',
           gap: 4,
           flexShrink: 0,
-          marginRight: 5,
-          paddingLeft: 3,
-          paddingRight: 5,
+          marginLeft: 3,
+          paddingRight: 4,
           borderRadius: 8,
           backgroundColor: theme.accent.tint12,
         }}
       >
-        <Avatar
-          message={message}
-          size={compactAvatarSize(fontSize)}
-          visible={props.visible}
-          label={authorName}
+        <RemoteImage
+          url={mentionedUser.avatarUrl}
+          objectFit="cover"
+          thumbnailSize={48}
+          style={{
+            width: compactAvatarSize(fontSize),
+            height: compactAvatarSize(fontSize),
+            borderRadius: compactAvatarSize(fontSize) / 2,
+          }}
+          fallback={
+            <div
+              style={{
+                width: compactAvatarSize(fontSize),
+                height: compactAvatarSize(fontSize),
+                borderRadius: compactAvatarSize(fontSize) / 2,
+                backgroundColor: theme.accent.primary,
+                color: theme.accent.onDeep,
+                fontSize: Math.round(fontSize * 0.6),
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {initialsOf(mentionedUser.username, 2)}
+            </div>
+          }
         />
         <Text
           style={{
@@ -770,7 +821,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             whiteSpace: 'nowrap',
           }}
         >
-          {`@${message.author.username ?? message.author.displayName}`}
+          {`@${mentionedUser.username}`}
         </Text>
       </div>
     ) : null
@@ -1032,7 +1083,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             rowGap: 2,
           }}
         >
-          {mentionChip}
           {props.showTimestamp ? (
             <Text
               testId={`chat-timestamp-${message.id}`}
@@ -1110,6 +1160,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           >
             {isAction ? ' ' : ': '}
           </Text>
+          {mentionChip}
           <MessageTokens
             message={message}
             channelSlug={props.channelSlug}
@@ -1242,7 +1293,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             flexWrap: 'wrap',
           }}
         >
-          {mentionChip}
           {sourceLabel}
           {props.showBadges !== false ? (
             <BadgeList
@@ -1263,6 +1313,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             onMention={mentionAuthor}
             testId={`chat-author-${message.platform}-${message.id}`}
           />
+          {mentionChip}
           {isFirstMessage ? (
             <BadgeComponent
               variant="warning"
