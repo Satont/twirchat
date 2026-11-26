@@ -28,6 +28,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1" -q 'length' 2>&1 | head -3
+      - name: exact publish listing command
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == "v1.21.17") | [.id, .draft] | @tsv' > "$RUNNER_TEMP/existing-release.txt"
+          echo "lines=$(wc -l < "$RUNNER_TEMP/existing-release.txt")"
+      - name: curl rate limit and headers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -s -D "$RUNNER_TEMP/h.txt" -o /dev/null -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=100"
+          grep -iE '^x-ratelimit|^HTTP/' "$RUNNER_TEMP/h.txt"
+      - name: gh release list
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release list --limit 1 2>&1 | head -3
   workflow-level-read:
     runs-on: ubuntu-24.04
     steps:
