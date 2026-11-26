@@ -183,6 +183,53 @@ describe('Twitch EventSub lifecycle', () => {
     expect(f.moderationNotices).toHaveLength(1)
   })
 
+  test('names the acting moderator for Channel Moderate bans, timeouts, and lifts', async () => {
+    const f = fixture()
+    await f.client.watch('creator', true)
+    const socket = required(f.sockets[0])
+    socket.welcome()
+    await settle()
+    const send = (event: object, id: string) =>
+      socket.message('notification', { subscription: { type: 'channel.moderate' }, event }, id)
+    const base = { broadcaster_user_login: 'Creator', moderator_user_login: 'moddy' }
+    send({ ...base, action: 'ban', ban: { user_login: 'chatter', reason: '' } }, 'ban')
+    send(
+      {
+        ...base,
+        action: 'timeout',
+        timeout: { user_login: 'chatter', reason: '', expires_at: '2026-11-02T00:10:00Z' },
+      },
+      'timeout',
+    )
+    send({ ...base, action: 'unban', unban: { user_login: 'chatter' } }, 'unban')
+    send({ ...base, action: 'untimeout', untimeout: { user_login: 'chatter' } }, 'untimeout')
+    expect(f.moderationNotices.map((notice) => notice.text)).toEqual([
+      '@moddy banned @chatter',
+      '@moddy timed out @chatter for 10m',
+      '@moddy unbanned @chatter',
+      '@moddy removed the timeout for @chatter',
+    ])
+  })
+
+  test('reports Channel Moderate coverage only while that subscription is live', async () => {
+    const f = fixture({
+      subscribe: async (session, channel) => ({
+        subscriptions: channel
+          ? [{ id: `${session}:${channel}`, type: 'channel.moderate', condition: {} }]
+          : [],
+        errors: [],
+      }),
+    })
+    expect(f.client.hasModerationEvents('creator')).toBe(false)
+    await f.client.watch('#Creator', true)
+    const socket = required(f.sockets[0])
+    socket.welcome()
+    await settle()
+    expect(f.client.hasModerationEvents('creator')).toBe(true)
+    await f.client.watch('creator', false)
+    expect(f.client.hasModerationEvents('creator')).toBe(false)
+  })
+
   test('delivers AutoMod only for watched channels and clears the queue on final unwatch', async () => {
     const f = fixture()
     await f.client.watch('Creator', true)

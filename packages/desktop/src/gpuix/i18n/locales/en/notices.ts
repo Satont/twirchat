@@ -201,6 +201,7 @@ export const notices = {
   'notices.twitchModeration.raidCanceled': 'canceled the raid to {user}',
   'notices.twitchModeration.banned': 'banned {user}',
   'notices.twitchModeration.timedOut': 'timed out {user}',
+  'notices.twitchModeration.timedOutFor': 'timed out {user} for {duration}',
   'notices.twitchModeration.messageDeleted': 'deleted a message from {user}',
   'notices.twitchModeration.unbanApproved': 'approved the unban request from {user}',
   'notices.twitchModeration.unbanDenied': 'denied the unban request from {user}',

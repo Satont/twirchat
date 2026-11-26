@@ -64,13 +64,17 @@ type Envelope = {
 }
 const SOCKET_URL = 'wss://eventsub.wss.twitch.tv/ws'
 
+function channelKey(channelSlug: string): string {
+  return channelSlug.trim().replace(/^#/, '').toLowerCase()
+}
+
 /** One connection per account. Server migrations retain subscriptions; ordinary disconnects rebuild them. */
 export class TwitchEventSubClient {
   private socket: EventSubSocket | null = null
   private replacement: EventSubSocket | null = null
   private sessionId: string | null = null
   private channels = new Map<string, number>()
-  private subscriptions = new Map<string, string[]>()
+  private subscriptions = new Map<string, TwitchEventSubscription[]>()
   private registering = new Map<string, symbol>()
   private unregistering = new Map<string, Promise<void>>()
   private seenMessages = new Set<string>()
@@ -94,6 +98,14 @@ export class TwitchEventSubClient {
     this.start()
   }
 
+  /** Whether Channel Moderate notifications (which name the acting moderator) are live here. */
+  hasModerationEvents(channelSlug: string): boolean {
+    if (!this.sessionId) return false
+    return (this.subscriptions.get(channelKey(channelSlug)) ?? []).some(
+      (subscription) => subscription.type === 'channel.moderate',
+    )
+  }
+
   stop(): void {
     this.stopped = true
     this.generation++
@@ -115,7 +127,7 @@ export class TwitchEventSubClient {
   }
 
   async watch(channelSlug: string, watch: boolean): Promise<void> {
-    const key = channelSlug.trim().replace(/^#/, '').toLowerCase()
+    const key = channelKey(channelSlug)
     if (!key) return
     const count = this.channels.get(key) ?? 0
     if (watch) {
@@ -126,9 +138,12 @@ export class TwitchEventSubClient {
     else if (count > 0) {
       this.channels.delete(key)
       this.dependencies.autoMod({ type: 'clear', channelSlug: key })
-      const ids = this.subscriptions.get(key) ?? []
+      const subscriptions = this.subscriptions.get(key) ?? []
       this.subscriptions.delete(key)
-      await this.removeSubscriptions(key, ids)
+      await this.removeSubscriptions(
+        key,
+        subscriptions.map(({ id }) => id),
+      )
     }
   }
 
@@ -242,11 +257,11 @@ export class TwitchEventSubClient {
       } else if (type === 'revocation') {
         const revoked = envelope.payload?.subscription
         if (revoked?.id) {
-          for (const [key, ids] of this.subscriptions) {
-            if (!ids.includes(revoked.id)) continue
+          for (const [key, subscriptions] of this.subscriptions) {
+            if (!subscriptions.some(({ id }) => id === revoked.id)) continue
             this.subscriptions.set(
               key,
-              ids.filter((id) => id !== revoked.id),
+              subscriptions.filter(({ id }) => id !== revoked.id),
             )
             if (revoked.type?.startsWith('automod.message.'))
               this.dependencies.autoMod({ type: 'clear', channelSlug: key })
@@ -343,7 +358,7 @@ export class TwitchEventSubClient {
         await this.removeSubscriptions(key, ids)
         return
       }
-      this.subscriptions.set(key, ids)
+      this.subscriptions.set(key, result.subscriptions)
       if (result.errors.length)
         this.dependencies.status({
           status: 'error',
