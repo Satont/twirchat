@@ -47,6 +47,19 @@ async function notificationAvatarIcon(url: string | undefined): Promise<string |
   })
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+function stripOwnMention(text: string, accounts: readonly Account[]): string {
+  const names = accounts
+    .flatMap((account) => [account.username, account.displayName])
+    .map(normalizeUserFilter)
+    .filter(Boolean)
+  if (!names.length) return text
+  return text.replace(new RegExp(`^\\s*@(?:${names.map(escapeRegex).join('|')})\\s*`, 'iu'), '')
+}
+
 function normalizeUserFilter(value: string): string {
   return value
     .trim()
@@ -258,8 +271,8 @@ export function wireHighlightNotifications(backend: {
     const send = (icon?: string) =>
       backend.api
         .notify({
-          title: `${message.author.displayName} · ${message.channelId}`,
-          body: classification.message.text,
+          title: message.author.displayName,
+          body: stripOwnMention(classification.message.text, accounts),
           sound,
           ...(sound && settings.soundPath ? { soundPath: settings.soundPath } : {}),
           ...(icon ? { icon } : {}),
