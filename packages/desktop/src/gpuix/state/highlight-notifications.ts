@@ -56,8 +56,13 @@ function stripOwnMention(text: string, accounts: readonly Account[]): string {
     .flatMap((account) => [account.username, account.displayName])
     .map(normalizeUserFilter)
     .filter(Boolean)
+    .toSorted((left, right) => right.length - left.length)
   if (!names.length) return text
-  return text.replace(new RegExp(`^\\s*@(?:${names.map(escapeRegex).join('|')})\\s*`, 'iu'), '')
+  const pattern = new RegExp(
+    `^\\s*@(?:${names.map(escapeRegex).join('|')})(?=\\s|$|[\\p{P}\\p{S}])\\s*`,
+    'iu',
+  )
+  return text.replace(pattern, '')
 }
 
 function normalizeUserFilter(value: string): string {
@@ -281,10 +286,11 @@ export function wireHighlightNotifications(backend: {
         .catch((error) =>
           notificationErrorStore.set(error instanceof Error ? error.message : String(error)),
         )
+    const wantsIcon = desktop && process.platform === 'linux' && !!avatarUrl
     const notification =
-      typeof cachedAvatar === 'string'
+      wantsIcon && typeof cachedAvatar === 'string'
         ? send(cachedAvatar)
-        : avatarUrl
+        : wantsIcon && avatarUrl
           ? notificationAvatarIcon(avatarUrl).then(send)
           : send()
     runInBackground(notification, 'highlight-notifications background operation failed')

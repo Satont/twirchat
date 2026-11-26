@@ -41,8 +41,9 @@ import {
 } from '../message-row-click'
 import { buildMessageTokens } from '../message-tokens'
 import type { ResolvedModerationOutcome } from '../state/app'
-import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
+import { avatarRevisionStore, avatarUrlFor, avatarUrlForUser, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
+import { mentionAppearanceKey, mentionAppearances } from '../state/mention-appearances'
 import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
@@ -641,16 +642,30 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     avatarUrl?: string
   } | null>(null)
   const clearMenuPosition = useCallback(() => setMenuPosition(null), [])
-  const mentionedUsername = useMemo(
-    () => buildMessageTokens(message).find((token) => token.kind === 'mention')?.username,
-    [message],
-  )
+  const mentionedUsername = useMemo(() => {
+    if (props.showMentionAvatar === false || props.visible === false) return undefined
+    return buildMessageTokens(message).find((token) => token.kind === 'mention')?.username
+  }, [message, props.showMentionAvatar, props.visible])
   useEffect(() => {
-    if (props.showMentionAvatar === false || !mentionedUsername) {
+    if (props.showMentionAvatar === false || props.visible === false || !mentionedUsername) {
       setMentionedUser(null)
       return
     }
     let active = true
+    const appearance = mentionAppearances.snapshot(
+      mentionAppearanceKey(message.platform, mentionedUsername),
+    )
+    const knownAvatar =
+      appearance?.id && (message.platform === 'twitch' || message.platform === 'kick')
+        ? avatarUrlForUser(message.platform, appearance.id)
+        : undefined
+    if (knownAvatar) {
+      setMentionedUser({
+        username: appearance?.username ?? mentionedUsername,
+        avatarUrl: knownAvatar,
+      })
+      return
+    }
     backend.api
       .resolveMentionUser({ platform: message.platform, username: mentionedUsername })
       .then((user) => {
@@ -665,7 +680,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     return () => {
       active = false
     }
-  }, [backend, mentionedUsername, message.platform, props.showMentionAvatar])
+  }, [backend, mentionedUsername, message.platform, props.showMentionAvatar, props.visible])
   const cosmetics = useAuthorCosmetics(
     message,
     props.visible !== false && (!props.hiddenLabel || ignoredRevealed),

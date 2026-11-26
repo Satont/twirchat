@@ -128,6 +128,12 @@ test('mention notification keeps only the message body and the sender nickname',
   expect(calls).toHaveLength(1)
   expect(calls[0]).toMatchObject({ title: 'Viewer', body: 'I need help' })
 })
+test('strips only the full own mention when account names share a prefix', () => {
+  accountsStore.set([{ ...account, username: 'ann', displayName: 'anna' }])
+  events.emit('chat_message', { ...message('boundary'), text: '@anna hello' })
+  expect(calls).toHaveLength(1)
+  expect(calls[0]?.body).toBe('hello')
+})
 test('one highlighted event received through own and watched paths alerts only once', () => {
   const current = chatRulesStore.get().value
   chatRulesStore.update({

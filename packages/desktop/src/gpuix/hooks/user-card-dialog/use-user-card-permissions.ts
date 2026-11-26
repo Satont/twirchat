@@ -1,5 +1,5 @@
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 
 export type UserCardPermission = 'read'
 
@@ -7,23 +7,23 @@ export interface UserCardPermissions {
   can: (user: UserCardTarget, permission: UserCardPermission) => boolean
 }
 
-/** Whether the card may expose the moderation block for this user. */
+/** Whether the acting account may moderate in this card's channel. */
 export function canUseUserCardAction(
   user: UserCardTarget,
   permission: UserCardPermission,
+  canModerate: boolean,
 ): boolean {
-  if (permission !== 'read') return false
-  const channel = user.channelSlug
-  const moderator = user.badges?.some((badge) => badge.type === 'moderator') ?? false
-  const broadcaster = user.badges?.some((badge) => badge.type === 'broadcaster') ?? false
-  const owner =
-    (user.channelId !== undefined && user.platformUserId === user.channelId) ||
-    (user.username !== undefined &&
-      channel !== undefined &&
-      user.username.toLowerCase() === channel.toLowerCase())
-  return moderator || broadcaster || owner
+  if (permission !== 'read' || !canModerate) return false
+  return (
+    (user.platform === 'twitch' || user.platform === 'kick') && typeof user.channelSlug === 'string'
+  )
 }
 
-export function useUserCardPermissions(): UserCardPermissions {
-  return useMemo(() => ({ can: canUseUserCardAction }), [])
+export function useUserCardPermissions(canModerate: boolean): UserCardPermissions {
+  const can = useCallback(
+    (user: UserCardTarget, permission: UserCardPermission) =>
+      canUseUserCardAction(user, permission, canModerate),
+    [canModerate],
+  )
+  return useMemo(() => ({ can }), [can])
 }

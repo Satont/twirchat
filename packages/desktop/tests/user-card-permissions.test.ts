@@ -8,23 +8,29 @@ function user(overrides: Partial<UserCardTarget> = {}): UserCardTarget {
     platform: 'twitch',
     platformUserId: '42',
     displayName: 'viewer',
+    channelSlug: 'streamer',
     ...overrides,
   }
 }
 
-test('grants read for a moderator badge', () => {
-  expect(
-    canUseUserCardAction(user({ badges: [{ id: 'm', type: 'moderator', text: 'Mod' }] }), 'read'),
-  ).toBe(true)
+test('grants read when the acting account can moderate in the channel', () => {
+  expect(canUseUserCardAction(user(), 'read', true)).toBe(true)
+  expect(canUseUserCardAction(user({ platform: 'kick' }), 'read', true)).toBe(true)
 })
 
-test('grants read for the channel owner by id or login', () => {
-  expect(canUseUserCardAction(user({ channelId: '42' }), 'read')).toBe(true)
+test('ignores roles held by the card target', () => {
   expect(
-    canUseUserCardAction(user({ username: 'streamer', channelSlug: 'streamer' }), 'read'),
-  ).toBe(true)
+    canUseUserCardAction(
+      user({ badges: [{ id: 'm', type: 'moderator', text: 'Mod' }] }),
+      'read',
+      false,
+    ),
+  ).toBe(false)
+  expect(canUseUserCardAction(user({ channelId: '42' }), 'read', false)).toBe(false)
 })
 
-test('denies read for a regular viewer', () => {
-  expect(canUseUserCardAction(user({ channelSlug: 'streamer' }), 'read')).toBe(false)
+test('denies read without moderation capability, channel or unsupported platform', () => {
+  expect(canUseUserCardAction(user(), 'read', false)).toBe(false)
+  expect(canUseUserCardAction(user({ channelSlug: undefined }), 'read', true)).toBe(false)
+  expect(canUseUserCardAction(user({ platform: 'youtube' }), 'read', true)).toBe(false)
 })

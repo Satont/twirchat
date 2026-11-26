@@ -13,7 +13,7 @@ import { WhisperSection } from './WhisperSection'
 export function UserCardActions({ target, moderation, onOpenWhispers }: UserCardActionsProps) {
   const channel = target.channelSlug
   const theme = useTheme()
-  const permissions = useUserCardPermissions()
+  const permissions = useUserCardPermissions(moderation.canModerate)
   const ownUserId = useStoreSelector(
     accountsStore,
     (accounts) => accounts.find((account) => account.platform === 'twitch')?.platformUserId,

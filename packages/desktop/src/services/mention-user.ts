@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { backendFetch } from '../runtime-config'
 import type { UserCardTarget } from '../views/main/utils/chatCommands'
+import { deleteOldestEntry } from './bounded-cache'
 
 export type MentionUser = Pick<
   UserCardTarget,
@@ -78,4 +79,36 @@ export async function resolveMentionUser(
     displayName: username,
     avatarUrl: user.avatarUrl,
   }
+}
+
+const CACHE_LIMIT = 500
+const CACHE_TTL_MS = 5 * 60_000
+const cache = new Map<string, { value: MentionUser | null; expiresAt: number }>()
+const inFlight = new Map<string, Promise<MentionUser | null>>()
+
+function cacheKey({ platform, username }: MentionUserRequest): string {
+  return `${platform}:${username.trim().toLowerCase()}`
+}
+
+/** Bounded, in-flight-deduplicated lookup for repeated mentions in chat rows. */
+export async function resolveMentionUserCached(
+  params: MentionUserRequest,
+): Promise<MentionUser | null> {
+  const key = cacheKey(params)
+  const cached = cache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+  const pending = inFlight.get(key)
+  if (pending) return pending
+  const request = resolveMentionUser(params)
+    .then((value) => {
+      cache.delete(key)
+      cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS })
+      while (cache.size > CACHE_LIMIT) deleteOldestEntry(cache)
+      return value
+    })
+    .finally(() => {
+      inFlight.delete(key)
+    })
+  inFlight.set(key, request)
+  return request
 }
