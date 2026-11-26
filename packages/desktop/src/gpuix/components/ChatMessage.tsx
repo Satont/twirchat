@@ -778,6 +778,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           display: 'flex',
           flexShrink: 0,
           marginLeft: 3,
+          marginRight: 6,
         }}
       >
         <RemoteImage
