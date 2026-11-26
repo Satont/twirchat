@@ -527,6 +527,7 @@ export interface ChatMessageProps {
   usernameDisplayMode?: UsernameDisplayMode
   showAvatar?: boolean
   showBadges?: boolean
+  showMentionAvatar?: boolean
   visible?: boolean
   fontSize?: number
   chatTheme?: 'modern' | 'compact'
@@ -739,6 +740,40 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
   const authorName = formatChatAuthorName(message.author, props.usernameDisplayMode, props.alias)
+  const mentionChip =
+    isSelfPing && props.showMentionAvatar !== false && !isTombstone ? (
+      <div
+        testId={`mention-avatar-${message.id}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          flexShrink: 0,
+          marginRight: 5,
+          paddingLeft: 3,
+          paddingRight: 5,
+          borderRadius: 8,
+          backgroundColor: theme.accent.tint12,
+        }}
+      >
+        <Avatar
+          message={message}
+          size={compactAvatarSize(fontSize)}
+          visible={props.visible}
+          label={authorName}
+        />
+        <Text
+          style={{
+            fontSize: Math.round(fontSize * 0.85),
+            color: theme.accent.primary,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {`@${message.author.username ?? message.author.displayName}`}
+        </Text>
+      </div>
+    ) : null
 
   if (props.hiddenLabel && !ignoredRevealed)
     return (
@@ -997,6 +1032,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             rowGap: 2,
           }}
         >
+          {mentionChip}
           {props.showTimestamp ? (
             <Text
               testId={`chat-timestamp-${message.id}`}
@@ -1206,6 +1242,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             flexWrap: 'wrap',
           }}
         >
+          {mentionChip}
           {sourceLabel}
           {props.showBadges !== false ? (
             <BadgeList

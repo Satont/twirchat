@@ -2507,6 +2507,7 @@ export function ChatView({
                     usernameDisplayMode={settings?.usernameDisplayMode}
                     showAvatar={settings?.showAvatars}
                     showBadges={settings?.showBadges}
+                    showMentionAvatar={settings?.showMentionAvatar}
                     showImagePreviews={
                       settings?.showChatImagePreviews === true &&
                       !(streamerMode.effectiveEnabled && streamerMode.settings.hideLinkThumbnails)
