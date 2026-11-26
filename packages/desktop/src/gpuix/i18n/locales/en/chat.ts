@@ -1,10 +1,8 @@
 export const chat = {
-  'chat.header.live': 'LIVE',
   'chat.header.offline': 'Offline',
   'chat.header.category': 'Category  {name}',
   'chat.header.viewers': 'Viewers  {count}',
   'chat.header.readOnly': 'read-only',
-  'chat.header.liveChat': 'Live Chat',
   'chat.header.removePluginChannel': 'Remove {name} from My channels',
 
   'chat.tooltip.searchHistory': 'Search saved chat history',
@@ -15,6 +13,14 @@ export const chat = {
   'chat.tooltip.pause': 'Pause chat to read',
   'chat.tooltip.resume': 'Resume live chat',
 
+  'chat.menu.more': 'More actions',
+  'chat.menu.split': 'Split pane',
+  'chat.menu.history': 'Chat history',
+  'chat.menu.activities': 'Channel activities',
+  'chat.menu.whispers': 'Whispers',
+  'chat.menu.filters': 'Message filters',
+  'chat.menu.searchMessages': 'Search messages',
+  'chat.menu.chatters': 'Chatters',
   'chat.menu.changeChannel': 'Change channel',
   'chat.menu.openWindow': 'Open chat in a new window',
   'chat.menu.openOverlay': 'Open chat overlay',
@@ -34,7 +40,8 @@ export const chat = {
   'chat.room.emoteOnly': 'Emote only',
   'chat.room.uniqueChat': 'Unique chat',
 
-  'chat.banner.pinned': 'Pinned · {author}: {text}',
+  'chat.banner.pinnedText': '{author}: {text}',
+  'chat.pinned.label': 'Pinned message',
   'chat.banner.nowPlaying': 'Now playing · {track}',
   'chat.banner.poll.one': 'Poll · {title} · {count} vote',
   'chat.banner.poll.few': 'Poll · {title} · {count} votes',
@@ -84,8 +91,6 @@ export const chat = {
   'chat.pill.resume': 'Resume live chat',
   'chat.pill.resumeNew': 'Resume live chat · {count} new',
   'chat.pill.scrollLatest': 'Scroll to latest',
-
-  'chat.rate': '{rate} msg/s',
 
   'chat.diagnostics.title': 'Chat diagnostics',
 
@@ -165,6 +170,8 @@ export const chat = {
   'chat.imagePreview.open': 'Open image in a new window',
   'chat.imagePreview.title': 'TwirChat — Image preview',
   'chat.appearance.toggle.channelLabel': 'Channel label',
+  'chat.appearance.buttons': 'Header buttons',
+  'chat.appearance.buttonsHint': 'Hidden buttons stay in the ⋯ menu.',
   'chat.appearance.toggle.emoteCache': 'Session emote cache',
 
   'chat.preview.welcome': 'Welcome in everyone!',

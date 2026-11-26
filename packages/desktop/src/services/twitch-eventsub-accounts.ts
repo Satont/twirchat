@@ -4,7 +4,10 @@ import { runInBackground } from './background-task'
 import type { TwitchEventSubClient } from './twitch-eventsub'
 
 type TwitchAccount = Pick<Account, 'id' | 'username' | 'platformUserId'>
-type EventSubClient = Pick<TwitchEventSubClient, 'stop' | 'restart' | 'watch'>
+type EventSubClient = Pick<
+  TwitchEventSubClient,
+  'stop' | 'restart' | 'watch' | 'hasModerationEvents'
+>
 
 interface Dependencies {
   activeAccount(): TwitchAccount | null
@@ -88,6 +91,13 @@ export function createTwitchEventSubAccounts(dependencies: Dependencies) {
     refresh,
     ownsChannel(accountId: string, channelSlug: string): boolean {
       return channelOwners.get(channelSlug) === accountId
+    },
+    hasModerationEvents(channelSlug: string): boolean {
+      const channel = channelSlug.trim().replace(/^#/, '').toLowerCase()
+      if (!channel) return false
+      const accountId = channelOwners.get(channel)
+      const client = accountId ? clients.get(accountId)?.client : undefined
+      return client?.hasModerationEvents(channel) ?? false
     },
     watch(channelSlug: string, watch: boolean): void {
       const channel = channelSlug.trim().replace(/^#/, '').toLowerCase()

@@ -244,6 +244,8 @@ try {
   await until(() => painted('SENT reconnected'), 'saved transport reconnects')
 
   await click('tab-home')
+  await click('panel-menu')
+  await until(() => Boolean(bounds('split-right')), 'pane menu lists the split action')
   await click('split-right')
   await click('add-platform-plugin:qa-plugin:feed')
   await fill('add-channel-input', 'read-only')
@@ -280,11 +282,7 @@ try {
   await current().setWindowBounds({ width: 680, height: 720 })
   await click('plugin-chat-move-home')
   await until(
-    () =>
-      !bounds('plugin-chat') &&
-      Boolean(bounds(`home-plugin-remove-${feed.id}`)) &&
-      painted('PLUGIN HISTORY') &&
-      painted('BUILTIN MESSAGE'),
+    () => !bounds('plugin-chat') && painted('PLUGIN HISTORY') && painted('BUILTIN MESSAGE'),
     'plugin history moves into the built-in list',
   )
   await until(paintedHistoryEmote, 'inline emote in the combined feed')
@@ -302,6 +300,11 @@ try {
   await click('chat-pause-button')
   await until(() => painted('PLUGIN LIVE'), 'plugin live message appears on resume')
   await captureGuiQaDisplay('plugins-combined-feed')
+  await click('panel-menu')
+  await until(
+    () => Boolean(bounds(`home-plugin-remove-${feed.id}`)),
+    'pane menu lists the plugin source',
+  )
   await click(`home-plugin-remove-${feed.id}`)
   await until(() => !painted('PLUGIN HISTORY') && !painted('PLUGIN LIVE'), 'plugin source removed')
   assert(painted('BUILTIN MESSAGE'))

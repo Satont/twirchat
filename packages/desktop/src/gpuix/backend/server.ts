@@ -43,7 +43,7 @@ import {
   startOverlayServer,
 } from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
-import { TwitchAdapter } from '../../platforms/twitch/adapter'
+import { TwitchAdapter, type TwitchModerationEvents } from '../../platforms/twitch/adapter'
 import { createTwitchBadgeCatalog } from '../../platforms/twitch/badge-catalog'
 import { createDefaultTwitchSenderPool } from '../../platforms/twitch/sender-pool'
 import { VkPlayAdapter } from '../../platforms/vkplay/adapter'
@@ -194,7 +194,11 @@ function boot(): DesktopBackend {
 
   const twitchSenders = createDefaultTwitchSenderPool()
   const twitchBadges = createTwitchBadgeCatalog({ storage: createTwitchBadgeCatalogStore() })
-  const twitchAdapter = new TwitchAdapter(twitchSenders, twitchBadges)
+  // Channel Moderate repeats IRC bans and timeouts with the acting moderator.
+  const twitchModerationEvents: TwitchModerationEvents = {
+    hasModerationEvents: (channelSlug) => twitchEventSub.hasModerationEvents(channelSlug),
+  }
+  const twitchAdapter = new TwitchAdapter(twitchSenders, twitchBadges, twitchModerationEvents)
   const kickAdapter = new KickAdapter()
   const youtubeAdapter = new YouTubeAdapter()
   const vkPlayAdapter = new VkPlayAdapter()
@@ -208,7 +212,9 @@ function boot(): DesktopBackend {
   const watchedChannelManager = new WatchedChannelManager(
     (message) => providerRuntime.enrich(message),
     (channel) =>
-      channel.platform === 'twitch' ? new TwitchAdapter(twitchSenders, twitchBadges) : undefined,
+      channel.platform === 'twitch'
+        ? new TwitchAdapter(twitchSenders, twitchBadges, twitchModerationEvents)
+        : undefined,
     createChatAccountSender(twitchSenders),
   )
   const donationShare = createDonationShareClient({

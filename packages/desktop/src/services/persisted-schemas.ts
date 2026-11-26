@@ -33,7 +33,7 @@ import type {
   ModerationOutcome,
   UsernameDisplayMode,
 } from '@twirchat/shared/types'
-import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
+import { CHAT_HEADER_ACTIONS, DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import type {
   YouTubeChatBatch,
   YouTubeChatStatus,
@@ -277,6 +277,8 @@ const customPaletteSchema = z.toZod<CustomPalette>()(
     })
     .readonly(),
 )
+const chatHeaderActionSchema = z.enum(CHAT_HEADER_ACTIONS)
+
 export const appSettingsSchema = z.toZod<AppSettings>()(
   z.object({
     language: languageSchema,
@@ -300,6 +302,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showChatImagePreviews: z.boolean().optional(),
     showModerationRail: z.boolean().optional(),
     showObsRemoteButton: z.boolean().optional(),
+    chatHeaderActions: z.array(chatHeaderActionSchema).optional(),
     emoteSessionCache: z.boolean(),
     platformFilter: z.union([z.array(platformSchema), z.literal('all')]),
     hotkeys: hotkeySettingsSchema,

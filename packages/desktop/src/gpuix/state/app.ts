@@ -14,6 +14,7 @@ import type {
 } from '@twirchat/shared/types'
 
 import { similarityChannelKey } from '../../services/message-similarity'
+import { formatSanctionDuration } from '../../services/sanction-duration'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import {
   appendLiveChatMessagesWithCount,
@@ -33,7 +34,7 @@ import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
 import type { DesktopBackend } from '../backend/server'
-import { getLanguage, setLanguage, t, tPlural, type Language } from '../i18n'
+import { getLanguage, setLanguage, t, type Language } from '../i18n'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
 import { donationFeed, sharedDonationFeeds } from './donation-feed'
@@ -255,13 +256,6 @@ function moderationMessageKey(platform: string, messageId: string): string {
 
 function moderationUserKey(platform: string, channelId: string, userId: string): string {
   return `${platform}:${channelId.trim().replace(/^#/, '').toLowerCase()}:${userId}`
-}
-
-function formatSanctionDuration(seconds: number): string {
-  if (seconds % 86_400 === 0) return tPlural('notices.moderation.durationDays', seconds / 86_400)
-  if (seconds % 3_600 === 0) return tPlural('notices.moderation.durationHours', seconds / 3_600)
-  if (seconds % 60 === 0) return tPlural('notices.moderation.durationMinutes', seconds / 60)
-  return tPlural('notices.moderation.durationSeconds', seconds)
 }
 
 export function applyModerationOutcome(outcome: ModerationOutcome): void {

@@ -4,6 +4,7 @@ import {
   TwitchAdapter,
   twitchAuthorAppearance,
   twitchMessageMetadata,
+  type TwitchModerationEvents,
 } from '@desktop/platforms/twitch/adapter'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatClient, LogLevel, UserState } from '@twurple/chat'
@@ -58,10 +59,15 @@ afterEach(() => {
   for (const client of clients.splice(0)) client.quit()
 })
 
-function readerFixture(login = 'satont', channel = 'satont', senders?: TwitchSenderPool) {
+function readerFixture(
+  login = 'satont',
+  channel = 'satont',
+  senders?: TwitchSenderPool,
+  moderationEvents?: TwitchModerationEvents,
+) {
   const client = new ChatClient({ logger: { minLevel: LogLevel.CRITICAL } })
   clients.push(client)
-  const adapter = new TwitchAdapter(senders)
+  const adapter = new TwitchAdapter(senders, undefined, moderationEvents)
   Object.assign(adapter, {
     chatClient: client,
     channelName: channel,
@@ -238,6 +244,24 @@ describe('Twitch system notices', () => {
       timestamp: new Date(1780000003000),
       metadata: { twitchNotice: { kind: 'moderation' } },
     })
+  })
+
+  test('defers local ban and timeout notices to Channel Moderate on subscribed channels', () => {
+    const { adapter, client } = readerFixture('viewer', 'another', undefined, {
+      hasModerationEvents: (channel) => channel === 'another',
+    })
+    const notices: string[] = []
+    const actions: string[] = []
+    adapter.on('notice', ({ text }) => notices.push(text))
+    adapter.on('moderation', ({ action }) => actions.push(action))
+    client.irc.receiveLine(
+      '@room-id=420;target-user-id=10;tmi-sent-ts=1780000000000 :tmi.twitch.tv CLEARCHAT #another :maya',
+    )
+    client.irc.receiveLine(
+      '@room-id=420;target-user-id=11;tmi-sent-ts=1780000001000;ban-duration=60 :tmi.twitch.tv CLEARCHAT #another :liam',
+    )
+    expect(actions).toEqual(['ban', 'timeout'])
+    expect(notices).toEqual([])
   })
 
   test('seeds initial room modes silently and deduplicates IRC mode confirmations', () => {

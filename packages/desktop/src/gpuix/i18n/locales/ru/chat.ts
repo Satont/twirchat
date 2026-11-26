@@ -1,12 +1,10 @@
 import { chat } from '../en/chat'
 
 export const ruChat = {
-  'chat.header.live': 'В ЭФИРЕ',
   'chat.header.offline': 'Не в сети',
   'chat.header.category': 'Категория  {name}',
   'chat.header.viewers': 'Зрители  {count}',
   'chat.header.readOnly': 'только чтение',
-  'chat.header.liveChat': 'Живой чат',
   'chat.header.removePluginChannel': 'Убрать {name} из «Моих каналов»',
 
   'chat.tooltip.searchHistory': 'Поиск по сохранённой истории чата',
@@ -17,6 +15,14 @@ export const ruChat = {
   'chat.tooltip.pause': 'Приостановить чат для чтения',
   'chat.tooltip.resume': 'Вернуться к живому чату',
 
+  'chat.menu.more': 'Другие действия',
+  'chat.menu.split': 'Разделить панель',
+  'chat.menu.history': 'История чата',
+  'chat.menu.activities': 'Активности канала',
+  'chat.menu.whispers': 'Шёпоты',
+  'chat.menu.filters': 'Фильтры сообщений',
+  'chat.menu.searchMessages': 'Поиск сообщений',
+  'chat.menu.chatters': 'Зрители',
   'chat.menu.changeChannel': 'Сменить канал',
   'chat.menu.openWindow': 'Открыть чат в новом окне',
   'chat.menu.openOverlay': 'Открыть оверлей чата',
@@ -36,7 +42,8 @@ export const ruChat = {
   'chat.room.emoteOnly': 'Только эмоуты',
   'chat.room.uniqueChat': 'Уникальные сообщения',
 
-  'chat.banner.pinned': 'Закреплено · {author}: {text}',
+  'chat.banner.pinnedText': '{author}: {text}',
+  'chat.pinned.label': 'Закреплённое сообщение',
   'chat.banner.nowPlaying': 'Сейчас играет · {track}',
   'chat.banner.poll.one': 'Опрос · {title} · {count} голос',
   'chat.banner.poll.few': 'Опрос · {title} · {count} голоса',
@@ -88,8 +95,6 @@ export const ruChat = {
   'chat.pill.resume': 'Вернуться к живому чату',
   'chat.pill.resumeNew': 'Вернуться к живому чату · {count} новых',
   'chat.pill.scrollLatest': 'Прокрутить к последним',
-
-  'chat.rate': '{rate} сообщ./с',
 
   'chat.diagnostics.title': 'Диагностика чата',
 
@@ -171,6 +176,8 @@ export const ruChat = {
   'chat.imagePreview.open': 'Открыть изображение в новом окне',
   'chat.imagePreview.title': 'TwirChat — Просмотр изображения',
   'chat.appearance.toggle.channelLabel': 'Название канала',
+  'chat.appearance.buttons': 'Кнопки панели',
+  'chat.appearance.buttonsHint': 'Скрытые кнопки остаются в меню ⋯.',
   'chat.appearance.toggle.emoteCache': 'Кэш эмоутов сеанса',
 
   'chat.preview.welcome': 'Всем привет!',
