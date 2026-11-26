@@ -1,8 +1,14 @@
 import { useGpuixRequired, useWindowSize } from '@gpuix/react'
-import type { AppSettings, UsernameDisplayMode } from '@twirchat/shared/types'
+import {
+  CHAT_HEADER_ACTIONS,
+  type AppSettings,
+  type ChatHeaderAction,
+  type UsernameDisplayMode,
+} from '@twirchat/shared/types'
 import { useEffect } from 'react'
 
 import { useBackend } from '../../backend/context'
+import { CHAT_HEADER_ACTION_META } from '../../chat-header-actions'
 import { useT, type MessageKey } from '../../i18n'
 import { settingsStore } from '../../state/app'
 import { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN } from '../../state/chat-font-size'
@@ -60,6 +66,15 @@ export function ChatAppearanceDialog({
     settingsStore.set(next)
     void backend.api.saveSettings(next).catch((error) => {
       console.warn('[appearance] saveSettings failed:', error)
+    })
+  }
+
+  const toggleHeaderAction = (action: ChatHeaderAction) => {
+    const current = settings.chatHeaderActions ?? []
+    patch({
+      chatHeaderActions: current.includes(action)
+        ? current.filter((entry) => entry !== action)
+        : [...current, action],
     })
   }
 
@@ -264,6 +279,77 @@ export function ChatAppearanceDialog({
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Pane header buttons */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 8 }}>
+                {t('chat.appearance.buttons').toUpperCase()}
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {CHAT_HEADER_ACTIONS.map((action) => {
+                  const meta = CHAT_HEADER_ACTION_META[action]
+                  const label = t(meta.labelKey)
+                  const active = (settings.chatHeaderActions ?? []).includes(action)
+                  return (
+                    <div
+                      key={action}
+                      testId={`appearance-header-action-${action}`}
+                      role="button"
+                      aria-label={label}
+                      aria-description={active ? t('misc.toggle.selected') : undefined}
+                      aria-pressed={active}
+                      tabIndex={0}
+                      onClick={() => toggleHeaderAction(action)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'enter' || event.key === 'space') {
+                          event.preventDefault()
+                          toggleHeaderAction(action)
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                        paddingTop: 5,
+                        paddingBottom: 5,
+                        paddingLeft: 8,
+                        paddingRight: 9,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: active ? theme.accent.primary : theme.hairline,
+                        backgroundColor: active ? theme.accent.tint12 : theme.fill,
+                        cursor: 'pointer',
+                        hover: { backgroundColor: active ? theme.accent.tint20 : theme.fillHover },
+                        focusVisible: {
+                          outlineWidth: 1,
+                          outlineColor: theme.link,
+                          outlineOffset: -2,
+                        },
+                      }}
+                    >
+                      <Icon
+                        name={active ? 'check' : meta.icon}
+                        size={12}
+                        color={active ? theme.accent.primary : theme.text2}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: active ? 600 : 500,
+                          color: active ? theme.accent.primary : theme.text,
+                        }}
+                      >
+                        {label}
+                      </Text>
+                    </div>
+                  )
+                })}
+              </div>
+              <Text style={{ fontSize: 10, color: theme.text2, marginTop: 6 }}>
+                {t('chat.appearance.buttonsHint')}
+              </Text>
             </div>
 
             {/* Username display */}

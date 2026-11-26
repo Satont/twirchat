@@ -262,6 +262,30 @@ export type TimestampFormat = 'HH:MM:SS' | 'HH:MM' | 'HH:MM:SS.sss' | 'hh:MM A' 
 /** How localized chat author display names are shown alongside their login. */
 export type UsernameDisplayMode = 'localized-and-username' | 'localized' | 'username'
 
+/**
+ * Chat pane header actions the user may pin next to pause and mentions.
+ * Everything else lives in the pane's ⋯ menu.
+ */
+export type ChatHeaderAction =
+  | 'history'
+  | 'activities'
+  | 'whispers'
+  | 'filters'
+  | 'search'
+  | 'chatters'
+  | 'settings'
+
+/** Every pinnable header action, used by settings validation and the menu. */
+export const CHAT_HEADER_ACTIONS: [ChatHeaderAction, ...ChatHeaderAction[]] = [
+  'history',
+  'activities',
+  'whispers',
+  'filters',
+  'search',
+  'chatters',
+  'settings',
+]
+
 export interface AppSettings {
   /** UI language; new installs start in English. */
   language: Language
@@ -285,6 +309,8 @@ export interface AppSettings {
   showChatImagePreviews?: boolean
   showModerationRail?: boolean
   showObsRemoteButton?: boolean
+  /** Actions pinned in the chat pane header; the rest stay in the ⋯ menu. */
+  chatHeaderActions?: ChatHeaderAction[]
   emoteSessionCache: boolean
   platformFilter: Platform[] | 'all'
   hotkeys: HotkeySettings
@@ -352,6 +378,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showChatImagePreviews: false,
   showModerationRail: true,
   showObsRemoteButton: false,
+  chatHeaderActions: [],
   emoteSessionCache: true,
   showPlatformColorStripe: true,
   showPlatformIcon: true,
