@@ -1,10 +1,4 @@
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  useGpuixRequired,
-  type EventPayload,
-} from '@gpuix/react'
+import { useGpuixRequired, type EventPayload } from '@gpuix/react'
 import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/donations'
 import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 /**
@@ -14,13 +8,14 @@ import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/m
  */
 import type {
   Account,
+  ChatHeaderAction,
   ChatSendReceipt,
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
   createPauseController,
@@ -42,6 +37,7 @@ import {
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { useBackend } from '../backend/context'
+import { CHAT_HEADER_ACTION_META } from '../chat-header-actions'
 import {
   autoModSearchMessage,
   donationSearchMessage,
@@ -68,7 +64,6 @@ import {
   applyModerationOutcome,
   channelStatusStore,
   chatActivityStore,
-  chatMessageRate,
   clearModerationSanction,
   homeMessagesStore,
   moderationViewStore,
@@ -132,14 +127,15 @@ import { createWatchedFeedReader, observeWatchedFeedSources } from '../state/wat
 import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
 import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
-import { platformColor, semantic, withAlpha } from '../theme'
-import { useFont, useTheme } from '../theme-context'
+import { platformColor, withAlpha } from '../theme'
+import { useTheme } from '../theme-context'
 import { ChatAppearanceDialog } from './chat-settings/ChatAppearanceDialog'
 import { PaneAccountChip } from './ChatAccountControl'
-import { ChatFeedHeader, ChatFeedTargetPicker } from './ChatFeedControls'
+import { ChatFeedTargetPicker } from './ChatFeedControls'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
+import { ChatPaneHeader, HeaderButton } from './ChatPaneHeader'
 import { ChattersDialog } from './ChattersDialog'
 import { ChatThreadPanel } from './ChatThreadPanel'
 import { ChatTwirNowPlaying } from './ChatTwirNowPlaying'
@@ -147,7 +143,7 @@ import { DonationChatRow } from './DonationChatRow'
 import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
 import { TwitchAutoModChatRow } from './TwitchAutoModChatRow'
-import { Icon, PlatformIcon, type IconName } from './ui/Icon'
+import { Icon, type IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { RemoteImage } from './ui/RemoteImage'
 import { Switch } from './ui/Switch'
@@ -166,6 +162,7 @@ const FONT_WHEEL_INTERVAL_MS = 50
 /** The list scrolls before the wrapper's listener, so snapshot its settled range. */
 const FONT_WHEEL_SETTLE_MS = 120
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
+const EMPTY_HEADER_ACTIONS: readonly ChatHeaderAction[] = []
 
 function usePluginChannelFeed(
   observe: DesktopApi['observePluginChannel'],
@@ -219,149 +216,21 @@ interface ChatReply {
   sourceId?: string
 }
 
-function platformName(platform: string): string {
-  switch (platform) {
-    case 'twitch':
-      return 'Twitch'
-    case 'youtube':
-      return 'YouTube'
-    case 'kick':
-      return 'Kick'
-    case 'vkplay':
-      return 'VK Play Live'
-    default:
-      return platform
-  }
+interface HeaderActionSpec {
+  readonly id: ChatHeaderAction
+  readonly available: boolean
+  /** Active colour, when the action reflects a toggled state. */
+  readonly tint?: string
+  readonly run: () => void
 }
 
-interface HeaderChannel {
-  platform: Platform
-  channelLogin: string
-  isLive: boolean
-  title?: string
-  viewerCount?: number
-  categoryName?: string
-}
-
-/** Live channel chip in the home header, with the rich hover tooltip. */
-function HeaderChannelChip({ channel: ch }: { channel: HeaderChannel }) {
-  const theme = useTheme()
-  const font = useFont()
-  const { t } = useT()
-  const color = platformColor(ch.platform)
-  const hideViewerCount = useStoreSelector(
-    streamerModeStore,
-    (state) => state.effectiveEnabled && state.settings.hideViewerCountAndDuration,
-  )
-
-  return (
-    <Tooltip delayDuration={200}>
-      <TooltipTrigger asChild>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 5,
-            paddingTop: 3,
-            paddingBottom: 3,
-            paddingLeft: 6,
-            paddingRight: 8,
-            borderRadius: 20,
-            borderWidth: 1,
-            flexShrink: 0,
-            backgroundColor: ch.isLive ? withAlpha(color, 0.12) : theme.fill,
-            borderColor: ch.isLive ? withAlpha(color, 0.35) : theme.hairline,
-          }}
-        >
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              flexShrink: 0,
-              backgroundColor: ch.isLive ? color : theme.text2,
-            }}
-          />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              color: ch.isLive ? theme.text : theme.text2,
-              maxWidth: 100,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {ch.channelLogin}
-          </Text>
-          {ch.isLive && ch.viewerCount !== undefined && !hideViewerCount ? (
-            <Text style={{ fontSize: 11, color: theme.text2, opacity: 0.75 }}>
-              {formatViewers(ch.viewerCount)}
-            </Text>
-          ) : null}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        sideOffset={8}
-        style={{
-          backgroundColor: theme.popover,
-          borderWidth: 1,
-          borderColor: theme.dialogBorder,
-          borderRadius: 8,
-          padding: 10,
-          minWidth: 190,
-          maxWidth: 270,
-          boxShadow: {
-            offsetX: 0,
-            offsetY: 8,
-            blurRadius: 24,
-            spreadRadius: 0,
-            color: '#00000080',
-          },
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <text style={{ fontSize: 11, fontWeight: 700, color, fontFamily: font }}>
-              {platformName(ch.platform)}
-            </text>
-            <text
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                color: ch.isLive ? semantic.success : theme.text2,
-                fontFamily: font,
-              }}
-            >
-              {ch.isLive ? t('chat.header.live') : t('chat.header.offline')}
-            </text>
-          </div>
-          {ch.title ? (
-            <text style={{ fontSize: 12, color: '#e2e2e8', fontFamily: font }}>{ch.title}</text>
-          ) : null}
-          {ch.categoryName ? (
-            <text style={{ fontSize: 11, color: '#8b8b99', fontFamily: font }}>
-              {t('chat.header.category', { name: ch.categoryName })}
-            </text>
-          ) : null}
-          {ch.isLive && ch.viewerCount !== undefined && !hideViewerCount ? (
-            <text style={{ fontSize: 11, color: '#8b8b99', fontFamily: font }}>
-              {t('chat.header.viewers', { count: ch.viewerCount.toLocaleString() })}
-            </text>
-          ) : null}
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-function formatViewers(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
-  return String(n)
+interface HeaderAction {
+  readonly id: ChatHeaderAction
+  readonly icon: IconName
+  readonly label: string
+  readonly testId: string
+  readonly run: () => void
+  readonly button: ReactNode
 }
 
 export interface ChatViewProps {
@@ -1630,6 +1499,79 @@ export function ChatView({
     [aliases, userCardTarget],
   )
 
+  // ── Header ────────────────────────────────────────────────────────────────
+
+  // The tab bar already names the pane; the header only states what is on air.
+  const headerStream =
+    watchedChannel && watchedChannel.platform !== 'youtube' ? watchedStreamStatus : undefined
+  const hideViewerCount =
+    streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration
+  const headerNames = useMemo(() => {
+    const source = feedChannels
+      ? feedChannels.map((channel) => channel.displayName)
+      : isHome
+        ? [
+            ...displayedChannels.map((channel) => channel.channelLogin),
+            ...pluginFeed.channels.map((channel) => channel.displayName),
+          ]
+        : []
+    const names: string[] = []
+    const seen = new Set<string>()
+    for (const name of source) {
+      const clean = sanitizeDisplayText(name).trim()
+      const key = clean.toLowerCase()
+      if (!clean || seen.has(key)) continue
+      seen.add(key)
+      names.push(clean)
+    }
+    return names
+  }, [displayedChannels, feedChannels, isHome, pluginFeed.channels])
+
+  // One spec per pinnable action; the toolbar and the ⋯ menu share the same buttons.
+  const headerActionSpecs: HeaderActionSpec[] = [
+    {
+      id: 'history',
+      available: Boolean(watchedChannel || isHome),
+      run: () => setHistoryOpen(true),
+    },
+    { id: 'activities', available: Boolean(twitchChannel), run: () => setActivitiesOpen(true) },
+    { id: 'whispers', available: true, run: () => setWhisperListOpen(true) },
+    {
+      id: 'filters',
+      available: true,
+      tint: rules.paneFilters[paneKey]?.length ? theme.accent.primary : theme.text2,
+      run: () => setFiltersOpen((value) => !value),
+    },
+    {
+      id: 'search',
+      available: true,
+      tint: searchOpen ? theme.accent.primary : theme.text2,
+      run: openSearch,
+    },
+    { id: 'chatters', available: chattersTargets.length > 0, run: () => setChattersOpen(true) },
+    { id: 'settings', available: true, run: () => setChatSettingsOpen(true) },
+  ]
+  const pinnedIds = new Set(settings?.chatHeaderActions ?? EMPTY_HEADER_ACTIONS)
+  const headerActionList = headerActionSpecs
+    .filter((spec) => spec.available)
+    .map((spec): HeaderAction => {
+      const meta = CHAT_HEADER_ACTION_META[spec.id]
+      return {
+        id: spec.id,
+        icon: meta.icon,
+        label: t(meta.labelKey),
+        testId: meta.testId,
+        run: spec.run,
+        button: (
+          <HeaderButton testId={meta.testId} title={t(meta.tooltipKey)} onClick={spec.run}>
+            <Icon name={meta.icon} size={14} color={spec.tint ?? theme.text2} />
+          </HeaderButton>
+        ),
+      }
+    })
+  const pinnedHeaderActions = headerActionList.filter((action) => pinnedIds.has(action.id))
+  const hiddenHeaderActions = headerActionList.filter((action) => !pinnedIds.has(action.id))
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -1659,434 +1601,235 @@ export function ChatView({
         }}
       >
         {/* Header */}
-        <div
-          testId="chat-header"
-          style={{
-            backgroundColor: flash
-              ? withAlpha(flash.color?.slice(0, 7) ?? theme.accent.primary, 0.22)
-              : undefined,
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 8,
-            paddingTop: 8,
-            paddingBottom: 8,
-            paddingLeft: 12,
-            paddingRight: 12,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-            flexShrink: 0,
-            minHeight: 44,
-            userSelect: 'none',
-          }}
-        >
-          {headerLeading}
-          {feedChannels ? (
-            <ChatFeedHeader channels={feedChannels} onEdit={onEditFeed} />
-          ) : watchedChannel ? (
-            <>
+        <ChatPaneHeader
+          leading={headerLeading}
+          background={
+            flash ? withAlpha(flash.color?.slice(0, 7) ?? theme.accent.primary, 0.22) : undefined
+          }
+          stream={headerStream}
+          hideViewerCount={hideViewerCount}
+          names={headerNames}
+          onEditSources={feedChannels ? onEditFeed : undefined}
+          meta={
+            watchedChannel ? (
               <div
                 style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 4,
-                  flexShrink: 0,
-                  backgroundColor:
-                    watchedChannelStatus?.status === 'connected'
-                      ? '#22c55e'
-                      : watchedChannelStatus?.status === 'connecting'
-                        ? '#f59e0b'
-                        : theme.text2,
-                }}
-              />
-              <PlatformIcon platform={watchedChannel.platform} size={14} />
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: theme.text2,
-                  // The channel name wins over the stream title/category,
-                  // which absorb the squeeze in narrow split panes.
-                  maxWidth: 160,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
                   flexShrink: 0,
                 }}
               >
-                {watchedChannel.displayName.toUpperCase()}
-              </Text>
-              {watchedStreamStatus?.isLive ? (
-                <>
-                  {watchedStreamStatus.viewerCount !== undefined &&
-                  !(
-                    streamerMode.effectiveEnabled &&
-                    streamerMode.settings.hideViewerCountAndDuration
-                  ) ? (
-                    <Text
-                      style={{ fontSize: 11, fontWeight: 600, color: '#22c55e', flexShrink: 0 }}
-                    >
-                      {formatViewers(watchedStreamStatus.viewerCount)}
+                {/* Authenticated is the normal state — only flag read-only. */}
+                {watchedChannelStatus && watchedChannelStatus.mode !== 'authenticated' ? (
+                  <div
+                    style={{
+                      borderRadius: 10,
+                      paddingTop: 2,
+                      paddingBottom: 2,
+                      paddingLeft: 7,
+                      paddingRight: 7,
+                      borderWidth: 1,
+                      flexShrink: 0,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: theme.text2 }}>
+                      {t('chat.header.readOnly')}
                     </Text>
-                  ) : null}
-                  {watchedStreamStatus.categoryName ? (
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: theme.text2,
-                        minWidth: 0,
-                        flexShrink: 1,
-                        maxWidth: 100,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {watchedStreamStatus.categoryName}
-                    </Text>
-                  ) : null}
-                  {watchedStreamStatus.title ? (
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: theme.text2,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        flexGrow: 1,
-                        minWidth: 0,
-                      }}
-                    >
-                      {watchedStreamStatus.title}
-                    </Text>
-                  ) : null}
-                </>
-              ) : null}
-              {/* Authenticated is the normal state — only flag read-only. */}
-              {watchedChannelStatus && watchedChannelStatus.mode !== 'authenticated' ? (
-                <div
-                  style={{
-                    borderRadius: 10,
-                    paddingTop: 2,
-                    paddingBottom: 2,
-                    paddingLeft: 7,
-                    paddingRight: 7,
-                    borderWidth: 1,
-                    flexShrink: 0,
-                    borderColor: theme.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 11, color: theme.text2 }}>
-                    {t('chat.header.readOnly')}
-                  </Text>
-                </div>
-              ) : null}
-              {chatAccount && showPaneAccount ? (
-                <PaneAccountChip channel={watchedChannel} account={chatAccount} pane={paneTarget} />
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: theme.text2,
-                  flexShrink: 0,
-                }}
-              >
-                {t('chat.header.liveChat').toUpperCase()}
-              </Text>
-              {displayedChannels.length > 0 || pluginFeed.channels.length > 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    flexGrow: 1,
-                    minWidth: 0,
-                    overflowX: 'scroll',
-                  }}
-                >
-                  {displayedChannels.map((ch) => (
-                    <HeaderChannelChip key={`${ch.platform}:${ch.channelLogin}`} channel={ch} />
-                  ))}
-                  {pluginFeed.channels.map((channel) => (
-                    <div
-                      key={channel.id}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        flexShrink: 0,
-                        paddingLeft: 8,
-                        borderRadius: 20,
-                        borderWidth: 1,
-                        borderColor: theme.hairline,
-                        backgroundColor: theme.fill,
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, color: theme.text2 }}>
-                        {`${channel.transportName} · ${channel.displayName}`}
-                      </Text>
-                      <HeaderButton
-                        testId={`home-plugin-remove-${channel.id}`}
-                        title={t('chat.header.removePluginChannel', {
-                          name: channel.displayName,
-                        })}
-                        onClick={() =>
-                          runUiTask(setHomePluginChannel(backend.api, channel.id, false))
-                        }
-                      >
-                        <Icon name="close" size={12} color={theme.text2} />
-                      </HeaderButton>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          )}
-
-          {/* Right side */}
-          <div style={{ flexGrow: 1 }} />
-          <div
-            testId="chat-header-actions"
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: 2,
-              maxWidth: '100%',
-              minWidth: 0,
-            }}
-          >
-            <MessageRate activityKey={activityKey} feedChannelIds={feedChannelIds} />
-            {watchedChannel || isHome ? (
-              <HeaderButton
-                testId="chat-history-button"
-                title={t('chat.tooltip.searchHistory')}
-                onClick={() => setHistoryOpen(true)}
-              >
-                <Icon name="clock" size={14} color={theme.text2} />
-              </HeaderButton>
-            ) : null}
-            {twitchChannel ? (
-              <HeaderButton
-                testId="twitch-activities-button"
-                title={t('chat.tooltip.activities')}
-                onClick={() => setActivitiesOpen(true)}
-              >
-                <Icon name="globe" size={14} color={theme.text2} />
-              </HeaderButton>
-            ) : null}
-            <HeaderButton
-              testId="whispers-button"
-              title={t('activities.tab.whispers')}
-              onClick={() => setWhisperListOpen(true)}
-            >
-              <Icon name="reply" size={14} color={theme.text2} />
-            </HeaderButton>
-            <HeaderButton
-              testId="chat-filters-button"
-              title={t('chat.tooltip.filters')}
-              onClick={() => setFiltersOpen((value) => !value)}
-            >
-              <Icon
-                name="sliders"
-                size={14}
-                color={rules.paneFilters[paneKey]?.length ? theme.accent.primary : theme.text2}
-              />
-            </HeaderButton>
-            <HeaderButton
-              testId="chat-search-button"
-              title={t('chat.tooltip.searchMessages')}
-              onClick={() => openSearch()}
-            >
-              <Icon
-                name="search"
-                size={14}
-                color={searchOpen ? theme.accent.primary : theme.text2}
-              />
-            </HeaderButton>
-            <HeaderButton
-              testId="chat-mentions-button"
-              title={t('chat.tooltip.mentions')}
-              onClick={() => setMentionsOnly((value) => !value)}
-            >
-              <Icon
-                name="bell"
-                size={14}
-                color={mentionsOnly ? theme.accent.primary : theme.text2}
-              />
-            </HeaderButton>
-            <HeaderButton
-              testId="chat-pause-button"
-              title={paused ? t('chat.tooltip.resume') : t('chat.tooltip.pause')}
-              onClick={() => changePause(!paused)}
-            >
-              <Icon
-                name={paused ? 'play' : 'pause'}
-                size={14}
-                color={paused ? theme.accent.primary : theme.text2}
-              />
-            </HeaderButton>
-
-            {chattersTargets.length > 0 ? (
-              <HeaderButton
-                title={t('app.settings.chat.chatters')}
-                testId="chatters-button"
-                onClick={() => setChattersOpen(true)}
-              >
-                <Icon name="users" size={14} color={theme.text2} />
-              </HeaderButton>
-            ) : null}
-
-            <HeaderButton
-              title={t('app.settings.chat.settings')}
-              testId="settings-button"
-              onClick={() => setChatSettingsOpen(true)}
-            >
-              <Icon name="settings" size={14} color={theme.text2} />
-            </HeaderButton>
-
-            {settings && chatSettingsOpen ? (
-              <ChatAppearanceDialog
-                settings={settings}
-                onClose={() => setChatSettingsOpen(false)}
-              />
-            ) : null}
-
-            {onSplitRight || onClosePanel || onEditFeed || windows ? (
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
-                <HeaderButton
-                  title={t('app.addChannel.title')}
-                  testId="split-right"
-                  onClick={() => onSplitRight?.()}
-                >
-                  <Icon name="plus" size={14} color={theme.text2} />
-                </HeaderButton>
-
-                <HeaderButton
-                  title={t('app.settings.optionals')}
-                  testId="panel-menu"
-                  onClick={() => {
-                    if (Date.now() - menuDismissedAt.current < 250) return
-                    setMenuOpen((open) => !open)
-                  }}
-                >
-                  <Icon name="moreVertical" size={14} color={theme.text2} />
-                </HeaderButton>
-                {menuOpen ? (
-                  <anchored deferred side="bottom" align="end" gap={4}>
-                    <div
-                      onMouseDownOutside={() => {
-                        menuDismissedAt.current = Date.now()
-                        setMenuOpen(false)
-                      }}
-                      style={{
-                        backgroundColor: theme.surface,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: 8,
-                        padding: 4,
-                        minWidth: 180,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: {
-                          offsetX: 0,
-                          offsetY: 4,
-                          blurRadius: 12,
-                          spreadRadius: 0,
-                          color: '#00000066',
-                        },
-                      }}
-                    >
-                      {onChangeChannel ? (
-                        <MenuItem
-                          icon="refresh"
-                          label={t('chat.menu.changeChannel')}
-                          onClick={() => {
-                            setMenuOpen(false)
-                            onChangeChannel?.()
-                          }}
-                        />
-                      ) : null}
-                      {onEditFeed ? (
-                        <MenuItem
-                          icon="chat"
-                          testId="chat-edit-feed"
-                          label={t(feedChannels ? 'chat.feed.editSources' : 'chat.feed.combine')}
-                          onClick={() => {
-                            setMenuOpen(false)
-                            onEditFeed()
-                          }}
-                        />
-                      ) : null}
-                      {windows ? (
-                        <>
-                          <MenuItem
-                            icon="externalLink"
-                            label={t('chat.menu.openWindow')}
-                            onClick={() => {
-                              setMenuOpen(false)
-                              void windows
-                                .openChat(layoutTabId, layoutPanelId)
-                                .catch((error) => showNotice('error', String(error)))
-                            }}
-                          />
-                          <MenuItem
-                            icon="externalLink"
-                            label={t('chat.menu.openOverlay')}
-                            onClick={() => {
-                              setMenuOpen(false)
-                              void windows
-                                .openChat(layoutTabId, layoutPanelId, true)
-                                .catch((error) => showNotice('error', String(error)))
-                            }}
-                          />
-                        </>
-                      ) : null}
-                      {onChangeChannel || onEditFeed || windows ? (
-                        <div
-                          style={{
-                            height: 1,
-                            backgroundColor: theme.border,
-                            marginTop: 4,
-                            marginBottom: 4,
-                          }}
-                        />
-                      ) : null}
-                      {layoutTabId !== 'home' ||
-                      (paneLayout && allPanels(paneLayout).length > 1) ? (
-                        <MenuItem
-                          icon="close"
-                          label={t('chat.menu.closePanel')}
-                          danger
-                          onClick={() => {
-                            setMenuOpen(false)
-                            if (
-                              windows?.descriptor.kind !== 'main' &&
-                              paneLayout &&
-                              allPanels(paneLayout).length === 1
-                            )
-                              void windows
-                                ?.close()
-                                .catch((error) => showNotice('error', String(error)))
-                            else onClosePanel?.()
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  </anchored>
+                  </div>
+                ) : null}
+                {chatAccount && showPaneAccount ? (
+                  <PaneAccountChip
+                    channel={watchedChannel}
+                    account={chatAccount}
+                    pane={paneTarget}
+                  />
                 ) : null}
               </div>
+            ) : undefined
+          }
+        >
+          {pinnedHeaderActions.map((action) => action.button)}
+
+          <HeaderButton
+            testId="chat-pause-button"
+            title={paused ? t('chat.tooltip.resume') : t('chat.tooltip.pause')}
+            onClick={() => changePause(!paused)}
+          >
+            <Icon
+              name={paused ? 'play' : 'pause'}
+              size={14}
+              color={paused ? theme.accent.primary : theme.text2}
+            />
+          </HeaderButton>
+          <HeaderButton
+            testId="chat-mentions-button"
+            title={t('chat.tooltip.mentions')}
+            onClick={() => setMentionsOnly((value) => !value)}
+          >
+            <Icon name="bell" size={14} color={mentionsOnly ? theme.accent.primary : theme.text2} />
+          </HeaderButton>
+
+          {settings && chatSettingsOpen ? (
+            <ChatAppearanceDialog settings={settings} onClose={() => setChatSettingsOpen(false)} />
+          ) : null}
+
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
+            <HeaderButton
+              title={t('chat.menu.more')}
+              testId="panel-menu"
+              active={menuOpen}
+              onClick={() => {
+                if (Date.now() - menuDismissedAt.current < 250) return
+                setMenuOpen((open) => !open)
+              }}
+            >
+              <Icon name="moreVertical" size={14} color={theme.text2} />
+            </HeaderButton>
+            {menuOpen ? (
+              <anchored deferred side="bottom" align="end" gap={4}>
+                <div
+                  onMouseDownOutside={() => {
+                    menuDismissedAt.current = Date.now()
+                    setMenuOpen(false)
+                  }}
+                  style={{
+                    backgroundColor: theme.surface,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: 8,
+                    padding: 4,
+                    minWidth: 200,
+                    maxWidth: 320,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxShadow: {
+                      offsetX: 0,
+                      offsetY: 4,
+                      blurRadius: 12,
+                      spreadRadius: 0,
+                      color: '#00000066',
+                    },
+                  }}
+                >
+                  {hiddenHeaderActions.map((action) => (
+                    <MenuItem
+                      key={action.id}
+                      testId={action.testId}
+                      icon={action.icon}
+                      label={action.label}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        action.run()
+                      }}
+                    />
+                  ))}
+
+                  {onSplitRight ? (
+                    <MenuItem
+                      icon="plus"
+                      label={t('chat.menu.split')}
+                      testId="split-right"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onSplitRight()
+                      }}
+                    />
+                  ) : null}
+                  {onChangeChannel ? (
+                    <MenuItem
+                      icon="refresh"
+                      label={t('chat.menu.changeChannel')}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onChangeChannel()
+                      }}
+                    />
+                  ) : null}
+                  {onEditFeed ? (
+                    <MenuItem
+                      icon="chat"
+                      testId="chat-edit-feed"
+                      label={t(feedChannels ? 'chat.feed.editSources' : 'chat.feed.combine')}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onEditFeed()
+                      }}
+                    />
+                  ) : null}
+                  {windows ? (
+                    <>
+                      <MenuItem
+                        icon="externalLink"
+                        label={t('chat.menu.openWindow')}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          void windows
+                            .openChat(layoutTabId, layoutPanelId)
+                            .catch((error) => showNotice('error', String(error)))
+                        }}
+                      />
+                      <MenuItem
+                        icon="externalLink"
+                        label={t('chat.menu.openOverlay')}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          void windows
+                            .openChat(layoutTabId, layoutPanelId, true)
+                            .catch((error) => showNotice('error', String(error)))
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  {isHome && pluginFeed.channels.length > 0 ? (
+                    <>
+                      <MenuDivider />
+                      {pluginFeed.channels.map((channel) => (
+                        <MenuItem
+                          key={channel.id}
+                          icon="close"
+                          testId={`home-plugin-remove-${channel.id}`}
+                          label={t('chat.header.removePluginChannel', {
+                            name: channel.displayName,
+                          })}
+                          onClick={() => {
+                            setMenuOpen(false)
+                            runUiTask(setHomePluginChannel(backend.api, channel.id, false))
+                          }}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                  {layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1) ? (
+                    <>
+                      <MenuDivider />
+                      <MenuItem
+                        icon="close"
+                        label={t('chat.menu.closePanel')}
+                        danger
+                        onClick={() => {
+                          setMenuOpen(false)
+                          if (
+                            windows?.descriptor.kind !== 'main' &&
+                            paneLayout &&
+                            allPanels(paneLayout).length === 1
+                          )
+                            void windows
+                              ?.close()
+                              .catch((error) => showNotice('error', String(error)))
+                          else onClosePanel?.()
+                        }}
+                      />
+                    </>
+                  ) : null}
+                </div>
+              </anchored>
             ) : null}
           </div>
-        </div>
+        </ChatPaneHeader>
 
         {room &&
         (room.slowSeconds ||
@@ -2154,11 +1897,32 @@ export function ChatView({
             >
               {pinnedMessage ? (
                 <div
+                  testId="chat-pinned-banner"
+                  role="button"
+                  aria-label={t('chat.pinned.label')}
                   onClick={() => setActivitiesOpen(true)}
-                  style={{ padding: 8, cursor: 'pointer' }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: 8,
+                    cursor: 'pointer',
+                    hover: { backgroundColor: theme.fillHover },
+                  }}
                 >
-                  <Text style={{ fontSize: 12, color: theme.text }}>
-                    {t('chat.banner.pinned', {
+                  <Icon name="pin" size={14} color={theme.text2} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.text,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {t('chat.banner.pinnedText', {
                       author: pinnedMessage.authorName ?? '',
                       text: pinnedMessage.text,
                     })}
@@ -2805,82 +2569,10 @@ export function ChatView({
   )
 }
 
-function HeaderButton({
-  children,
-  onClick,
-  testId,
-  title,
-}: {
-  children: React.ReactNode
-  onClick?: () => void
-  testId?: string
-  title?: string
-}) {
+function MenuDivider() {
   const theme = useTheme()
-  const [hovered, setHovered] = useState(false)
-  const button = (
-    <div
-      testId={testId}
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: 22,
-        height: 24,
-        flexShrink: 0,
-        borderRadius: 4,
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: hovered ? theme.fillHover : undefined,
-      }}
-    >
-      {children}
-    </div>
-  )
-  return title ? (
-    <Tooltip delayDuration={250}>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        style={{ backgroundColor: theme.popover, color: theme.text, padding: 7, borderRadius: 5 }}
-      >
-        <Text style={{ fontSize: 12, color: theme.text }}>{title}</Text>
-      </TooltipContent>
-    </Tooltip>
-  ) : (
-    button
-  )
+  return <div style={{ height: 1, backgroundColor: theme.border, marginTop: 4, marginBottom: 4 }} />
 }
-
-/** The one-second clock only repaints the tiny rate indicator. */
-const MessageRate = memo(function MessageRate({
-  activityKey,
-  feedChannelIds,
-}: {
-  activityKey: string
-  feedChannelIds: readonly string[]
-}) {
-  const theme = useTheme()
-  const { t } = useT()
-  const [now, setNow] = useState(Date.now)
-  const activity = useStoreSelector(chatActivityStore, (entries) =>
-    feedChannelIds.length
-      ? feedChannelIds.reduce((total, id) => total + chatMessageRate(entries.get(id), now), 0)
-      : entries.get(activityKey),
-  )
-  const rate = typeof activity === 'number' ? activity : chatMessageRate(activity, now)
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-  return (
-    <Text testId="chat-message-rate" style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
-      {t('chat.rate', { rate: rate.toFixed(1) })}
-    </Text>
-  )
-})
 
 function MenuItem({
   icon,
@@ -2914,6 +2606,7 @@ function MenuItem({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
+        minWidth: 0,
         paddingTop: 7,
         paddingBottom: 7,
         paddingLeft: 10,
@@ -2925,7 +2618,19 @@ function MenuItem({
       }}
     >
       <Icon name={icon} size={14} color={danger ? color : theme.text2} />
-      <Text style={{ fontSize: 13, color }}>{label}</Text>
+      <Text
+        style={{
+          fontSize: 13,
+          color,
+          minWidth: 0,
+          flexShrink: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </Text>
     </div>
   )
 }

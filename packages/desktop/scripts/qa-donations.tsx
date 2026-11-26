@@ -234,6 +234,8 @@ try {
   await until(() => !painted('PixelCat'), 'mentions filter excludes donations')
   await click('chat-mentions-button')
   await until(() => painted('PixelCat'), 'clearing filter restores donations')
+  await click('panel-menu')
+  await until(() => find('chat-search-button'), 'pane menu lists the search action')
   await click('chat-search-button')
   await click('chat-search')
   renderer.simulateKeystrokes('m a')
