@@ -1,0 +1,37 @@
+name: Token probe
+
+on:
+  pull_request:
+  push:
+    tags: ['probe2-*']
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish-shape:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v1.21.17
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: list releases like publish
+        shell: bash
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | [.id, .draft] | @tsv" > "$RUNNER_TEMP/existing-release.txt"
+          echo "lines=$(wc -l < "$RUNNER_TEMP/existing-release.txt")"
+          echo "token_len=${#GH_TOKEN}"
+          curl -s -o "$RUNNER_TEMP/me.json" -w 'user_http=%{http_code}\n' -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/user
+          head -c 200 "$RUNNER_TEMP/me.json"; echo
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG"
+          echo fetch_ok=$?
