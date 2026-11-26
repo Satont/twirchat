@@ -561,6 +561,7 @@ export interface DesktopApi {
     sound?: boolean
     soundPath?: string
     silent?: boolean
+    icon?: string
   }): Promise<void>
   getTabChannelIds(): Promise<string[] | null>
   setTabChannelIds(params: { ids: string[] }): Promise<void>

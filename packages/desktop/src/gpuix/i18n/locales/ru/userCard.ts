@@ -6,6 +6,7 @@ export const ruUserCard = {
   'userCard.alias.hint':
     'Заменяет отображаемое имя в чате. Оставьте пустым, чтобы удалить псевдоним.',
   'userCard.alias.remove': 'Удалить псевдоним',
+  'userCard.alias.removed': 'Псевдоним удалён.',
 
   'userCard.opening': 'Открытие…',
   'userCard.openChannel': 'Открыть канал',
@@ -55,6 +56,7 @@ export const ruUserCard = {
   'userCard.whispers.search': 'Поиск по никнейму',
   'userCard.whispers.empty': 'Переписок пока нет.',
 
+  'userCard.refresh.success': 'Обновлено.',
   'userCard.moderation.warn.title': 'Предупреждение',
   'userCard.moderation.warn.hint': 'Отправить предупреждение с выбранной причиной.',
   'userCard.moderation.punish.title': 'Тайм-ауты и баны',
@@ -124,6 +126,7 @@ export const ruUserCard = {
   'userCard.history.loadingOlder': 'Загрузка старых сообщений…',
   'userCard.history.loadOlder': 'Загрузить старые сообщения',
   'userCard.history.names.now': 'Сейчас',
+  'userCard.history.names.today': 'Сегодня',
 
   'userCard.notes.title': 'Создание заметки',
   'userCard.notes.hint':

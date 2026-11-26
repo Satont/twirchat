@@ -1,5 +1,6 @@
 import { useTheme } from '@desktop/gpuix/theme-context'
 import { useBackend } from '@gpuix/backend/context'
+import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { ActionButton } from '@gpuix/components/ui/Form'
 import { Modal } from '@gpuix/components/ui/Modal'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
@@ -15,20 +16,33 @@ export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () 
   const backend = useBackend()
   const { t } = useT()
   const theme = useTheme()
+  const { showToast } = useActionToast()
   const [, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const popupContextId = usePopupHotkeys('profile-picture', { delete: onClose })
-  async function run(action: () => Promise<unknown>): Promise<void> {
-    if (busy) return
+  async function run(action: () => Promise<unknown>): Promise<boolean> {
+    if (busy) return false
     setBusy(true)
     setError('')
     try {
       await action()
+      return true
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+      return false
     } finally {
       setBusy(false)
     }
+  }
+
+  async function open(event?: ActionClickEvent) {
+    if (await run(() => backend.api.openExternalUrl({ url })))
+      showToast(t('userCard.feedback.opened'), event)
+  }
+
+  async function copy(event?: ActionClickEvent) {
+    if (await run(() => backend.api.copyText({ text: url })))
+      showToast(t('userCard.feedback.copied'), event)
   }
   return (
     <Modal hotkeyContextId={popupContextId} width={320} onClose={onClose}>
@@ -47,10 +61,7 @@ export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () 
         >
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
-              <ActionButton
-                disabled={busy}
-                onClick={() => void run(() => backend.api.openExternalUrl({ url }))}
-              >
+              <ActionButton disabled={busy} onClick={(event) => void open(event).catch(() => {})}>
                 {t('userCard.picture.openFull')}
               </ActionButton>
             </TooltipTrigger>
@@ -82,7 +93,7 @@ export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () 
                   backgroundColor: 'transparent',
                   hover: { backgroundColor: theme.fill },
                 }}
-                onClick={() => void run(() => backend.api.copyText({ text: url }))}
+                onClick={(event) => void copy(event).catch(() => {})}
               >
                 <Icon name="copy" size={14} color={theme.navText} />
               </div>

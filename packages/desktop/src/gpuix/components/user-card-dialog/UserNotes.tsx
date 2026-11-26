@@ -1,4 +1,5 @@
 import { useBackend } from '@gpuix/backend/context'
+import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { ActionButton, FormInput } from '@gpuix/components/ui/Form'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
@@ -26,6 +27,7 @@ export function UserNotes({
   const backend = useBackend()
   const theme = useTheme()
   const { t } = useT()
+  const { showToast } = useActionToast()
   const [text, setText] = useState('')
   const [saved, setSaved] = useState('')
   const [loading, setLoading] = useState(true)
@@ -55,15 +57,19 @@ export function UserNotes({
       active = false
     }
   }, [backend, platform, platformUserId])
-  async function save() {
+  async function save(event?: ActionClickEvent) {
     setSaving(true)
     setError('')
     const value = text
     try {
       await backend.api.setUserNotes({ ...target, text: value })
       setSaved(value)
+      showToast(t('userCard.notes.saved'), event)
+      return true
     } catch (cause) {
       setError(String(cause))
+      showToast(String(cause), event)
+      return false
     } finally {
       setSaving(false)
     }
@@ -79,6 +85,14 @@ export function UserNotes({
     handleRemoveAlias,
   } = useUserCardAlias({ target, currentAlias, onClose })
   const aliasFocus = useTextInputFocusTracking()
+
+  async function saveAlias(event?: ActionClickEvent) {
+    if (await handleSaveAlias()) showToast(t('common.saved'), event)
+  }
+
+  async function removeAlias(event?: ActionClickEvent) {
+    if (await handleRemoveAlias()) showToast(t('userCard.alias.removed'), event)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -105,7 +119,7 @@ export function UserNotes({
                 value={aliasValue}
                 placeholder={target.displayName}
                 onChange={(event) => setAliasValue(event.value ?? '')}
-                onSubmit={() => void handleSaveAlias()}
+                onSubmit={() => void saveAlias().catch(() => {})}
                 onKeyDown={(event) => {
                   if (event.key === 'escape') onClose?.()
                 }}
@@ -149,7 +163,7 @@ export function UserNotes({
                   borderRadius: 12,
                   hover: { opacity: 0.9 },
                 }}
-                onClick={() => void handleSaveAlias()}
+                onClick={(event) => void saveAlias(event).catch(() => {})}
               >
                 <div style={{ marginTop: 4 }}>
                   <Icon name="check" size={12} color={theme.accent.onDeep} />
@@ -177,7 +191,11 @@ export function UserNotes({
                 }}
               >
                 {effectiveAlias && effectiveAlias.trim() ? (
-                  <ActionButton danger onClick={() => void handleRemoveAlias()} disabled={isSaving}>
+                  <ActionButton
+                    danger
+                    onClick={(event) => void removeAlias(event).catch(() => {})}
+                    disabled={isSaving}
+                  >
                     {t('userCard.alias.remove')}
                   </ActionButton>
                 ) : null}
@@ -202,7 +220,7 @@ export function UserNotes({
                 }}
               >
                 <Text style={{ fontSize: 12, color: theme.dangerText }}>{saveError}</Text>
-                <ActionButton onClick={() => void handleSaveAlias()}>
+                <ActionButton onClick={(event) => void saveAlias(event).catch(() => {})}>
                   {t('common.retry')}
                 </ActionButton>
               </div>
@@ -246,7 +264,7 @@ export function UserNotes({
               <ActionButton
                 primary
                 disabled={loading || saving || text === saved}
-                onClick={() => void save()}
+                onClick={(event) => void save(event).catch(() => {})}
               >
                 {saving ? t('common.saving') : t('userCard.notes.save')}
               </ActionButton>

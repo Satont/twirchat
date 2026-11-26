@@ -61,6 +61,25 @@ test('notification content stays in arguments, never interpolated into executabl
   expect(calls).toEqual([])
 })
 
+test('Linux notifications use an existing avatar icon and skip a missing one', async () => {
+  const calls: string[][] = []
+  const integration = createSystemIntegration({
+    platform: 'linux',
+    wayland: false,
+    exists: async (path) => path === '/cache/avatar.png',
+    run: async (command) => {
+      calls.push(command)
+      return { code: 0, output: '' }
+    },
+  })
+  await integration.notify({ title: 'Mention', body: 'hello', icon: '/cache/avatar.png' })
+  expect(required(calls[0])).toContain('--icon=/cache/avatar.png')
+  expect(required(calls[0])).toContain('--hint=string:image-path:/cache/avatar.png')
+  calls.length = 0
+  await integration.notify({ title: 'Mention', body: 'hello', icon: '/cache/missing.png' })
+  expect(required(calls[0])).not.toContain('--icon=/cache/missing.png')
+})
+
 test('sound-only notifications never invoke an OS banner helper', async () => {
   const calls: string[][] = []
   const integration = createSystemIntegration({

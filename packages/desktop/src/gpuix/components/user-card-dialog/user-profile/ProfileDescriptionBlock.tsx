@@ -8,6 +8,7 @@ import type { ProfileDescriptionBlockProps } from './types'
 export const ProfileDescriptionBlock = memo(function ProfileDescriptionBlock({
   description,
   loading,
+  compact = false,
 }: ProfileDescriptionBlockProps) {
   const theme = useTheme()
   if (loading) {
@@ -15,9 +16,10 @@ export const ProfileDescriptionBlock = memo(function ProfileDescriptionBlock({
     return (
       <div
         style={{
-          width: '20%',
+          width: compact ? '60%' : '20%',
           height: 10,
           borderRadius: 8,
+          alignSelf: compact ? 'center' : undefined,
           paddingLeft: 5,
           backgroundColor: skel.valueBar,
         }}

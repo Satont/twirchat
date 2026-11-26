@@ -17,8 +17,8 @@ interface UseUserCardMetadataReturn {
   metadata: UserCardMetadataResponse | null
   metadataLoading: boolean
   metadataError: string | null
-  reloadMetadata: () => Promise<void>
-  refreshMetadata: () => Promise<void>
+  reloadMetadata: () => Promise<boolean>
+  refreshMetadata: () => Promise<boolean>
 }
 
 export function useUserCardMetadata({
@@ -33,13 +33,13 @@ export function useUserCardMetadata({
   const [metadataError, setMetadataError] = useState<string | null>(null)
   const metadataGenerationRef = useRef(0)
 
-  const reloadMetadata = useCallback(async (): Promise<void> => {
+  const reloadMetadata = useCallback(async (): Promise<boolean> => {
     const platform = moderationPlatform
     if (!platform) {
       setMetadata(null)
       setMetadataError(null)
       setMetadataLoading(false)
-      return
+      return false
     }
 
     const generation = metadataGenerationRef.current + 1
@@ -55,12 +55,14 @@ export function useUserCardMetadata({
         channelId: target.channelId,
         channelSlug: target.channelSlug,
       })
-      if (generation !== metadataGenerationRef.current) return
+      if (generation !== metadataGenerationRef.current) return false
       setMetadata(response)
+      return true
     } catch (loadError) {
-      if (generation !== metadataGenerationRef.current) return
+      if (generation !== metadataGenerationRef.current) return false
       setMetadata(null)
       setMetadataError(errorText(loadError))
+      return false
     } finally {
       if (generation === metadataGenerationRef.current) {
         setMetadataLoading(false)

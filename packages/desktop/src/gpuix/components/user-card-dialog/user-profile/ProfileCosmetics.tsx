@@ -9,6 +9,7 @@ export const ProfileCosmetics = memo(function ProfileCosmetics({
   badgesEnabled,
   paintsEnabled,
   openSevenTvProfile,
+  compact,
 }: ProfileCosmeticsProps) {
   if (!cosmetics?.sevenTvUserId || (!badgesEnabled && !paintsEnabled)) return null
   return (
@@ -18,6 +19,7 @@ export const ProfileCosmetics = memo(function ProfileCosmetics({
       badgesEnabled={badgesEnabled}
       paintsEnabled={paintsEnabled}
       openSevenTvProfile={openSevenTvProfile}
+      compact={compact}
     />
   )
 })

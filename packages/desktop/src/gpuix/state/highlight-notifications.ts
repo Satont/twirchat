@@ -9,9 +9,11 @@ import type { DesktopBackend } from '../backend/server'
 import { chatMessageKey, createMentionMatcher } from '../chat-tools'
 import { compileMessageRules } from '../message-rules'
 import { accountsStore, watchedChannelsStore, watchedStatusesStore } from './app'
+import { avatarUrlFor } from './caches'
 import { chatRulesStore } from './chat-rules'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
+import { ensureImage, imageSnapshot, subscribeImage } from './image-cache'
 import { getMessageSimilarity } from './message-similarity'
 import { persistentResource } from './persistent-resources'
 import type { PreferenceStore } from './preferences'
@@ -20,6 +22,30 @@ import { streamerModeStore } from './streamer-mode'
 import { canNotifyVisibility, readWindowVisibility } from './window-visibility'
 
 const DEFAULT_EXCLUDED_USERS = ['twirapp', 'nightbot', 'streamelements', 'streamlabs', 'moobot']
+
+const AVATAR_ICON_WAIT_MS = 1200
+
+async function notificationAvatarIcon(url: string | undefined): Promise<string | undefined> {
+  if (!url) return undefined
+  const cached = imageSnapshot(url)
+  if (typeof cached === 'string') return cached
+  ensureImage(url)
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (path: string | undefined) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      unsubscribe()
+      resolve(path)
+    }
+    const timer = setTimeout(() => finish(undefined), AVATAR_ICON_WAIT_MS)
+    const unsubscribe = subscribeImage(url, () => {
+      const path = imageSnapshot(url)
+      if (typeof path === 'string') finish(path)
+    })
+  })
+}
 
 function normalizeUserFilter(value: string): string {
   return value
@@ -227,20 +253,28 @@ export function wireHighlightNotifications(backend: {
     const sound = settings.soundEnabled && (classification.sound || mention)
     const desktop = settings.desktopEnabled && (classification.flash || mention)
     if (!desktop && !sound) return
-    runInBackground(
+    const avatarUrl = message.author.avatarUrl ?? avatarUrlFor(message)
+    const cachedAvatar = avatarUrl ? imageSnapshot(avatarUrl) : undefined
+    const send = (icon?: string) =>
       backend.api
         .notify({
           title: `${message.author.displayName} · ${message.channelId}`,
           body: classification.message.text,
           sound,
           ...(sound && settings.soundPath ? { soundPath: settings.soundPath } : {}),
+          ...(icon ? { icon } : {}),
           silent: !desktop,
         })
         .catch((error) =>
           notificationErrorStore.set(error instanceof Error ? error.message : String(error)),
-        ),
-      'highlight-notifications background operation failed',
-    )
+        )
+    const notification =
+      typeof cachedAvatar === 'string'
+        ? send(cachedAvatar)
+        : avatarUrl
+          ? notificationAvatarIcon(avatarUrl).then(send)
+          : send()
+    runInBackground(notification, 'highlight-notifications background operation failed')
   }
   const off = [
     backend.events.on('chat_message', receive),

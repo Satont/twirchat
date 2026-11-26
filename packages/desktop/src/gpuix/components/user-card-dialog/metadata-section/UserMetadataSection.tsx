@@ -1,3 +1,4 @@
+import { useActionToast } from '@gpuix/components/action-toast'
 import { Text } from '@gpuix/components/ui/Text'
 import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
@@ -20,9 +21,12 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
 }: UserCardMetadataSectionProps) {
   const theme = useTheme()
   const { t } = useT()
+  const { showToast } = useActionToast()
 
   const skeletonColors = useMemo(() => getSkeletonColors(theme), [theme])
-  const handleReloadMetadata = useCallback(() => reloadMetadata(), [reloadMetadata])
+  const handleReloadMetadata = useCallback(async () => {
+    if (await reloadMetadata()) showToast(t('userCard.refresh.success'))
+  }, [reloadMetadata, showToast, t])
 
   const render = () => {
     if (!supportedByCard) {
@@ -49,7 +53,9 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
       return (
         <MetadataState error>
           <Text style={{ fontSize: 13, color: theme.dangerText }}>{metadataError}</Text>
-          <InlineButton onClick={handleReloadMetadata}>{t('common.retry')}</InlineButton>
+          <InlineButton onClick={() => void handleReloadMetadata().catch(() => {})}>
+            {t('common.retry')}
+          </InlineButton>
         </MetadataState>
       )
     }
@@ -99,7 +105,11 @@ export const UserCardMetadataSection = memo(function UserCardMetadataSection({
         hint={t('userCard.metadata.hint')}
         action={
           supportedByCard ? (
-            <InlineButton icon="refresh" disabled={metadataLoading} onClick={handleReloadMetadata}>
+            <InlineButton
+              icon="refresh"
+              disabled={metadataLoading}
+              onClick={() => void handleReloadMetadata().catch(() => {})}
+            >
               {t('common.refresh')}
             </InlineButton>
           ) : undefined

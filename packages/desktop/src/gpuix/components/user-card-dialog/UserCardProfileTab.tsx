@@ -15,7 +15,7 @@ interface UserCardProfileTabProps {
   metadataLoading: boolean
   metadataError: string | null
   metadata: MetadataItem[]
-  reloadMetadata: () => void
+  reloadMetadata: () => Promise<boolean>
 }
 
 export const UserCardProfileTab = memo(function UserCardProfileTab({

@@ -12,13 +12,15 @@ function currentDayKey(): string {
   return new Date().toDateString()
 }
 
-function formatDate(inputDate: string | undefined, locale: string, today: string): string {
-  if (inputDate === undefined || inputDate === null) return '?'
-  const date = new Date(inputDate)
-  const isEnLocale = locale === 'en'
-  if (date.toDateString() === today)
-    return isEnLocale ? t('userCard.history.names.now') : t('userCard.history.names.now')
+function isToday(inputDate: string | undefined | null, today: string): boolean {
+  if (!inputDate) return false
+  return new Date(inputDate).toDateString() === today
+}
 
+function formatDate(inputDate: string | undefined, locale: string, today: string): string {
+  if (!inputDate) return '?'
+  if (isToday(inputDate, today)) return t('userCard.history.names.now')
+  const isEnLocale = locale === 'en'
   return new Date(inputDate).toLocaleDateString(isEnLocale ? 'en-GB' : locale, {
     month: '2-digit',
     day: '2-digit',
@@ -57,6 +59,8 @@ export const ProfileNameHistory = memo(function ProfileNameHistory({
             }}
           >
             {profile.nameHistory.map((entry) => {
+              const firstToday = isToday(entry.firstSeen, today)
+              const lastToday = isToday(entry.lastSeen, today)
               const firstSeen = formatDate(entry.firstSeen, language, today)
               const lastSeen = formatDate(entry.lastSeen, language, today)
 
@@ -86,15 +90,23 @@ export const ProfileNameHistory = memo(function ProfileNameHistory({
                     :
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', fontSize: 16, color: theme.text2 }}>
-                      {firstSeen}
+                  {firstToday && lastToday ? (
+                    <div style={{ fontSize: 16, color: theme.text2 }}>
+                      {t('userCard.history.names.today')}
                     </div>
-                    <div style={{ fontSize: 16, color: theme.text2 }}>-</div>
-                    <div style={{ display: 'flex', fontSize: 16, color: theme.text2 }}>
-                      {lastSeen}
+                  ) : (
+                    <div
+                      style={{ display: 'flex', flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}
+                    >
+                      <div style={{ display: 'flex', fontSize: 16, color: theme.text2 }}>
+                        {firstSeen}
+                      </div>
+                      <div style={{ fontSize: 16, color: theme.text2 }}>-</div>
+                      <div style={{ display: 'flex', fontSize: 16, color: theme.text2 }}>
+                        {lastSeen}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )
             })}
