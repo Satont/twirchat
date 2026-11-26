@@ -87,6 +87,11 @@ export { twitchAuthorAppearance, twitchMessageMetadata } from './normalize-messa
 // TwitchAdapter
 // ============================================================
 
+/** Channel Moderate notifications repeat IRC bans and timeouts with the acting moderator. */
+export interface TwitchModerationEvents {
+  hasModerationEvents(channelSlug: string): boolean
+}
+
 export class TwitchAdapter extends BasePlatformAdapter {
   readonly platform = 'twitch'
 
@@ -137,6 +142,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   constructor(
     private readonly senders: TwitchSenderPool = createDefaultTwitchSenderPool(),
     private readonly badgeCatalog: TwitchBadgeCatalog = createTwitchBadgeCatalog(),
+    private readonly moderationEvents?: TwitchModerationEvents,
   ) {
     super()
   }
@@ -464,6 +470,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         targetUserId: msg.tags.get('target-user-id'),
       })
       const at = msg.tags.get('tmi-sent-ts')
+      if (this.moderationEvents?.hasModerationEvents(channelId)) return
       this.emitModerationNotice({
         channelId,
         id: at ? `ban:${channelId}:${user}:${at}` : undefined,
@@ -483,6 +490,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         durationSeconds: duration,
       })
       const at = msg.tags.get('tmi-sent-ts')
+      if (this.moderationEvents?.hasModerationEvents(channelId)) return
       this.emitModerationNotice({
         channelId,
         id: at ? `timeout:${channelId}:${user}:${at}` : undefined,

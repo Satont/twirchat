@@ -208,6 +208,7 @@ export const ruNotices = {
   'notices.twitchModeration.raidCanceled': 'отменил рейд на {user}',
   'notices.twitchModeration.banned': 'забанил {user}',
   'notices.twitchModeration.timedOut': 'выдал тайм-аут {user}',
+  'notices.twitchModeration.timedOutFor': 'выдал тайм-аут {user} на {duration}',
   'notices.twitchModeration.messageDeleted': 'удалил сообщение от {user}',
   'notices.twitchModeration.unbanApproved': 'одобрил запрос на разбан от {user}',
   'notices.twitchModeration.unbanDenied': 'отклонил запрос на разбан от {user}',
