@@ -46,6 +46,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release list --limit 1 2>&1 | head -3
+      - name: write probe - create and delete a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code="$(curl -s -o "$RUNNER_TEMP/create.json" -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" \
+            -d '{"tag_name":"probe-token-write-test","draft":true,"name":"probe"}')"
+          echo "create_http=$code"
+          head -c 200 "$RUNNER_TEMP/create.json"; echo
+          id="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("id",""))' "$RUNNER_TEMP/create.json" 2>/dev/null || true)"
+          echo "release_id=$id"
+          if [ -n "$id" ]; then
+            curl -s -o /dev/null -w 'delete_http=%{http_code}\n' -X DELETE \
+              -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$id"
+          fi
   workflow-level-read:
     runs-on: ubuntu-24.04
     steps:
