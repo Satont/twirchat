@@ -4,6 +4,8 @@ export const ruChat = {
   'chat.header.offline': 'Не в сети',
   'chat.header.category': 'Категория  {name}',
   'chat.header.viewers': 'Зрители  {count}',
+  'chat.header.viewersTotal': '{count} зрителей на {live} каналах',
+  'chat.header.liveChannels': 'на стриме',
   'chat.header.readOnly': 'только чтение',
   'chat.header.removePluginChannel': 'Убрать {name} из «Моих каналов»',
 

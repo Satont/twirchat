@@ -75,6 +75,11 @@ import {
   showNotice,
 } from '../state/app'
 import { channelRoomStore, loadRoomState, roomKey } from '../state/channel-state'
+import {
+  combinedChannelViewers,
+  isLiveTransportStatus,
+  type ViewerSource,
+} from '../state/channel-viewers'
 import { stepChatFontSize } from '../state/chat-font-size'
 import { chatPauseStore } from '../state/chat-pause'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
@@ -1527,6 +1532,51 @@ export function ChatView({
     return names
   }, [displayedChannels, feedChannels, isHome, pluginFeed.channels])
 
+  // A combined pane (My channels, a feed) states one number: the viewers of its sources added
+  // up. A single channel keeps the detailed stream line above. Plugin sources report no viewer
+  // count, so they only add to the live tally.
+  const headerAddresses = useMemo<ViewerSource[]>(
+    () =>
+      watchedChannel
+        ? []
+        : feedChannels
+          ? feedChannels
+              .filter((channel) => !isPluginWatchedChannel(channel))
+              .map((channel) => ({ platform: channel.platform, channelSlug: channel.channelSlug }))
+          : displayedChannels.map((channel) => ({
+              platform: channel.platform,
+              channelSlug: channel.channelLogin,
+            })),
+    [watchedChannel, feedChannels, displayedChannels],
+  )
+  const headerPluginChannelIds = useMemo(
+    () =>
+      (feedChannels ?? pluginFeed.channels)
+        .filter(isPluginWatchedChannel)
+        .map((channel) => channel.id),
+    [feedChannels, pluginFeed.channels],
+  )
+  // A plugin source without a reported transport status has not failed yet.
+  const headerLivePluginCount = headerPluginChannelIds.filter((id) => {
+    const transport = (feedChannels ? customPluginFeed : pluginFeed).statuses.get(id)
+    if (transport === undefined) return false
+    return isLiveTransportStatus(transport.status.status)
+  }).length
+  const combinedViewers = useMemo(
+    () =>
+      headerAddresses.length > 1 || headerPluginChannelIds.length > 0
+        ? combinedChannelViewers(headerAddresses, streamStatuses)
+        : null,
+    [headerAddresses, headerPluginChannelIds.length, streamStatuses],
+  )
+  const headerViewers =
+    combinedViewers || headerLivePluginCount > 0
+      ? {
+          count: combinedViewers?.viewers ?? 0,
+          liveCount: (combinedViewers?.liveCount ?? 0) + headerLivePluginCount,
+        }
+      : undefined
+
   // One spec per pinnable action; the toolbar and the ⋯ menu share the same buttons.
   const headerActionSpecs: HeaderActionSpec[] = [
     {
@@ -1609,6 +1659,7 @@ export function ChatView({
           stream={headerStream}
           hideViewerCount={hideViewerCount}
           names={headerNames}
+          viewers={headerViewers}
           onEditSources={feedChannels ? onEditFeed : undefined}
           meta={
             watchedChannel ? (

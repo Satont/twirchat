@@ -2,6 +2,8 @@ export const chat = {
   'chat.header.offline': 'Offline',
   'chat.header.category': 'Category  {name}',
   'chat.header.viewers': 'Viewers  {count}',
+  'chat.header.viewersTotal': '{count} viewers on {live} channels',
+  'chat.header.liveChannels': 'on live',
   'chat.header.readOnly': 'read-only',
   'chat.header.removePluginChannel': 'Remove {name} from My channels',
 
