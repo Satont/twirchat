@@ -1,7 +1,6 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { memo, useContext, useEffect, useMemo, useState } from 'react'
 
-import type { ChatImagePreview as PreparedImage } from '../../services/chat-image-preview-cache'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../i18n'
@@ -15,6 +14,13 @@ import { ActionButton } from './ui/Form'
 import { ImageLoadingContext } from './ui/RemoteImage'
 
 const MAX_LINKS_PER_MESSAGE = 2
+// Every preview renders into the same slot so rows keep a stable height no
+// matter the image aspect ratio. The slot matches the renderer's thumbnail
+// box; a differing ratio is letterboxed on black instead of resizing the card.
+const PREVIEW_WIDTH = 240
+const PREVIEW_HEIGHT = 160
+const PREVIEW_FRAME = 4 // 1px padding + 1px border on each side
+const PREVIEW_BACKGROUND = '#000000'
 
 export const ChatImagePreviews = memo(function ChatImagePreviews({
   message,
@@ -38,24 +44,21 @@ function ChatImageThumbnail({ url, messageId }: { url: string; messageId: string
   const windows = useDesktopWindows()
   const theme = useTheme()
   const { t } = useT()
-  const [image, setImage] = useState<Omit<PreparedImage, 'full'>>()
+  const [thumbnail, setThumbnail] = useState<string>()
 
   useEffect(() => {
-    if (!visible || !windows || image) return
+    if (!visible || !windows || thumbnail) return
     const request = new AbortController()
     api
       .getChatImagePreview(url, request.signal)
       .then((result) => {
-        if (!request.signal.aborted && result) {
-          const { thumbnail, width, height } = result
-          setImage({ thumbnail, width, height })
-        }
+        if (!request.signal.aborted && result) setThumbnail(result.thumbnail)
       })
       .catch(() => undefined)
     return () => request.abort()
-  }, [api, image, url, visible, windows])
+  }, [api, thumbnail, url, visible, windows])
 
-  if (!image || !windows) return null
+  if (!thumbnail || !windows) return null
   const label = t('chat.imagePreview.open')
   const open = () => {
     runUiTask(
@@ -88,22 +91,22 @@ function ChatImageThumbnail({ url, messageId }: { url: string; messageId: string
       style={{
         display: 'flex',
         alignSelf: 'flex-start',
-        width: image.width + 4,
+        width: PREVIEW_WIDTH + PREVIEW_FRAME,
         maxWidth: '100%',
-        height: image.height + 4,
+        height: PREVIEW_HEIGHT + PREVIEW_FRAME,
         marginTop: 4,
         padding: 1,
         borderRadius: 5,
         borderWidth: 1,
         borderColor: theme.border,
-        backgroundColor: theme.surface,
+        backgroundColor: PREVIEW_BACKGROUND,
         overflow: 'hidden',
         cursor: 'pointer',
         hover: { borderColor: theme.accent.primary },
         focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
       }}
     >
-      <img src={image.thumbnail} objectFit="contain" style={{ width: '100%', height: '100%' }} />
+      <img src={thumbnail} objectFit="contain" style={{ width: '100%', height: '100%' }} />
     </div>
   )
 }
