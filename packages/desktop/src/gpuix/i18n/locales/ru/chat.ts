@@ -166,6 +166,7 @@ export const ruChat = {
   'chat.appearance.toggle.stripe': 'Цветная полоса',
   'chat.appearance.toggle.platformIcon': 'Иконка платформы',
   'chat.appearance.toggle.avatars': 'Аватары',
+  'chat.appearance.toggle.mentionAvatar': 'Аватар упомянутого пользователя',
   'chat.appearance.toggle.badges': 'Значки',
   'chat.appearance.toggle.timestamp': 'Время',
   'chat.imagePreview.setting': 'Превью изображений',

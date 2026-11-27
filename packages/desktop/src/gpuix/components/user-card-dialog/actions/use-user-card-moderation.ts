@@ -13,8 +13,11 @@ export function useUserCardModeration(target: UserCardTarget) {
   const { t } = useT()
   const channel = target.channelSlug
   const identity = target.platformUserId
-  const available = (target.platform === 'twitch' || target.platform === 'kick') && !!channel
+  const moderationPlatform =
+    target.platform === 'twitch' || target.platform === 'kick' ? target.platform : undefined
+  const available = !!moderationPlatform && !!channel
   const [loaded, setLoaded] = useState(false)
+  const [canModerate, setCanModerate] = useState(false)
   const busyRef = useRef(false)
   const [settings, setSettings] = useState<ModerationSettings>(
     structuredClone(DEFAULT_MODERATION_SETTINGS),
@@ -41,6 +44,28 @@ export function useUserCardModeration(target: UserCardTarget) {
       active = false
     }
   }, [backend, target.platform, target.platformUserId, available])
+  useEffect(() => {
+    if (!moderationPlatform || !channel) {
+      setCanModerate(false)
+      return
+    }
+    let active = true
+    backend.api
+      .getModerationCapabilities({
+        platform: moderationPlatform,
+        channelSlug: channel,
+        accountId: paneAccountId,
+      })
+      .then((value) => {
+        if (active) setCanModerate(value.canModerate)
+      })
+      .catch(() => {
+        if (active) setCanModerate(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [backend, channel, moderationPlatform, paneAccountId])
   async function run(
     action: () => Promise<unknown>,
     message: string,
@@ -111,6 +136,7 @@ export function useUserCardModeration(target: UserCardTarget) {
     moderate,
     exec,
     available: available && loaded,
+    canModerate,
   }
 }
 

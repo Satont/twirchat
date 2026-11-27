@@ -305,6 +305,8 @@ export interface AppSettings {
   showTwitchJoinPart: boolean
   showAvatars: boolean
   showBadges: boolean
+  /** Show the mentioned user's avatar and @login inline in chat messages. */
+  showMentionAvatar?: boolean
   showChannelLabel: boolean
   showChatImagePreviews?: boolean
   showModerationRail?: boolean
@@ -374,6 +376,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   platformFilter: 'all',
   showAvatars: true,
   showBadges: true,
+  showMentionAvatar: true,
   showChannelLabel: true,
   showChatImagePreviews: false,
   showModerationRail: true,

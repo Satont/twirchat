@@ -1,6 +1,7 @@
 import { useGpuixRequired, useWindowSize } from '@gpuix/react'
 import {
   CHAT_HEADER_ACTIONS,
+  DEFAULT_SETTINGS,
   type AppSettings,
   type ChatHeaderAction,
   type UsernameDisplayMode,
@@ -82,6 +83,7 @@ export function ChatAppearanceDialog({
     { key: 'showPlatformColorStripe', label: t('chat.appearance.toggle.stripe') },
     { key: 'showPlatformIcon', label: t('chat.appearance.toggle.platformIcon') },
     { key: 'showAvatars', label: t('chat.appearance.toggle.avatars') },
+    { key: 'showMentionAvatar', label: t('chat.appearance.toggle.mentionAvatar') },
     { key: 'showBadges', label: t('chat.appearance.toggle.badges') },
     { key: 'showTimestamp', label: t('chat.appearance.toggle.timestamp') },
     { key: 'showChannelLabel', label: t('chat.appearance.toggle.channelLabel') },
@@ -274,7 +276,7 @@ export function ChatAppearanceDialog({
                   <Switch
                     small
                     aria-label={toggle.label}
-                    checked={Boolean(settings[toggle.key])}
+                    checked={Boolean(settings[toggle.key] ?? DEFAULT_SETTINGS[toggle.key])}
                     onChange={(value) => patch({ [toggle.key]: value })}
                   />
                 </div>

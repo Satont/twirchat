@@ -15,6 +15,7 @@ export const ProfileHeading = memo(function ProfileHeading({
   showCopyAvatar,
   copyAvatarUrl,
   openAvatarUrl,
+  compact = false,
 }: ProfileHeadingProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -28,6 +29,7 @@ export const ProfileHeading = memo(function ProfileHeading({
           style={{
             display: 'flex',
             flexDirection: 'column',
+            alignItems: compact ? 'center' : undefined,
             gap: 4,
           }}
         >
@@ -94,16 +96,26 @@ export const ProfileHeading = memo(function ProfileHeading({
           <div
             style={{
               display: 'flex',
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              justifyContent: 'flex-end',
+              flexDirection: compact ? 'column' : 'row',
+              flexWrap: compact ? undefined : 'wrap',
+              justifyContent: compact ? 'center' : 'flex-end',
+              alignItems: compact ? 'center' : undefined,
               flexGrow: 1,
-              flexShrink: 0,
+              flexShrink: 1,
+              flexBasis: compact ? 0 : 200,
+              alignSelf: compact ? 'stretch' : undefined,
+              minWidth: 0,
               gap: 8,
             }}
           >
             <GhostButton
               icon="externalLink"
+              justify="center"
+              style={{
+                alignSelf: compact ? 'stretch' : undefined,
+                flexGrow: compact ? 1 : undefined,
+                flexBasis: compact ? 0 : undefined,
+              }}
               onClick={(event) =>
                 runUiTask(
                   openAvatarUrl().then(() => showToast(t('userCard.feedback.opened'), event)),
@@ -114,6 +126,12 @@ export const ProfileHeading = memo(function ProfileHeading({
             </GhostButton>
             <GhostButton
               icon="copy"
+              justify="center"
+              style={{
+                alignSelf: compact ? 'stretch' : undefined,
+                flexGrow: compact ? 1 : undefined,
+                flexBasis: compact ? 0 : undefined,
+              }}
               onClick={(event) =>
                 runUiTask(
                   copyAvatarUrl().then(() => showToast(t('userCard.feedback.copied'), event)),
@@ -132,11 +150,12 @@ export const ProfileHeading = memo(function ProfileHeading({
     <div
       style={{
         display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        width: '100%',
+        flexDirection: compact ? 'column' : 'row',
+        alignItems: compact ? 'center' : 'flex-start',
+        justifyContent: compact ? 'center' : 'space-between',
+        flexWrap: compact ? undefined : 'wrap',
+        width: compact ? undefined : '100%',
+        alignSelf: compact ? 'stretch' : undefined,
         gap: 10,
         marginLeft: 3,
       }}
@@ -144,8 +163,9 @@ export const ProfileHeading = memo(function ProfileHeading({
       <div
         style={{
           display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
+          flexDirection: compact ? 'column' : 'row',
+          flexWrap: compact ? undefined : 'wrap',
+          justifyContent: compact ? 'center' : undefined,
           gap: 10,
           minWidth: 0,
           paddingLeft: 4,

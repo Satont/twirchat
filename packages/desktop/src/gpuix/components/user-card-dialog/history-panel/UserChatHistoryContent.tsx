@@ -1,4 +1,5 @@
 import { chatMessageKey } from '@gpuix/chat-tools'
+import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useT } from '@gpuix/i18n'
@@ -35,6 +36,7 @@ export function UserChatHistoryContent({
 }: UserChatHistoryProps) {
   const theme = useTheme()
   const { t, language } = useT()
+  const { showToast } = useActionToast()
   const usernameDisplayMode = useStoreSelector(settingsStore, (s) => s?.usernameDisplayMode)
   const {
     messages,
@@ -52,9 +54,12 @@ export function UserChatHistoryContent({
   const sourceNotice = historySourceNotice(history)
   const showLoadOlder = canLoadOlder || loadingOlder
 
-  const handleRefresh = useCallback(() => {
-    runUiTask(loadInitial())
-  }, [loadInitial])
+  const handleRefresh = useCallback(
+    async (event?: ActionClickEvent) => {
+      if (await loadInitial()) showToast(t('userCard.refresh.success'), event)
+    },
+    [loadInitial, showToast, t],
+  )
 
   const handleLoadOlder = useCallback(() => {
     runUiTask(loadOlder())
@@ -78,7 +83,11 @@ export function UserChatHistoryContent({
             : t('userCard.history.subtitle')
         }
         action={
-          <GhostButton icon="refresh" disabled={loadingInitial} onClick={handleRefresh}>
+          <GhostButton
+            icon="refresh"
+            disabled={loadingInitial}
+            onClick={(event) => void handleRefresh(event).catch(() => {})}
+          >
             {t('common.refresh')}
           </GhostButton>
         }
@@ -110,7 +119,7 @@ export function UserChatHistoryContent({
       ) : error && !messages.length ? (
         <HistoryState minHeight={HISTORY_STATE_MIN_HEIGHT} error>
           <Text style={{ fontSize: 13, color: theme.dangerText }}>{error}</Text>
-          <HistoryRetryButton onClick={handleRefresh} />
+          <HistoryRetryButton onClick={() => void handleRefresh().catch(() => {})} />
         </HistoryState>
       ) : !messages.length ? (
         <HistoryState minHeight={HISTORY_STATE_MIN_HEIGHT}>

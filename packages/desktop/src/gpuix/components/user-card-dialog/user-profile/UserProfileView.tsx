@@ -1,3 +1,4 @@
+import { useWindowSize } from '@gpuix/react'
 import { memo, useMemo } from 'react'
 
 import { UserCardPanel } from '../UserCardUI'
@@ -26,6 +27,8 @@ export const UserProfileView = memo(function UserProfileView({
     openAvatarUrl,
     openSevenTvProfile,
   } = state
+  const windowSize = useWindowSize()
+  const compact = windowSize.width < 1600
 
   const avatarUrl = useMemo(
     () => (hideAvatar ? undefined : (profile?.avatarUrl ?? target.avatarUrl)),
@@ -41,13 +44,23 @@ export const UserProfileView = memo(function UserProfileView({
       <div
         style={{
           display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'flex-start',
-          gap: 16,
+          flexDirection: compact ? 'column' : 'row',
+          flexWrap: compact ? undefined : 'wrap',
+          alignItems: compact ? 'center' : 'flex-start',
+          justifyContent: compact ? 'center' : undefined,
+          gap: compact ? 8 : 16,
         }}
       >
-        <ProfileAvatar avatarUrl={avatarUrl} displayName={displayName} />
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            alignSelf: compact ? 'stretch' : undefined,
+          }}
+        >
+          <ProfileAvatar avatarUrl={avatarUrl} displayName={displayName} />
+        </div>
         <div
           style={{
             display: 'flex',
@@ -55,7 +68,9 @@ export const UserProfileView = memo(function UserProfileView({
             flexGrow: 1,
             flexBasis: 280,
             minWidth: 0,
-            gap: 12,
+            alignSelf: compact ? 'stretch' : undefined,
+            alignItems: compact ? 'center' : undefined,
+            gap: compact ? 6 : 12,
           }}
         >
           <ProfileHeading
@@ -65,12 +80,23 @@ export const UserProfileView = memo(function UserProfileView({
             showCopyAvatar={Boolean(avatarUrl)}
             copyAvatarUrl={copyAvatarUrl}
             openAvatarUrl={openAvatarUrl}
+            compact={compact}
           />
-          <ProfileDescriptionBlock description={profile?.description} loading={loading} />
+          <ProfileDescriptionBlock
+            description={profile?.description}
+            loading={loading}
+            compact={compact}
+          />
         </div>
       </div>
 
-      <ProfileDetails profile={profile} loading={loading} error={error} copyText={copyText} />
+      <ProfileDetails
+        profile={profile}
+        loading={loading}
+        error={error}
+        copyText={copyText}
+        compact={compact}
+      />
 
       <ProfileCosmetics
         cosmetics={cosmetics}
@@ -78,6 +104,7 @@ export const UserProfileView = memo(function UserProfileView({
         badgesEnabled={badgesEnabled}
         paintsEnabled={paintsEnabled}
         openSevenTvProfile={openSevenTvProfile}
+        compact={compact}
       />
     </UserCardPanel>
   )

@@ -110,6 +110,7 @@ export function ChatThreadPanel({
         usernameDisplayMode={settings?.usernameDisplayMode}
         showAvatar={!preview && settings?.showAvatars}
         showBadges={settings?.showBadges}
+        showMentionAvatar={!preview && settings?.showMentionAvatar}
         showPlatformColorStripe={false}
         fontSize={settings?.fontSize}
         chatTheme={settings?.chatTheme}

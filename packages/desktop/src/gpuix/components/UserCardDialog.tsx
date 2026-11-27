@@ -352,7 +352,7 @@ export function UserCardDialog({
                     metadataLoading={metadata.metadataLoading}
                     metadataError={metadata.metadataError}
                     metadata={metadataItems}
-                    reloadMetadata={() => runUiTask(metadata.reloadMetadata())}
+                    reloadMetadata={metadata.reloadMetadata}
                   />
                 ) : null}
                 {tab === 'history' ? (

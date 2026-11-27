@@ -30,11 +30,13 @@ export interface ProfileHeadingProps {
   showCopyAvatar: boolean
   copyAvatarUrl: () => Promise<void>
   openAvatarUrl: () => Promise<void>
+  compact?: boolean
 }
 
 export interface ProfileDescriptionBlockProps {
   description: string | undefined
   loading: boolean
+  compact?: boolean
 }
 
 export interface ProfileDetailsProps {
@@ -42,6 +44,7 @@ export interface ProfileDetailsProps {
   loading: boolean
   error: string
   copyText: (text: string) => Promise<void>
+  compact?: boolean
 }
 
 export interface ProfileNameHistoryProps {
@@ -64,6 +67,7 @@ export interface ProfileCosmeticsProps {
   badgesEnabled: boolean
   paintsEnabled: boolean
   openSevenTvProfile: () => Promise<void>
+  compact?: boolean
 }
 
 export interface ProfileCosmeticsBodyProps {
@@ -72,6 +76,7 @@ export interface ProfileCosmeticsBodyProps {
   badgesEnabled: boolean
   paintsEnabled: boolean
   openSevenTvProfile: () => Promise<void>
+  compact?: boolean
 }
 
 export interface UserProfileViewProps {

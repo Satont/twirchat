@@ -82,10 +82,15 @@ export function createSystemIntegration(options: SystemIntegrationOptions) {
       sound?: boolean
       soundPath?: string
       silent?: boolean
+      icon?: string
     }): Promise<void> {
       if (params.silent && !params.sound && !params.soundPath) return
       const title = params.title.slice(0, 200)
       const body = params.body.slice(0, 2000)
+      const icon =
+        options.platform === 'linux' && params.icon && (await options.exists(params.icon))
+          ? params.icon
+          : undefined
       if (!params.silent) {
         if (options.platform === 'win32')
           await (options.nativeNotifyWindows ?? notifyWindows)({ title, body })
@@ -97,6 +102,7 @@ export function createSystemIntegration(options: SystemIntegrationOptions) {
               'notify-send',
               '--app-name=TwirChat',
               '--hint=boolean:suppress-sound:true',
+              ...(icon ? [`--icon=${icon}`, `--hint=string:image-path:${icon}`] : []),
               '--',
               title,
               body,

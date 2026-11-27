@@ -122,6 +122,18 @@ test('a sound-only highlight uses the sound helper without a desktop popup', () 
   expect(calls).toHaveLength(1)
   expect(calls[0]).toMatchObject({ sound: true, silent: true, body: 'I need help' })
 })
+test('mention notification keeps only the message body and the sender nickname', () => {
+  const msg = { ...message('mentioned'), text: '@streamer I need help' }
+  events.emit('chat_message', msg)
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toMatchObject({ title: 'Viewer', body: 'I need help' })
+})
+test('strips only the full own mention when account names share a prefix', () => {
+  accountsStore.set([{ ...account, username: 'ann', displayName: 'anna' }])
+  events.emit('chat_message', { ...message('boundary'), text: '@anna hello' })
+  expect(calls).toHaveLength(1)
+  expect(calls[0]?.body).toBe('hello')
+})
 test('one highlighted event received through own and watched paths alerts only once', () => {
   const current = chatRulesStore.get().value
   chatRulesStore.update({
@@ -234,7 +246,7 @@ test('mentions and replies notify without requiring a custom sound or flash rule
   chatRulesStore.update({ value: structuredClone(DEFAULT_CHAT_RULES) })
   events.emit('chat_message', { ...message('mention'), text: '@streamer hello' })
   expect(calls).toHaveLength(1)
-  expect(calls[0]).toMatchObject({ sound: true, silent: false, body: '@streamer hello' })
+  expect(calls[0]).toMatchObject({ sound: true, silent: false, body: 'hello' })
   events.emit('chat_message', {
     ...message('reply', 'another'),
     text: 'A reply without the username',

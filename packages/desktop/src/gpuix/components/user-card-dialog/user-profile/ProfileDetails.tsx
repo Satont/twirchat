@@ -19,6 +19,7 @@ export const ProfileDetails = memo(function ProfileDetails({
   loading,
   error,
   copyText,
+  compact = false,
 }: ProfileDetailsProps) {
   const theme = useTheme()
   const { t, language } = useT()
@@ -176,7 +177,7 @@ export const ProfileDetails = memo(function ProfileDetails({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          marginTop: 12,
+          marginTop: compact ? 6 : 12,
           borderWidth: 1,
           borderColor: theme.hairline,
           borderRadius: 12,
@@ -260,7 +261,7 @@ export const ProfileDetails = memo(function ProfileDetails({
         borderWidth: 1,
         borderColor: theme.hairline,
         borderRadius: 12,
-        marginTop: 12,
+        marginTop: compact ? 6 : 12,
         overflow: 'hidden',
         backgroundColor: userCardWellColor(theme),
       }}

@@ -70,7 +70,7 @@ export interface UserCardMetadataSectionProps {
   metadataLoading: boolean
   metadataError: string | null
   metadata: MetadataItem[] | null
-  reloadMetadata: () => void
+  reloadMetadata: () => Promise<boolean>
 }
 
 export interface UserCardAliasSectionProps {
@@ -80,8 +80,8 @@ export interface UserCardAliasSectionProps {
   effectiveAlias: string | undefined
   displayName: string
   aliasFocus: ReturnType<typeof useTextInputFocusTracking>
-  handleSaveAlias: () => Promise<void>
-  handleRemoveAlias: () => Promise<void>
+  handleSaveAlias: () => Promise<boolean>
+  handleRemoveAlias: () => Promise<boolean>
   pinned: boolean
   togglePin: () => void
   onClose: () => void

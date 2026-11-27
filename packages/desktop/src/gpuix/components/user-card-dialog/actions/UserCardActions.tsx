@@ -1,4 +1,5 @@
 import { useTheme } from '@desktop/gpuix/theme-context'
+import { useUserCardPermissions } from '@gpuix/hooks/user-card-dialog/use-user-card-permissions'
 import { accountsStore } from '@gpuix/state/app'
 import { useStoreSelector } from '@gpuix/state/create-store'
 
@@ -12,6 +13,7 @@ import { WhisperSection } from './WhisperSection'
 export function UserCardActions({ target, moderation, onOpenWhispers }: UserCardActionsProps) {
   const channel = target.channelSlug
   const theme = useTheme()
+  const permissions = useUserCardPermissions(moderation.canModerate)
   const ownUserId = useStoreSelector(
     accountsStore,
     (accounts) => accounts.find((account) => account.platform === 'twitch')?.platformUserId,
@@ -25,7 +27,6 @@ export function UserCardActions({ target, moderation, onOpenWhispers }: UserCard
     (target.username !== undefined &&
       ownUsername !== undefined &&
       target.username.toLowerCase() === ownUsername.toLowerCase())
-
   const blockBg = userCardPanelColor(theme)
 
   return (
@@ -42,7 +43,9 @@ export function UserCardActions({ target, moderation, onOpenWhispers }: UserCard
           onOpenWhispers={(value) => onOpenWhispers?.(value)}
         />
       ) : null}
-      {(target.platform === 'twitch' || target.platform === 'kick') && channel ? (
+      {(target.platform === 'twitch' || target.platform === 'kick') &&
+      channel &&
+      permissions.can(target, 'read') ? (
         <ModerationSection target={target} channel={channel} moderation={moderation} bg={blockBg} />
       ) : null}
     </div>

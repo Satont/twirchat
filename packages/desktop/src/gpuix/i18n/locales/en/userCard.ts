@@ -3,6 +3,7 @@ export const userCard = {
   'userCard.alias.title': 'Display alias',
   'userCard.alias.hint': 'Replaces the displayed name in chat. Leave empty to remove alias.',
   'userCard.alias.remove': 'Remove alias',
+  'userCard.alias.removed': 'Alias removed.',
   'userCard.opening': 'Opening…',
   'userCard.openChannel': 'Open channel',
   'userCard.openInWindow': 'Open in window',
@@ -51,6 +52,7 @@ export const userCard = {
   'userCard.whispers.search': 'Search by nickname',
   'userCard.whispers.empty': 'No conversations yet.',
 
+  'userCard.refresh.success': 'Refreshed.',
   'userCard.moderation.warn.title': 'Warning',
   'userCard.moderation.warn.hint': 'Send a formal warning with the selected reason.',
   'userCard.moderation.punish.title': 'Timeouts and bans',
@@ -120,6 +122,7 @@ export const userCard = {
   'userCard.history.loadingOlder': 'Loading older messages…',
   'userCard.history.loadOlder': 'Load older messages',
   'userCard.history.names.now': 'Present',
+  'userCard.history.names.today': 'Today',
 
   'userCard.notes.title': 'Make note',
   'userCard.notes.hint':

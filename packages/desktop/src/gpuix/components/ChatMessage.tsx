@@ -39,9 +39,11 @@ import {
   isMessageRowContextMenu,
   isMessageRowDoubleClick,
 } from '../message-row-click'
+import { buildMessageTokens } from '../message-tokens'
 import type { ResolvedModerationOutcome } from '../state/app'
-import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
+import { avatarRevisionStore, avatarUrlFor, avatarUrlForUser, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
+import { mentionAppearanceKey, mentionAppearances } from '../state/mention-appearances'
 import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
@@ -527,6 +529,7 @@ export interface ChatMessageProps {
   usernameDisplayMode?: UsernameDisplayMode
   showAvatar?: boolean
   showBadges?: boolean
+  showMentionAvatar?: boolean
   visible?: boolean
   fontSize?: number
   chatTheme?: 'modern' | 'compact'
@@ -634,7 +637,50 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const [ignoredRevealed, setIgnoredRevealed] = useState(false)
   const [menuRequest, setMenuRequest] = useState(0)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  const [mentionedUser, setMentionedUser] = useState<{
+    username: string
+    avatarUrl?: string
+  } | null>(null)
   const clearMenuPosition = useCallback(() => setMenuPosition(null), [])
+  const mentionedUsername = useMemo(() => {
+    if (props.showMentionAvatar === false || props.visible === false) return undefined
+    return buildMessageTokens(message).find((token) => token.kind === 'mention')?.username
+  }, [message, props.showMentionAvatar, props.visible])
+  useEffect(() => {
+    if (props.showMentionAvatar === false || props.visible === false || !mentionedUsername) {
+      setMentionedUser(null)
+      return
+    }
+    let active = true
+    const appearance = mentionAppearances.snapshot(
+      mentionAppearanceKey(message.platform, mentionedUsername),
+    )
+    const knownAvatar =
+      appearance?.id && (message.platform === 'twitch' || message.platform === 'kick')
+        ? avatarUrlForUser(message.platform, appearance.id)
+        : undefined
+    if (knownAvatar) {
+      setMentionedUser({
+        username: appearance?.username ?? mentionedUsername,
+        avatarUrl: knownAvatar,
+      })
+      return
+    }
+    backend.api
+      .resolveMentionUser({ platform: message.platform, username: mentionedUsername })
+      .then((user) => {
+        if (!active) return
+        setMentionedUser(
+          user ? { username: user.username ?? mentionedUsername, avatarUrl: user.avatarUrl } : null,
+        )
+      })
+      .catch(() => {
+        if (active) setMentionedUser(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [backend, mentionedUsername, message.platform, props.showMentionAvatar, props.visible])
   const cosmetics = useAuthorCosmetics(
     message,
     props.visible !== false && (!props.hiddenLabel || ignoredRevealed),
@@ -739,6 +785,47 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
   const authorName = formatChatAuthorName(message.author, props.usernameDisplayMode, props.alias)
+  const mentionChip =
+    props.showMentionAvatar !== false && mentionedUser && !isTombstone ? (
+      <div
+        testId={`mention-avatar-${message.id}`}
+        style={{
+          display: 'flex',
+          flexShrink: 0,
+          marginLeft: 3,
+          marginRight: 6,
+        }}
+      >
+        <RemoteImage
+          url={mentionedUser.avatarUrl}
+          objectFit="cover"
+          thumbnailSize={48}
+          style={{
+            width: compactAvatarSize(fontSize),
+            height: compactAvatarSize(fontSize),
+            borderRadius: compactAvatarSize(fontSize) / 2,
+          }}
+          fallback={
+            <div
+              style={{
+                width: compactAvatarSize(fontSize),
+                height: compactAvatarSize(fontSize),
+                borderRadius: compactAvatarSize(fontSize) / 2,
+                backgroundColor: theme.accent.primary,
+                color: theme.accent.onDeep,
+                fontSize: Math.round(fontSize * 0.6),
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {initialsOf(mentionedUser.username, 2)}
+            </div>
+          }
+        />
+      </div>
+    ) : null
 
   if (props.hiddenLabel && !ignoredRevealed)
     return (
@@ -1074,6 +1161,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           >
             {isAction ? ' ' : ': '}
           </Text>
+          {mentionChip}
           <MessageTokens
             message={message}
             channelSlug={props.channelSlug}
@@ -1226,6 +1314,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             onMention={mentionAuthor}
             testId={`chat-author-${message.platform}-${message.id}`}
           />
+          {mentionChip}
           {isFirstMessage ? (
             <BadgeComponent
               variant="warning"

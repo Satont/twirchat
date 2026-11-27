@@ -22,8 +22,8 @@ export interface ChatHistoryState {
   history: UserChatHistoryPage['history']
   visibleRange: HistoryVisibleRange | null
   canLoadOlder: boolean
-  loadInitial: () => Promise<void>
-  loadOlder: () => Promise<void>
+  loadInitial: () => Promise<boolean>
+  loadOlder: () => Promise<boolean>
   updateVisibleRange: (start: number, end: number) => void
 }
 
@@ -44,7 +44,7 @@ export function useChatHistory(
   const nextCursorRef = useRef<UserChatHistoryCursor | null>(null)
   const generationRef = useRef(0)
 
-  const loadInitial = useCallback(async (): Promise<void> => {
+  const loadInitial = useCallback(async (): Promise<boolean> => {
     const generation = generationRef.current + 1
     generationRef.current = generation
     setLoadingInitial(true)
@@ -59,14 +59,16 @@ export function useChatHistory(
         username,
         limit: PAGE_SIZE,
       })
-      if (generation !== generationRef.current) return
+      if (generation !== generationRef.current) return false
       setMessages((current) => mergeHistoryMessages(current, page.messages))
       setHistory(page.history)
       setHasMore(page.hasMore)
       nextCursorRef.current = page.nextCursor
+      return true
     } catch (loadError) {
-      if (generation !== generationRef.current) return
+      if (generation !== generationRef.current) return false
       setError(errorText(loadError))
+      return false
     } finally {
       if (generation === generationRef.current) {
         setLoadingInitial(false)
@@ -74,7 +76,7 @@ export function useChatHistory(
     }
   }, [backend, platform, platformUserId, channelId, username])
 
-  const loadOlder = useCallback(async (): Promise<void> => {
+  const loadOlder = useCallback(async (): Promise<boolean> => {
     const cursor = nextCursorRef.current
     if (
       loadingInitial ||
@@ -83,7 +85,7 @@ export function useChatHistory(
       !cursor ||
       messages.length >= HISTORY_DISPLAY_LIMIT
     )
-      return
+      return false
 
     setLoadingOlder(true)
     setError(null)
@@ -98,14 +100,16 @@ export function useChatHistory(
         limit: PAGE_SIZE,
         cursor,
       })
-      if (generation !== generationRef.current) return
+      if (generation !== generationRef.current) return false
       setMessages((current) => mergeHistoryMessages(current, page.messages))
       setHistory(page.history)
       setHasMore(page.hasMore)
       nextCursorRef.current = page.nextCursor
+      return true
     } catch (loadError) {
-      if (generation !== generationRef.current) return
+      if (generation !== generationRef.current) return false
       setError(errorText(loadError))
+      return false
     } finally {
       if (generation === generationRef.current) {
         setLoadingOlder(false)

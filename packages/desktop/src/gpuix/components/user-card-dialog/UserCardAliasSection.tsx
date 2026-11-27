@@ -1,5 +1,5 @@
+import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { Text } from '@gpuix/components/ui/Text'
-import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useT } from '@gpuix/i18n'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
@@ -23,6 +23,15 @@ export function UserCardAliasSection({
 }: UserCardAliasSectionProps) {
   const theme = useTheme()
   const { t } = useT()
+  const { showToast } = useActionToast()
+
+  async function save(event?: ActionClickEvent) {
+    if (await handleSaveAlias()) showToast(t('common.saved'), event)
+  }
+
+  async function remove(event?: ActionClickEvent) {
+    if (await handleRemoveAlias()) showToast(t('userCard.alias.removed'), event)
+  }
 
   return (
     <UserCardPanel style={{ marginBottom: 16 }}>
@@ -46,7 +55,7 @@ export function UserCardAliasSection({
           placeholder={displayName}
           onChange={(event) => setAliasValue(event.value ?? '')}
           {...aliasFocus}
-          onSubmit={() => runUiTask(handleSaveAlias())}
+          onSubmit={() => void save().catch(() => {})}
           onKeyDown={(event) => {
             if (event.key === 'escape') onClose()
           }}
@@ -77,7 +86,7 @@ export function UserCardAliasSection({
         />
         <InlineButton
           icon="check"
-          onClick={() => runUiTask(handleSaveAlias())}
+          onClick={() => void save().catch(() => {})}
           style={{
             flexGrow: 1,
             flexBasis: 60,
@@ -108,7 +117,11 @@ export function UserCardAliasSection({
           }}
         >
           {effectiveAlias ? (
-            <GhostButton tone="danger" icon="trash" onClick={() => runUiTask(handleRemoveAlias())}>
+            <GhostButton
+              tone="danger"
+              icon="trash"
+              onClick={(event) => void remove(event).catch(() => {})}
+            >
               {t('userCard.alias.remove')}
             </GhostButton>
           ) : null}

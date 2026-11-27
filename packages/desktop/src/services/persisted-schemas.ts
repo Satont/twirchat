@@ -297,6 +297,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showTwitchJoinPart: z.boolean().default(DEFAULT_SETTINGS.showTwitchJoinPart),
     showAvatars: z.boolean(),
     showBadges: z.boolean(),
+    showMentionAvatar: z.boolean().optional(),
     showChannelLabel: z.boolean(),
     showChatImagePreviews: z.boolean().optional(),
     showModerationRail: z.boolean().optional(),

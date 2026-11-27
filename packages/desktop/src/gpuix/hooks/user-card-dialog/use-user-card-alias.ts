@@ -18,8 +18,8 @@ interface UseUserCardAliasReturn {
   effectiveAlias: string | undefined
   isSaving: boolean
   saveError: string | null
-  handleSaveAlias: () => Promise<void>
-  handleRemoveAlias: () => Promise<void>
+  handleSaveAlias: () => Promise<boolean>
+  handleRemoveAlias: () => Promise<boolean>
   refreshAliases: () => Promise<void>
 }
 
@@ -63,7 +63,7 @@ export function useUserCardAlias({
     aliasesLoadedStore.set(true)
   }, [backend])
 
-  const handleSaveAlias = useCallback(async (): Promise<void> => {
+  const handleSaveAlias = useCallback(async (): Promise<boolean> => {
     const value = aliasValue.trim()
     setIsSaving(true)
     setSaveError(null)
@@ -81,16 +81,18 @@ export function useUserCardAlias({
         })
       }
       await refreshAliases()
+      return true
     } catch (cause) {
       const message = errorText(cause)
       setSaveError(message)
       showNotice('error', message)
+      return false
     } finally {
       setIsSaving(false)
     }
   }, [aliasValue, target.platform, target.platformUserId, backend, refreshAliases])
 
-  const handleRemoveAlias = useCallback(async (): Promise<void> => {
+  const handleRemoveAlias = useCallback(async (): Promise<boolean> => {
     setIsSaving(true)
     setSaveError(null)
     try {
@@ -99,10 +101,12 @@ export function useUserCardAlias({
         platformUserId: target.platformUserId,
       })
       await refreshAliases()
+      return true
     } catch (cause) {
       const message = errorText(cause)
       setSaveError(message)
       showNotice('error', message)
+      return false
     } finally {
       setIsSaving(false)
     }

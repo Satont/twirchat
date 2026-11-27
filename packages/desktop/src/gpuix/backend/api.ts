@@ -116,7 +116,7 @@ import {
   type JeetbotCommandTarget,
 } from '../../services/jeetbot-commands'
 import {
-  resolveMentionUser,
+  resolveMentionUserCached,
   type MentionUser,
   type MentionUserRequest,
 } from '../../services/mention-user'
@@ -561,6 +561,7 @@ export interface DesktopApi {
     sound?: boolean
     soundPath?: string
     silent?: boolean
+    icon?: string
   }): Promise<void>
   getTabChannelIds(): Promise<string[] | null>
   setTabChannelIds(params: { ids: string[] }): Promise<void>
@@ -1611,7 +1612,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getStatuses: async () => [...currentStatuses.values()],
 
-    resolveMentionUser,
+    resolveMentionUser: resolveMentionUserCached,
 
     getChannelEmotes: async ({ platform, channelId }) => {
       const runtime = (ctx.providerRuntime ??= createDesktopProviderRuntime())

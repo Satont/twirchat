@@ -15,6 +15,7 @@ export const ProfileCosmeticsBody = memo(function ProfileCosmeticsBody({
   badgesEnabled,
   paintsEnabled,
   openSevenTvProfile,
+  compact = false,
 }: ProfileCosmeticsBodyProps) {
   const theme = useTheme()
   const { t } = useT()
@@ -35,19 +36,21 @@ export const ProfileCosmeticsBody = memo(function ProfileCosmeticsBody({
       <div
         style={{
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: compact ? 'column' : 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
+          justifyContent: compact ? 'center' : 'space-between',
+          flexWrap: compact ? undefined : 'wrap',
           gap: 10,
         }}
       >
         <div
           style={{
             display: 'flex',
-            flexDirection: 'row',
+            flexDirection: compact ? 'column' : 'row',
             alignItems: 'center',
-            flexWrap: 'wrap',
+            justifyContent: compact ? 'center' : undefined,
+            flexWrap: compact ? undefined : 'wrap',
+            alignSelf: compact ? 'stretch' : undefined,
             gap: 8,
             minWidth: 0,
           }}
@@ -58,6 +61,12 @@ export const ProfileCosmeticsBody = memo(function ProfileCosmeticsBody({
           ) : null}
           <GhostButton
             icon="externalLink"
+            justify="center"
+            style={{
+              alignSelf: compact ? 'stretch' : undefined,
+              flexGrow: compact ? 1 : undefined,
+              flexBasis: compact ? 0 : undefined,
+            }}
             onClick={(event) =>
               runUiTask(
                 openSevenTvProfile().then(() => showToast(t('userCard.feedback.opened'), event)),
