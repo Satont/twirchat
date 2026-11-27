@@ -11,6 +11,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger, type EventPayload } from '@gpuix/react'
 import type {
   Account,
+  MentionAvatarStyle,
   NormalizedChatMessage,
   Platform,
   SevenTvSystemAction,
@@ -34,6 +35,7 @@ import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
 import { t, tPlural, useLanguage } from '../i18n'
 import { icons } from '../icons'
+import { resolveMentionAvatarStyle } from '../mention-avatar'
 import {
   claimMessageRowClick,
   isMessageRowContextMenu,
@@ -41,9 +43,8 @@ import {
 } from '../message-row-click'
 import { buildMessageTokens } from '../message-tokens'
 import type { ResolvedModerationOutcome } from '../state/app'
-import { avatarRevisionStore, avatarUrlFor, avatarUrlForUser, ensureAvatar } from '../state/caches'
+import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
-import { mentionAppearanceKey, mentionAppearances } from '../state/mention-appearances'
 import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
@@ -51,6 +52,7 @@ import { formatChatAuthorName } from '../username-display'
 import { ChatAnnouncement } from './ChatAnnouncement'
 import { ChatImagePreviews } from './ChatImagePreview'
 import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
+import { MentionAvatar, useMentionAvatar } from './MentionAvatar'
 import { MessageActionsMenu } from './MessageActionsMenu'
 import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
@@ -529,6 +531,8 @@ export interface ChatMessageProps {
   usernameDisplayMode?: UsernameDisplayMode
   showAvatar?: boolean
   showBadges?: boolean
+  mentionAvatarStyle?: MentionAvatarStyle
+  /** @deprecated Use `mentionAvatarStyle`; still respected when `mentionAvatarStyle` is omitted. */
   showMentionAvatar?: boolean
   visible?: boolean
   fontSize?: number
@@ -637,50 +641,19 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const [ignoredRevealed, setIgnoredRevealed] = useState(false)
   const [menuRequest, setMenuRequest] = useState(0)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
-  const [mentionedUser, setMentionedUser] = useState<{
-    username: string
-    avatarUrl?: string
-  } | null>(null)
   const clearMenuPosition = useCallback(() => setMenuPosition(null), [])
-  const mentionedUsername = useMemo(() => {
-    if (props.showMentionAvatar === false || props.visible === false) return undefined
+  const isTombstone = props.moderationOutcome?.isTombstone === true
+  const mentionAvatarStyle = resolveMentionAvatarStyle(
+    props.mentionAvatarStyle,
+    props.showMentionAvatar,
+  )
+  const chipEnabled = mentionAvatarStyle === 'chip' && props.visible !== false && !isTombstone
+  const chipMentionUsername = useMemo(() => {
+    if (!chipEnabled) return undefined
     return buildMessageTokens(message).find((token) => token.kind === 'mention')?.username
-  }, [message, props.showMentionAvatar, props.visible])
-  useEffect(() => {
-    if (props.showMentionAvatar === false || props.visible === false || !mentionedUsername) {
-      setMentionedUser(null)
-      return
-    }
-    let active = true
-    const appearance = mentionAppearances.snapshot(
-      mentionAppearanceKey(message.platform, mentionedUsername),
-    )
-    const knownAvatar =
-      appearance?.id && (message.platform === 'twitch' || message.platform === 'kick')
-        ? avatarUrlForUser(message.platform, appearance.id)
-        : undefined
-    if (knownAvatar) {
-      setMentionedUser({
-        username: appearance?.username ?? mentionedUsername,
-        avatarUrl: knownAvatar,
-      })
-      return
-    }
-    backend.api
-      .resolveMentionUser({ platform: message.platform, username: mentionedUsername })
-      .then((user) => {
-        if (!active) return
-        setMentionedUser(
-          user ? { username: user.username ?? mentionedUsername, avatarUrl: user.avatarUrl } : null,
-        )
-      })
-      .catch(() => {
-        if (active) setMentionedUser(null)
-      })
-    return () => {
-      active = false
-    }
-  }, [backend, mentionedUsername, message.platform, props.showMentionAvatar, props.visible])
+  }, [chipEnabled, message])
+  const chipMentionedUser = useMentionAvatar(message.platform, chipMentionUsername, chipEnabled)
+  const inlineMentionAvatarStyle: MentionAvatarStyle = isTombstone ? 'off' : mentionAvatarStyle
   const cosmetics = useAuthorCosmetics(
     message,
     props.visible !== false && (!props.hiddenLabel || ignoredRevealed),
@@ -721,7 +694,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   ) : null
   const isSystem = message.type === 'system'
   const isAction = message.type === 'action'
-  const isTombstone = props.moderationOutcome?.isTombstone === true
   const twitchMetadata = message.platform === 'twitch' ? message.metadata : undefined
   const rewardId = isTombstone && !isSystem ? undefined : twitchMetadata?.rewardId
   const mentionMatcher = useMemo(() => createMentionMatcher(props.accounts ?? []), [props.accounts])
@@ -786,7 +758,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
   const authorName = formatChatAuthorName(message.author, props.usernameDisplayMode, props.alias)
   const mentionChip =
-    props.showMentionAvatar !== false && mentionedUser && !isTombstone ? (
+    chipEnabled && chipMentionedUser ? (
       <div
         testId={`mention-avatar-${message.id}`}
         style={{
@@ -796,33 +768,10 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           marginRight: 6,
         }}
       >
-        <RemoteImage
-          url={mentionedUser.avatarUrl}
-          objectFit="cover"
-          thumbnailSize={48}
-          style={{
-            width: compactAvatarSize(fontSize),
-            height: compactAvatarSize(fontSize),
-            borderRadius: compactAvatarSize(fontSize) / 2,
-          }}
-          fallback={
-            <div
-              style={{
-                width: compactAvatarSize(fontSize),
-                height: compactAvatarSize(fontSize),
-                borderRadius: compactAvatarSize(fontSize) / 2,
-                backgroundColor: theme.accent.primary,
-                color: theme.accent.onDeep,
-                fontSize: Math.round(fontSize * 0.6),
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {initialsOf(mentionedUser.username, 2)}
-            </div>
-          }
+        <MentionAvatar
+          username={chipMentionedUser.username}
+          avatarUrl={chipMentionedUser.avatarUrl}
+          size={compactAvatarSize(fontSize)}
         />
       </div>
     ) : null
@@ -1170,6 +1119,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             deleted={isTombstone}
             isAction={isAction}
             actionColor={isAction ? authorColor : undefined}
+            mentionAvatarStyle={inlineMentionAvatarStyle}
           />
           {props.moderationOutcome ? (
             <Text style={{ fontSize: Math.round(fontSize * 0.82), color: theme.text2 }}>
@@ -1366,6 +1316,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           deleted={isTombstone}
           isAction={isAction}
           actionColor={isAction ? authorColor : undefined}
+          mentionAvatarStyle={inlineMentionAvatarStyle}
         />
         {previews}
         {!isTombstone ? (

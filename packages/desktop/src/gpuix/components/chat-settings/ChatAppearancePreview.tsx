@@ -4,11 +4,12 @@
  * platform icon, avatars, badges, timestamp) changes these rows immediately.
  */
 
-import type { AppSettings, Platform } from '@twirchat/shared/types'
+import type { AppSettings, MentionAvatarStyle, Platform } from '@twirchat/shared/types'
 import { useMemo } from 'react'
 
 import { initialsOf } from '../../../views/shared/utils/display-text'
 import { useT, type MessageKey } from '../../i18n'
+import { inlineMentionAvatarSize, resolveMentionAvatarStyle } from '../../mention-avatar'
 import { platformColor, readableOn } from '../../theme'
 import { useFont, useTheme } from '../../theme-context'
 import { formatMessageTime, timestampColumnWidth } from '../../timestamp-format'
@@ -202,31 +203,108 @@ function PreviewBadges({
   )
 }
 
-function PreviewTokens({ text, fontSize }: { text: string; fontSize: number }) {
+function PreviewTokens({
+  tokens,
+  fontSize,
+  mentionAvatarStyle,
+}: {
+  tokens: readonly PreviewToken[]
+  fontSize: number
+  mentionAvatarStyle: MentionAvatarStyle
+}) {
   const theme = useTheme()
   const font = useFont()
-  const tokens = useMemo(() => tokenize(text), [text])
   const lineHeight = Math.round(fontSize * 1.45)
+  const avatarSize = inlineMentionAvatarSize(fontSize)
   return (
     <>
-      {tokens.map((token) => (
-        <Text
-          key={`${token.kind}:${token.offset}`}
-          style={{
-            color:
-              token.kind === 'mention'
-                ? theme.accent.primary
-                : token.kind === 'link'
-                  ? theme.link
-                  : theme.text,
-            fontSize,
-            fontFamily: font,
-            lineHeight,
-          }}
-        >
-          {token.text}
-        </Text>
-      ))}
+      {tokens.map((token) => {
+        if (
+          token.kind === 'mention' &&
+          (mentionAvatarStyle === 'pill' || mentionAvatarStyle === 'inline')
+        ) {
+          const mentionName = token.text.slice(1)
+          if (mentionAvatarStyle === 'pill') {
+            return (
+              <div
+                key={`${token.kind}:${token.offset}`}
+                testId={`appearance-preview-mention-pill-${token.offset}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingLeft: 3,
+                  paddingRight: 6,
+                  paddingTop: 1,
+                  paddingBottom: 1,
+                  borderRadius: 999,
+                  backgroundColor: theme.fill,
+                  borderWidth: 1,
+                  borderColor: theme.hairline,
+                  flexShrink: 0,
+                }}
+              >
+                <PreviewAvatar name={mentionName} color={theme.accent.primary} size={avatarSize} />
+                <Text
+                  style={{
+                    color: theme.accent.primary,
+                    fontWeight: 600,
+                    fontSize,
+                    fontFamily: font,
+                    lineHeight: Math.max(avatarSize, Math.round(fontSize * 1.15)),
+                  }}
+                >
+                  {token.text}
+                </Text>
+              </div>
+            )
+          }
+          return (
+            <div
+              key={`${token.kind}:${token.offset}`}
+              testId={`appearance-preview-mention-inline-${token.offset}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                flexShrink: 0,
+              }}
+            >
+              <PreviewAvatar name={mentionName} color={theme.accent.primary} size={avatarSize} />
+              <Text
+                style={{
+                  color: theme.accent.primary,
+                  fontSize,
+                  fontFamily: font,
+                  lineHeight,
+                }}
+              >
+                {token.text}
+              </Text>
+            </div>
+          )
+        }
+        return (
+          <Text
+            key={`${token.kind}:${token.offset}`}
+            style={{
+              color:
+                token.kind === 'mention'
+                  ? theme.accent.primary
+                  : token.kind === 'link'
+                    ? theme.link
+                    : theme.text,
+              fontSize,
+              fontFamily: font,
+              lineHeight,
+            }}
+          >
+            {token.text}
+          </Text>
+        )
+      })}
     </>
   )
 }
@@ -235,6 +313,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
   const theme = useTheme()
   const { t } = useT()
   const text = t(message.textKey)
+  const tokens = useMemo(() => tokenize(text), [text])
   const fontSize = settings.fontSize
   const time = formatMessageTime(message.time, settings.timestampFormat)
   const authorName = formatChatAuthorName(message.author, settings.usernameDisplayMode)
@@ -242,6 +321,24 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
   const showStripe = settings.showPlatformColorStripe
   const highlighted = message.highlighted === true && settings.selfPing?.enabled === true
   const rowBackground = highlighted ? settings.selfPing?.color : undefined
+  const mentionAvatarStyle = resolveMentionAvatarStyle(
+    settings.mentionAvatarStyle,
+    settings.showMentionAvatar,
+  )
+  const firstMention =
+    mentionAvatarStyle === 'chip' ? tokens.find((token) => token.kind === 'mention') : undefined
+  const mentionChip = firstMention ? (
+    <div
+      testId={`appearance-preview-mention-chip-${message.id}`}
+      style={{ display: 'flex', flexShrink: 0, marginLeft: 3, marginRight: 4 }}
+    >
+      <PreviewAvatar
+        name={firstMention.text.slice(1)}
+        color={theme.accent.primary}
+        size={compactAvatarSize(fontSize)}
+      />
+    </div>
+  ) : null
 
   const stripe = showStripe ? (
     <div
@@ -320,7 +417,12 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
           {authorName}
         </Text>
         <Text style={{ fontSize, color: theme.text }}>: </Text>
-        <PreviewTokens text={text} fontSize={fontSize} />
+        {mentionChip}
+        <PreviewTokens
+          tokens={tokens}
+          fontSize={fontSize}
+          mentionAvatarStyle={mentionAvatarStyle}
+        />
       </div>
     )
   }
@@ -397,6 +499,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
           >
             {authorName}
           </Text>
+          {mentionChip}
           {settings.showTimestamp ? (
             <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>{time}</Text>
           ) : null}
@@ -411,7 +514,11 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
             minWidth: 0,
           }}
         >
-          <PreviewTokens text={text} fontSize={fontSize} />
+          <PreviewTokens
+            tokens={tokens}
+            fontSize={fontSize}
+            mentionAvatarStyle={mentionAvatarStyle}
+          />
         </div>
       </div>
     </div>

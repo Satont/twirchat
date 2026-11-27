@@ -51,6 +51,7 @@ import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat
 import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
 import { useT } from '../i18n'
+import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
 import { nativeWindow } from '../native-window'
@@ -2322,7 +2323,10 @@ export function ChatView({
                     usernameDisplayMode={settings?.usernameDisplayMode}
                     showAvatar={settings?.showAvatars}
                     showBadges={settings?.showBadges}
-                    showMentionAvatar={settings?.showMentionAvatar}
+                    mentionAvatarStyle={resolveMentionAvatarStyle(
+                      settings?.mentionAvatarStyle,
+                      settings?.showMentionAvatar,
+                    )}
                     showImagePreviews={
                       settings?.showChatImagePreviews === true &&
                       !(streamerMode.effectiveEnabled && streamerMode.settings.hideLinkThumbnails)

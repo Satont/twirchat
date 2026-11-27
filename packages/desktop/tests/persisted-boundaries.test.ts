@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { DEFAULT_SETTINGS, type NormalizedChatMessage } from '@twirchat/shared/types'
+import {
+  DEFAULT_SETTINGS,
+  MENTION_AVATAR_STYLES,
+  type NormalizedChatMessage,
+} from '@twirchat/shared/types'
 
 import {
   backendToDesktopMessageSchema,
@@ -119,6 +123,71 @@ test('username display mode defaults for old settings, persists all modes, and r
     expect(SettingsStore.get()).toMatchObject({
       fontSize: 19,
       usernameDisplayMode: DEFAULT_SETTINGS.usernameDisplayMode,
+    })
+  } finally {
+    f.dispose()
+  }
+})
+
+test('mention avatar style migrates legacy showMentionAvatar, persists all modes, and recovers invalid values', () => {
+  const f = fixture()
+  try {
+    // Legacy saved settings with showMentionAvatar: false migrate to 'off'
+    f.database.run('INSERT INTO settings(key,value) VALUES(?,?)', [
+      'app_settings',
+      JSON.stringify({ fontSize: 18, showMentionAvatar: false }),
+    ])
+    expect(SettingsStore.get()).toMatchObject({
+      mentionAvatarStyle: 'off',
+      showMentionAvatar: false,
+    })
+
+    // Legacy saved settings with showMentionAvatar: true migrate to default ('pill')
+    f.database.run('UPDATE settings SET value=? WHERE key=?', [
+      JSON.stringify({ fontSize: 18, showMentionAvatar: true }),
+      'app_settings',
+    ])
+    expect(SettingsStore.get()).toMatchObject({
+      mentionAvatarStyle: 'pill',
+      showMentionAvatar: true,
+    })
+
+    // Persisting every supported style keeps showMentionAvatar synchronized
+    for (const style of MENTION_AVATAR_STYLES) {
+      SettingsStore.set({ ...SettingsStore.get(), mentionAvatarStyle: style })
+      expect(SettingsStore.get()).toMatchObject({
+        mentionAvatarStyle: style,
+        showMentionAvatar: style !== 'off',
+      })
+    }
+
+    // Legacy partial update using showMentionAvatar toggles between 'off' and default
+    SettingsStore.update({ showMentionAvatar: true })
+    expect(SettingsStore.get()).toMatchObject({
+      mentionAvatarStyle: 'pill',
+      showMentionAvatar: true,
+    })
+    SettingsStore.update({ mentionAvatarStyle: 'inline' })
+    SettingsStore.update({ showMentionAvatar: true })
+    expect(SettingsStore.get()).toMatchObject({
+      mentionAvatarStyle: 'inline',
+      showMentionAvatar: true,
+    })
+    SettingsStore.update({ showMentionAvatar: false })
+    expect(SettingsStore.get()).toMatchObject({
+      mentionAvatarStyle: 'off',
+      showMentionAvatar: false,
+    })
+
+    // Invalid persisted style recovers cleanly without losing other fields
+    f.database.run('UPDATE settings SET value=? WHERE key=?', [
+      JSON.stringify({ fontSize: 19, mentionAvatarStyle: 'not-a-style' }),
+      'app_settings',
+    ])
+    expect(SettingsStore.get()).toMatchObject({
+      fontSize: 19,
+      mentionAvatarStyle: DEFAULT_SETTINGS.mentionAvatarStyle,
+      showMentionAvatar: true,
     })
   } finally {
     f.dispose()

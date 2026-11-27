@@ -6,6 +6,7 @@ import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { selectTwitchThread } from '../chat-thread'
 import { chatMessageKey } from '../chat-tools'
 import { useT } from '../i18n'
+import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import type { compileMessageRules } from '../message-rules'
 import type { ModerationView } from '../state/app'
@@ -110,7 +111,11 @@ export function ChatThreadPanel({
         usernameDisplayMode={settings?.usernameDisplayMode}
         showAvatar={!preview && settings?.showAvatars}
         showBadges={settings?.showBadges}
-        showMentionAvatar={!preview && settings?.showMentionAvatar}
+        mentionAvatarStyle={
+          preview
+            ? 'off'
+            : resolveMentionAvatarStyle(settings?.mentionAvatarStyle, settings?.showMentionAvatar)
+        }
         showPlatformColorStripe={false}
         fontSize={settings?.fontSize}
         chatTheme={settings?.chatTheme}

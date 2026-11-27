@@ -1,4 +1,9 @@
-import type { NormalizedChatMessage, Platform, UsernameDisplayMode } from '@twirchat/shared/types'
+import type {
+  MentionAvatarStyle,
+  NormalizedChatMessage,
+  Platform,
+  UsernameDisplayMode,
+} from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
@@ -14,6 +19,7 @@ import type { ChatHistoryQuery } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
 import { chatMessageKey, formatChatTranscript } from '../chat-tools'
 import { useT } from '../i18n'
+import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { settingsStore } from '../state/app'
 import { useStoreSelector } from '../state/create-store'
 import { useTheme } from '../theme-context'
@@ -48,6 +54,9 @@ export function ChatHistoryPanel({
   const theme = useTheme()
   const { t, tPlural, language } = useT()
   const usernameDisplayMode = useStoreSelector(settingsStore, (s) => s?.usernameDisplayMode)
+  const mentionAvatarStyle = useStoreSelector(settingsStore, (s) =>
+    resolveMentionAvatarStyle(s?.mentionAvatarStyle, s?.showMentionAvatar),
+  )
   const [platform, setPlatform] = useState<Platform | 'all'>(channel?.platform ?? 'all')
   const [channelId, setChannelId] = useState(channel?.channelId ?? '')
   const [author, setAuthor] = useState('')
@@ -331,6 +340,7 @@ export function ChatHistoryPanel({
                   key={chatMessageKey(message)}
                   message={message}
                   usernameDisplayMode={usernameDisplayMode}
+                  mentionAvatarStyle={mentionAvatarStyle}
                   visible={historyRowVisible(index, messages.length, visibleRange)}
                 />
               ))}
@@ -374,10 +384,12 @@ export function ChatHistoryPanel({
 const HistorySearchMessageRow = memo(function HistorySearchMessageRow({
   message,
   usernameDisplayMode,
+  mentionAvatarStyle,
   visible,
 }: {
   message: NormalizedChatMessage
   usernameDisplayMode?: UsernameDisplayMode
+  mentionAvatarStyle?: MentionAvatarStyle
   visible: boolean
 }) {
   const theme = useTheme()
@@ -405,6 +417,7 @@ const HistorySearchMessageRow = memo(function HistorySearchMessageRow({
         showTimestamp={false}
         showAvatar={false}
         usernameDisplayMode={usernameDisplayMode}
+        mentionAvatarStyle={mentionAvatarStyle}
         visible={visible}
       />
     </div>

@@ -3,6 +3,7 @@ import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { useT } from '@gpuix/i18n'
+import { resolveMentionAvatarStyle } from '@gpuix/mention-avatar'
 import { settingsStore } from '@gpuix/state/app'
 import { useStoreSelector } from '@gpuix/state/create-store'
 import { useTheme } from '@gpuix/theme-context'
@@ -38,6 +39,9 @@ export function UserChatHistoryContent({
   const { t, language } = useT()
   const { showToast } = useActionToast()
   const usernameDisplayMode = useStoreSelector(settingsStore, (s) => s?.usernameDisplayMode)
+  const mentionAvatarStyle = useStoreSelector(settingsStore, (s) =>
+    resolveMentionAvatarStyle(s?.mentionAvatarStyle, s?.showMentionAvatar),
+  )
   const {
     messages,
     loadingInitial,
@@ -157,6 +161,7 @@ export function UserChatHistoryContent({
                 key={chatMessageKey(message)}
                 message={message}
                 usernameDisplayMode={usernameDisplayMode}
+                mentionAvatarStyle={mentionAvatarStyle}
                 visible={historyRowVisible(
                   index,
                   messages.length,

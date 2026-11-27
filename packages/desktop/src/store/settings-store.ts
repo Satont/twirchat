@@ -16,11 +16,16 @@ export const SettingsStore = {
 
     try {
       const parsed = partialAppSettingsSchema.parse(JSON.parse(row.value))
+      const mentionAvatarStyle =
+        parsed.mentionAvatarStyle ??
+        (parsed.showMentionAvatar === false ? 'off' : DEFAULT_SETTINGS.mentionAvatarStyle)
       // Deep-merge with defaults so new fields added after the settings were saved
       // don't come back as undefined.
       return appSettingsSchema.parse({
         ...DEFAULT_SETTINGS,
         ...parsed,
+        mentionAvatarStyle,
+        showMentionAvatar: mentionAvatarStyle !== 'off',
         overlay: { ...DEFAULT_SETTINGS.overlay, ...parsed.overlay },
         hotkeys: { ...DEFAULT_SETTINGS.hotkeys, ...parsed.hotkeys },
         selfPing: parsed.selfPing
@@ -36,7 +41,14 @@ export const SettingsStore = {
   },
 
   set(settings: AppSettings): AppSettings {
-    const validated = appSettingsSchema.parse(settings)
+    const mentionAvatarStyle =
+      settings.mentionAvatarStyle ??
+      (settings.showMentionAvatar === false ? 'off' : DEFAULT_SETTINGS.mentionAvatarStyle)
+    const validated = appSettingsSchema.parse({
+      ...settings,
+      mentionAvatarStyle,
+      showMentionAvatar: mentionAvatarStyle !== 'off',
+    })
     const db = getDb()
     db.run(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -46,6 +58,14 @@ export const SettingsStore = {
   },
 
   update(partial: Partial<AppSettings>): AppSettings {
-    return this.set(deepMerge(this.get(), partial))
+    const merged = deepMerge(this.get(), partial)
+    if (partial.mentionAvatarStyle === undefined && partial.showMentionAvatar !== undefined) {
+      merged.mentionAvatarStyle = partial.showMentionAvatar
+        ? merged.mentionAvatarStyle === 'off'
+          ? DEFAULT_SETTINGS.mentionAvatarStyle
+          : merged.mentionAvatarStyle
+        : 'off'
+    }
+    return this.set(merged)
   },
 }
