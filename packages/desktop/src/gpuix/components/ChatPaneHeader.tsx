@@ -14,12 +14,20 @@ export interface ChatPaneStreamInfo {
   title?: string
 }
 
+/** Watchers summed over the pane's sources, shown when it has more than one channel. */
+export interface ChatPaneViewers {
+  count: number
+  liveCount: number
+}
+
 export interface ChatPaneHeaderProps {
   leading?: ReactNode
   stream?: ChatPaneStreamInfo
   hideViewerCount?: boolean
   /** Short channel names for combined panes; rendered as plain text, no badges. */
   names?: readonly string[]
+  /** Combined live viewers; undefined when no source of the pane streams now. */
+  viewers?: ChatPaneViewers
   /** Extra state markers (read-only, pane account) kept next to the actions. */
   meta?: ReactNode
   onEditSources?: () => void
@@ -47,6 +55,7 @@ export function ChatPaneHeader({
   stream,
   hideViewerCount,
   names,
+  viewers,
   meta,
   onEditSources,
   children,
@@ -173,6 +182,43 @@ export function ChatPaneHeader({
           >
             {names.join(', ')}
           </Text>
+        ) : null}
+
+        {viewers ? (
+          <>
+            {showNames ? <MetaSeparator /> : null}
+            <div
+              testId="chat-header-viewers-total"
+              aria-label={t('chat.header.viewersTotal', {
+                count: viewers.count.toLocaleString(),
+                live: viewers.liveCount,
+              })}
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 4,
+                  backgroundColor: '#22c55e',
+                }}
+              />
+              {!hideViewerCount ? (
+                <Text style={{ fontSize: 11, fontWeight: 600, color: '#22c55e', flexShrink: 0 }}>
+                  {formatViewers(viewers.count)}
+                </Text>
+              ) : null}
+              <Text style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
+                {t('chat.header.liveChannels', { count: viewers.liveCount })}
+              </Text>
+            </div>
+          </>
         ) : null}
 
         {meta}
