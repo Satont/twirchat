@@ -262,6 +262,17 @@ export type TimestampFormat = 'HH:MM:SS' | 'HH:MM' | 'HH:MM:SS.sss' | 'hh:MM A' 
 /** How localized chat author display names are shown alongside their login. */
 export type UsernameDisplayMode = 'localized-and-username' | 'localized' | 'username'
 
+/** How mentioned users' avatars are displayed in chat messages. */
+export type MentionAvatarStyle = 'pill' | 'inline' | 'chip' | 'off'
+
+/** Every supported mention avatar style, used by settings validation and the UI. */
+export const MENTION_AVATAR_STYLES: [MentionAvatarStyle, ...MentionAvatarStyle[]] = [
+  'pill',
+  'inline',
+  'chip',
+  'off',
+]
+
 /**
  * Chat pane header actions the user may pin next to pause and mentions.
  * Everything else lives in the pane's ⋯ menu.
@@ -305,7 +316,9 @@ export interface AppSettings {
   showTwitchJoinPart: boolean
   showAvatars: boolean
   showBadges: boolean
-  /** Show the mentioned user's avatar and @login inline in chat messages. */
+  /** How mentioned users' avatars are displayed in chat messages. */
+  mentionAvatarStyle?: MentionAvatarStyle
+  /** @deprecated Migrated to `mentionAvatarStyle`; kept so older saved settings still load cleanly. */
   showMentionAvatar?: boolean
   showChannelLabel: boolean
   showChatImagePreviews?: boolean
@@ -376,6 +389,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   platformFilter: 'all',
   showAvatars: true,
   showBadges: true,
+  mentionAvatarStyle: 'pill',
   showMentionAvatar: true,
   showChannelLabel: true,
   showChatImagePreviews: false,

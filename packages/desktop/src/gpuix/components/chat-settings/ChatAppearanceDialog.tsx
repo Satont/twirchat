@@ -11,6 +11,11 @@ import { useEffect } from 'react'
 import { useBackend } from '../../backend/context'
 import { CHAT_HEADER_ACTION_META } from '../../chat-header-actions'
 import { useT, type MessageKey } from '../../i18n'
+import {
+  MENTION_AVATAR_OPTION_BY_STYLE,
+  MENTION_AVATAR_OPTIONS,
+  resolveMentionAvatarStyle,
+} from '../../mention-avatar'
 import { settingsStore } from '../../state/app'
 import { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN } from '../../state/chat-font-size'
 import { useTheme } from '../../theme-context'
@@ -79,11 +84,15 @@ export function ChatAppearanceDialog({
     })
   }
 
+  const activeMentionAvatarStyle = resolveMentionAvatarStyle(
+    settings.mentionAvatarStyle,
+    settings.showMentionAvatar,
+  )
+
   const toggles: { key: keyof AppSettings; label: string }[] = [
     { key: 'showPlatformColorStripe', label: t('chat.appearance.toggle.stripe') },
     { key: 'showPlatformIcon', label: t('chat.appearance.toggle.platformIcon') },
     { key: 'showAvatars', label: t('chat.appearance.toggle.avatars') },
-    { key: 'showMentionAvatar', label: t('chat.appearance.toggle.mentionAvatar') },
     { key: 'showBadges', label: t('chat.appearance.toggle.badges') },
     { key: 'showTimestamp', label: t('chat.appearance.toggle.timestamp') },
     { key: 'showChannelLabel', label: t('chat.appearance.toggle.channelLabel') },
@@ -281,6 +290,76 @@ export function ChatAppearanceDialog({
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Mentioned user avatar */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 8 }}>
+                {t('chat.appearance.mentionAvatar').toUpperCase()}
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {MENTION_AVATAR_OPTIONS.map((option) => {
+                  const active = activeMentionAvatarStyle === option.value
+                  const label = t(option.labelKey)
+                  const selectStyle = () =>
+                    patch({
+                      mentionAvatarStyle: option.value,
+                      showMentionAvatar: option.value !== 'off',
+                    })
+                  return (
+                    <div
+                      key={option.value}
+                      testId={`appearance-mention-avatar-${option.value}`}
+                      role="button"
+                      aria-label={label}
+                      aria-description={active ? t('misc.toggle.selected') : undefined}
+                      aria-pressed={active}
+                      tabIndex={0}
+                      onClick={selectStyle}
+                      onKeyDown={(event) => {
+                        if (event.key === 'enter' || event.key === 'space') {
+                          event.preventDefault()
+                          selectStyle()
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                        paddingTop: 5,
+                        paddingBottom: 5,
+                        paddingLeft: 9,
+                        paddingRight: 10,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: active ? theme.accent.primary : theme.hairline,
+                        backgroundColor: active ? theme.accent.tint12 : theme.fill,
+                        cursor: 'pointer',
+                        hover: { backgroundColor: active ? theme.accent.tint20 : theme.fillHover },
+                        focusVisible: {
+                          outlineWidth: 1,
+                          outlineColor: theme.link,
+                          outlineOffset: -2,
+                        },
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: active ? 600 : 500,
+                          color: active ? theme.accent.primary : theme.text,
+                        }}
+                      >
+                        {label}
+                      </Text>
+                    </div>
+                  )
+                })}
+              </div>
+              <Text style={{ fontSize: 10, color: theme.text2, marginTop: 6 }}>
+                {t(MENTION_AVATAR_OPTION_BY_STYLE[activeMentionAvatarStyle].hintKey)}
+              </Text>
             </div>
 
             {/* Pane header buttons */}

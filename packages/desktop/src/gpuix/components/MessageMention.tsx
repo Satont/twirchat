@@ -1,4 +1,5 @@
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import type { EventPayload, KeyEvent } from '@gpuix/react'
+import type { MentionAvatarStyle, NormalizedChatMessage } from '@twirchat/shared/types'
 import { useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 
 import { DEFAULT_COMMUNITY_BADGE_PREFERENCES } from '../../services/community-badges'
@@ -11,6 +12,7 @@ import { resolveMentionTarget } from '../../views/main/utils/mention-user-card'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
+import { inlineMentionAvatarSize } from '../mention-avatar'
 import { claimMessageRowClick } from '../message-row-click'
 import type { MessageToken } from '../message-tokens'
 import { accountsStore, aliasesStore, homeMessagesStore, watchedMessagesStore } from '../state/app'
@@ -20,6 +22,7 @@ import { emotePreferencesStore } from '../state/emote-preferences'
 import { mentionAppearanceKey, mentionAppearances } from '../state/mention-appearances'
 import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { MentionAvatar, useMentionAvatar } from './MentionAvatar'
 import { ImageLoadingContext } from './ui/RemoteImage'
 
 type OpenUserCard = (target: UserCardTarget) => void
@@ -39,6 +42,7 @@ interface MessageMentionProps {
   fontSize: number
   baseColor: string
   opacity: number
+  mentionAvatarStyle?: MentionAvatarStyle
 }
 
 function* retainedMessages(message: NormalizedChatMessage): Generator<NormalizedChatMessage> {
@@ -61,6 +65,7 @@ export function MessageMention({
   fontSize,
   baseColor,
   opacity,
+  mentionAvatarStyle = 'off',
 }: MessageMentionProps) {
   const backend = useBackend()
   const theme = useTheme()
@@ -76,6 +81,17 @@ export function MessageMention({
   const snapshot = useCallback(() => mentionAppearances.snapshot(key), [key])
   const appearance = useSyncExternalStore(subscribe, snapshot, snapshot)
   const visible = useContext(ImageLoadingContext)
+  const inlineAvatarEnabled =
+    visible && (mentionAvatarStyle === 'pill' || mentionAvatarStyle === 'inline')
+  const mentionedUser = useMentionAvatar(
+    message.platform,
+    username,
+    inlineAvatarEnabled,
+    appearance,
+  )
+  const showInlineAvatar = inlineAvatarEnabled && mentionedUser !== null
+  const isPill = mentionAvatarStyle === 'pill' && showInlineAvatar
+  const avatarSize = inlineMentionAvatarSize(fontSize)
   const paintsEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
   const cosmeticPreferences = useMemo(
     () => ({
@@ -97,7 +113,7 @@ export function MessageMention({
   const spacing = token.text.slice(name.length)
   const textStyle = {
     color: appearance?.color ? readableOn(appearance.color, theme.bg) : baseColor,
-    fontWeight: image ? 700 : appearance?.color ? 600 : 400,
+    fontWeight: image ? 700 : appearance?.color || isPill ? 600 : 400,
     fontSize,
     fontFamily: font,
     lineHeight: Math.round(fontSize * 1.45),
@@ -142,25 +158,104 @@ export function MessageMention({
     }
   }
 
+  const handleClick = (event: EventPayload) => {
+    if (!interactive) return
+    if (!claimMessageRowClick(event)) return
+    if ((event.button ?? 0) !== 0 || event.isRightClick) return
+    runUiTask(openCard())
+  }
+
+  const handleKeyDown = (event: KeyEvent) => {
+    if (interactive && (event.key === 'enter' || event.key === 'space')) {
+      event.preventDefault()
+      event.stopPropagation()
+      runUiTask(openCard())
+    }
+  }
+
+  const paintedImage = image ? (
+    <img
+      src={image.path}
+      style={{
+        width: image.width,
+        height: image.height,
+        marginLeft: -PAINT_GLYPH_HORIZONTAL_PADDING,
+        marginRight: -PAINT_GLYPH_HORIZONTAL_PADDING,
+        marginTop: -PAINT_GLYPH_VERTICAL_PADDING,
+        marginBottom: -PAINT_GLYPH_VERTICAL_PADDING,
+        pointerEvents: 'none',
+        opacity,
+      }}
+    />
+  ) : null
+
+  if (isPill && mentionedUser) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          flexShrink: 0,
+          minHeight: textStyle.lineHeight,
+        }}
+      >
+        <div
+          role={interactive ? 'button' : undefined}
+          aria-label={name}
+          testId={`${image ? 'painted-mention' : 'mention'}-${name}`}
+          tabIndex={interactive ? 0 : undefined}
+          onClick={handleClick}
+          onKeyDown={handleKeyDown}
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingLeft: 3,
+            paddingRight: 6,
+            paddingTop: 1,
+            paddingBottom: 1,
+            borderRadius: 999,
+            backgroundColor: theme.fill,
+            borderWidth: 1,
+            borderColor: theme.hairline,
+            cursor: interactive ? 'pointer' : 'default',
+            ...(interactive ? { hover: { backgroundColor: theme.fillHover } } : {}),
+          }}
+        >
+          <MentionAvatar
+            username={mentionedUser.username}
+            avatarUrl={mentionedUser.avatarUrl}
+            size={avatarSize}
+            fallbackColor={appearance?.color}
+            opacity={opacity}
+            testId={`mention-inline-avatar-${name}`}
+          />
+          {paintedImage ?? (
+            <text
+              style={{
+                ...textStyle,
+                lineHeight: Math.max(avatarSize, Math.round(fontSize * 1.15)),
+              }}
+            >
+              {name}
+            </text>
+          )}
+        </div>
+        {spacing ? <text style={textStyle}>{spacing}</text> : null}
+      </div>
+    )
+  }
+
   return (
     <div
       role={interactive ? 'button' : undefined}
       aria-label={name}
       testId={`${image ? 'painted-mention' : 'mention'}-${name}`}
       tabIndex={interactive ? 0 : undefined}
-      onClick={(event) => {
-        if (!interactive) return
-        if (!claimMessageRowClick(event)) return
-        if ((event.button ?? 0) !== 0 || event.isRightClick) return
-        runUiTask(openCard())
-      }}
-      onKeyDown={(event) => {
-        if (interactive && (event.key === 'enter' || event.key === 'space')) {
-          event.preventDefault()
-          event.stopPropagation()
-          runUiTask(openCard())
-        }
-      }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       style={{
         display: 'flex',
         flexDirection: 'row',
@@ -170,21 +265,21 @@ export function MessageMention({
         cursor: interactive ? 'pointer' : 'default',
       }}
     >
-      {image ? (
-        <>
-          <img
-            src={image.path}
-            style={{
-              width: image.width,
-              height: image.height,
-              marginLeft: -PAINT_GLYPH_HORIZONTAL_PADDING,
-              marginRight: -PAINT_GLYPH_HORIZONTAL_PADDING,
-              marginTop: -PAINT_GLYPH_VERTICAL_PADDING,
-              marginBottom: -PAINT_GLYPH_VERTICAL_PADDING,
-              pointerEvents: 'none',
-              opacity,
-            }}
+      {showInlineAvatar && mentionedUser ? (
+        <div style={{ display: 'flex', marginRight: 4, flexShrink: 0 }}>
+          <MentionAvatar
+            username={mentionedUser.username}
+            avatarUrl={mentionedUser.avatarUrl}
+            size={avatarSize}
+            fallbackColor={appearance?.color}
+            opacity={opacity}
+            testId={`mention-inline-avatar-${name}`}
           />
+        </div>
+      ) : null}
+      {paintedImage ? (
+        <>
+          {paintedImage}
           {spacing ? <text style={textStyle}>{spacing}</text> : null}
         </>
       ) : (

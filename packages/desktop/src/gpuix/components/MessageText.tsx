@@ -7,7 +7,7 @@ import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
  * into its own flex-wrap container (modern layout). Replaces the Vue app's
  * v-html="processText(...)" inline rendering.
  */
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import type { MentionAvatarStyle, NormalizedChatMessage } from '@twirchat/shared/types'
 import { memo, useMemo } from 'react'
 
 import { authorEmoteCatalog, enrichProviderEmotes } from '../../services/provider-emotes'
@@ -44,6 +44,7 @@ export const MessageTokens = memo(function MessageTokens({
   actionColor,
   channelSlug,
   onOpenUserCard,
+  mentionAvatarStyle,
   standalone,
 }: {
   message: NormalizedChatMessage
@@ -55,6 +56,7 @@ export const MessageTokens = memo(function MessageTokens({
   actionColor?: string
   channelSlug?: string
   onOpenUserCard?: (target: UserCardTarget) => void
+  mentionAvatarStyle?: MentionAvatarStyle
   /** The tokens own their row, so plain text does not have to flow after an author name. */
   standalone?: boolean
 }) {
@@ -225,6 +227,7 @@ export const MessageTokens = memo(function MessageTokens({
           fontSize={fontSize}
           baseColor={baseColor}
           opacity={textOpacity}
+          mentionAvatarStyle={deleted ? 'off' : mentionAvatarStyle}
         />
       )
     }
@@ -255,6 +258,7 @@ export const MessageText = memo(function MessageText(props: {
   actionColor?: string
   channelSlug?: string
   onOpenUserCard?: (target: UserCardTarget) => void
+  mentionAvatarStyle?: MentionAvatarStyle
 }) {
   return (
     <div

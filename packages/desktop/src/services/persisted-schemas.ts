@@ -33,7 +33,11 @@ import type {
   ModerationOutcome,
   UsernameDisplayMode,
 } from '@twirchat/shared/types'
-import { CHAT_HEADER_ACTIONS, DEFAULT_SETTINGS } from '@twirchat/shared/types'
+import {
+  CHAT_HEADER_ACTIONS,
+  DEFAULT_SETTINGS,
+  MENTION_AVATAR_STYLES,
+} from '@twirchat/shared/types'
 import type {
   YouTubeChatBatch,
   YouTubeChatStatus,
@@ -278,6 +282,7 @@ const customPaletteSchema = z.toZod<CustomPalette>()(
     .readonly(),
 )
 const chatHeaderActionSchema = z.enum(CHAT_HEADER_ACTIONS)
+const mentionAvatarStyleSchema = z.enum(MENTION_AVATAR_STYLES)
 
 export const appSettingsSchema = z.toZod<AppSettings>()(
   z.object({
@@ -297,6 +302,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showTwitchJoinPart: z.boolean().default(DEFAULT_SETTINGS.showTwitchJoinPart),
     showAvatars: z.boolean(),
     showBadges: z.boolean(),
+    mentionAvatarStyle: mentionAvatarStyleSchema.optional(),
     showMentionAvatar: z.boolean().optional(),
     showChannelLabel: z.boolean(),
     showChatImagePreviews: z.boolean().optional(),
@@ -595,6 +601,7 @@ export const partialAppSettingsSchema = appSettingsSchema.partial().extend({
   customPalette: customPaletteSchema.optional().catch(undefined),
   timestampFormat: timestampFormatSchema.optional(),
   usernameDisplayMode: usernameDisplayModeSchema.optional().catch(undefined),
+  mentionAvatarStyle: mentionAvatarStyleSchema.optional().catch(undefined),
   replyOnDoubleClick: z.boolean().optional(),
   showTwitchJoinPart: z.boolean().optional(),
   overlay: overlayConfigSchema.partial().optional(),
