@@ -55,6 +55,11 @@ const bytes = await sharp({
 })
   .png()
   .toBuffer()
+const tallBytes = await sharp({
+  create: { width: 270, height: 480, channels: 3, background: '#2aab95' },
+})
+  .png()
+  .toBuffer()
 const artworkUrl = 'https://i.scdn.co/image/now-playing-qa'
 const { getDbPath } = await import('../src/runtime-config')
 const imageCache = join(dirname(getDbPath()), 'image-cache')
@@ -66,6 +71,7 @@ const previewRequests: string[] = []
 backend.api.getChatImagePreview = createChatImagePreviewCache({
   load: async (url) => {
     previewRequests.push(url)
+    if (url === 'https://example.com/tall') return tallBytes
     return url === 'https://example.com/short' || url === artworkUrl ? bytes : undefined
   },
 })
@@ -286,11 +292,20 @@ try {
   const thumbnail = bounds('chat-image-thumbnail-compact')
   const chat = bounds('chat-messages')
   assert(thumbnail.width <= chat.width && thumbnail.x + thumbnail.width <= chat.x + chat.width)
+  assert.equal(thumbnail.width, 244, 'preview uses the fixed slot width')
+  assert.equal(thumbnail.height, 164, 'preview uses the fixed slot height')
   await captureGuiQaDisplay('chat-image-preview-compact')
-  const trigger = find('chat-image-thumbnail-compact')
+
+  incoming('tall', 'https://example.com/tall')
+  await until(() => find('chat-image-thumbnail-tall'), 'tall thumbnail in live chat')
+  const tallThumbnail = bounds('chat-image-thumbnail-tall')
+  assert.equal(tallThumbnail.width, thumbnail.width, 'tall preview keeps the slot width')
+  assert.equal(tallThumbnail.height, thumbnail.height, 'tall preview keeps the slot height')
+
+  const trigger = find('chat-image-thumbnail-tall')
   assert(trigger)
   current().focusElement(trigger.id)
-  await until(() => current().getFocusedElementId() === trigger.id, 'focus compact thumbnail')
+  await until(() => current().getFocusedElementId() === trigger.id, 'focus preview thumbnail')
   input('key', 'Return')
   await until(() => viewer && nativeWindow(viewer).isWindowOpen(), 'open image with keyboard')
   console.log('Native chat image preview QA passed.')
