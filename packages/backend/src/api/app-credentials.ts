@@ -5,6 +5,8 @@ import { config } from '../config.ts'
 // Leave time for the API request after a cold grant.
 const APP_GRANT_TIMEOUT_MS = 8000
 const TWITCH_REQUEST_TIMEOUT_MS = 8000
+// Bound the full Kick read, including cold grant acquisition and all batch waves.
+const KICK_READ_TIMEOUT_MS = 20_000
 const REFRESH_MARGIN_MS = 60_000
 const appTokenResponse = z.object({ access_token: z.string(), expires_in: z.number() })
 
@@ -126,7 +128,13 @@ async function requestKickAppToken(): Promise<string> {
   return kickAppToken
 }
 
-export async function getKickAppHeaders(): Promise<Record<string, string>> {
+export async function createKickRead(): Promise<(path: `/public/${string}`) => Promise<Response>> {
+  const signal = AbortSignal.timeout(KICK_READ_TIMEOUT_MS)
   const token = await getKickAppToken()
-  return { Authorization: `Bearer ${token}`, 'Client-ID': config.KICK_CLIENT_ID }
+  signal.throwIfAborted()
+  const headers = { Authorization: `Bearer ${token}`, 'Client-ID': config.KICK_CLIENT_ID }
+  return async (path) => {
+    signal.throwIfAborted()
+    return fetch(`https://api.kick.com${path}`, { headers, signal })
+  }
 }

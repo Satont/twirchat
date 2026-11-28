@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 
-import { fetchTwitchHelixWithAppToken, getKickAppHeaders } from '../src/api/app-credentials'
+import { createKickRead, fetchTwitchHelixWithAppToken } from '../src/api/app-credentials'
 import { fetchUrl } from './literal'
 
 const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
 const kickTokenUrl = 'https://id.kick.com/oauth/token'
+const kickReadUrl = 'https://api.kick.com/public/v1/channels'
 const helixUrl = 'https://api.twitch.tv/helix/users'
 
 const originalFetch = globalThis.fetch
@@ -12,6 +13,19 @@ let now = Date.now()
 
 async function getHelixAuthorization(): Promise<unknown> {
   return (await fetchTwitchHelixWithAppToken(helixUrl)).json()
+}
+
+async function getKickReadHeaders(): Promise<unknown> {
+  const read = await createKickRead()
+  return (await read('/public/v1/channels')).json()
+}
+
+function kickReadResponse(init: RequestInit | undefined): Response {
+  const headers = new Headers(init?.headers)
+  return Response.json({
+    Authorization: headers.get('Authorization'),
+    'Client-ID': headers.get('Client-ID'),
+  })
 }
 
 beforeEach(() => {
@@ -32,6 +46,7 @@ test('coalesces Twitch grants, caches by provider, and refreshes at the 60-secon
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const url = fetchUrl(input)
+      if (url === kickReadUrl) return kickReadResponse(init)
       if (url === helixUrl) return Response.json(new Headers(init?.headers).get('Authorization'))
       if (url !== twitchTokenUrl && url !== kickTokenUrl)
         throw new Error(`Unexpected fetch: ${url}`)
@@ -63,7 +78,7 @@ test('coalesces Twitch grants, caches by provider, and refreshes at the 60-secon
   twitchGrant.resolve(Response.json({ access_token: 'twitch-1', expires_in: 120 }))
   expect(await Promise.all([first, second])).toEqual(['Bearer twitch-1', 'Bearer twitch-1'])
   expect(twitchGrants).toBe(1)
-  expect(await getKickAppHeaders()).toEqual({
+  expect(await getKickReadHeaders()).toEqual({
     Authorization: 'Bearer kick',
     'Client-ID': 'test-kick-client-id',
   })
@@ -71,7 +86,7 @@ test('coalesces Twitch grants, caches by provider, and refreshes at the 60-secon
   expect(await getHelixAuthorization()).toBe('Bearer twitch-1')
   now++
   expect(await getHelixAuthorization()).toBe('Bearer twitch-2')
-  expect(await getKickAppHeaders()).toEqual({
+  expect(await getKickReadHeaders()).toEqual({
     Authorization: 'Bearer kick',
     'Client-ID': 'test-kick-client-id',
   })
@@ -82,7 +97,8 @@ test('Kick shares a cold or expiring grant across callers', async () => {
   let grant = Promise.withResolvers<string>()
   let requests = 0
   globalThis.fetch = Object.assign(
-    async (input: string | URL | Request) => {
+    async (input: string | URL | Request, init?: RequestInit) => {
+      if (fetchUrl(input) === kickReadUrl) return kickReadResponse(init)
       expect(fetchUrl(input)).toBe(kickTokenUrl)
       requests++
       return Response.json({ access_token: await grant.promise, expires_in: 120 })
@@ -91,12 +107,12 @@ test('Kick shares a cold or expiring grant across callers', async () => {
   )
 
   async function expectSharedGrant(token: string) {
-    const first = getKickAppHeaders()
-    const second = getKickAppHeaders()
+    const first = getKickReadHeaders()
+    const second = getKickReadHeaders()
     grant.resolve(token)
     const expected = { Authorization: `Bearer ${token}`, 'Client-ID': 'test-kick-client-id' }
     expect(await Promise.all([first, second])).toEqual([expected, expected])
-    expect(await getKickAppHeaders()).toEqual(expected)
+    expect(await getKickReadHeaders()).toEqual(expected)
   }
 
   await expectSharedGrant('kick-first')
@@ -108,10 +124,14 @@ test('Kick shares a cold or expiring grant across callers', async () => {
 
 test('a timed-out Kick grant rejects all waiters and does not poison the cache', async () => {
   const deadline = new AbortController()
-  const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal)
+  const originalTimeout = AbortSignal.timeout.bind(AbortSignal)
+  const timeout = spyOn(AbortSignal, 'timeout').mockImplementation((ms) =>
+    ms === 8000 ? deadline.signal : originalTimeout(ms),
+  )
   let requests = 0
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
+      if (fetchUrl(input) === kickReadUrl) return kickReadResponse(init)
       expect(fetchUrl(input)).toBe(kickTokenUrl)
       if (++requests > 1) return Response.json({ access_token: 'kick-recovered', expires_in: 120 })
       const signal = init?.signal
@@ -123,17 +143,16 @@ test('a timed-out Kick grant rejects all waiters and does not poison the cache',
     { preconnect: originalFetch.preconnect },
   )
 
-  const waiting = Promise.allSettled([getKickAppHeaders(), getKickAppHeaders()])
+  const waiting = Promise.allSettled([getKickReadHeaders(), getKickReadHeaders()])
   const reason = new DOMException('Grant deadline elapsed', 'TimeoutError')
   deadline.abort(reason)
   expect(await waiting).toEqual([
     { status: 'rejected', reason },
     { status: 'rejected', reason },
   ])
-  expect(timeout).toHaveBeenCalledTimes(1)
-  expect(timeout).toHaveBeenCalledWith(8000)
+  expect(timeout.mock.calls).toEqual([[20_000], [8000], [20_000]])
   timeout.mockRestore()
-  expect(await getKickAppHeaders()).toEqual({
+  expect(await getKickReadHeaders()).toEqual({
     Authorization: 'Bearer kick-recovered',
     'Client-ID': 'test-kick-client-id',
   })

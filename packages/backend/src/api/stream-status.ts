@@ -10,7 +10,7 @@ import type { StreamStatusResponse } from '@twirchat/shared'
  */
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken, getKickAppHeaders } from './app-credentials.ts'
+import { fetchTwitchHelixWithAppToken, createKickRead } from './app-credentials.ts'
 
 // ----------------------------------------------------------------
 // Twitch stream status
@@ -83,11 +83,8 @@ async function getTwitchStreamStatus(channelId: string): Promise<StreamStatusRes
 // ----------------------------------------------------------------
 
 async function getKickStreamStatus(channelSlug: string): Promise<StreamStatusResponse> {
-  const headers = await getKickAppHeaders()
-  const res = await fetch(
-    `https://api.kick.com/public/v1/channels?slug=${encodeURIComponent(channelSlug)}`,
-    { headers },
-  )
+  const read = await createKickRead()
+  const res = await read(`/public/v1/channels?slug=${encodeURIComponent(channelSlug)}`)
 
   if (!res.ok) {
     throw new Error(`Kick channels API failed: ${res.status}`)

@@ -8,7 +8,7 @@ import type { CategorySearchResult, SearchCategoriesResponse } from '@twirchat/s
  */
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken, getKickAppHeaders } from './app-credentials.ts'
+import { fetchTwitchHelixWithAppToken, createKickRead } from './app-credentials.ts'
 
 // ----------------------------------------------------------------
 // Twitch
@@ -45,11 +45,8 @@ async function searchTwitchCategories(query: string): Promise<CategorySearchResu
 // ----------------------------------------------------------------
 
 async function searchKickCategories(query: string): Promise<CategorySearchResult[]> {
-  const headers = await getKickAppHeaders()
-  const res = await fetch(
-    `https://api.kick.com/public/v2/categories?name=${encodeURIComponent(query)}&limit=25`,
-    { headers },
-  )
+  const read = await createKickRead()
+  const res = await read(`/public/v2/categories?name=${encodeURIComponent(query)}&limit=25`)
 
   if (!res.ok) {
     throw new Error(`Kick categories search failed: ${res.status}`)
