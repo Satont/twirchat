@@ -7,10 +7,10 @@ import {
   type MessageSimilarityFlags,
   type MessageSimilaritySettings,
 } from '../../services/message-similarity'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopBackend } from '../backend/server'
 import { accountsStore } from './accounts'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
 import { createPreferenceStore, type PreferenceStore } from './preferences'
 
 export const messageSimilarityPreferences = persistentResource(
@@ -132,7 +132,7 @@ export function resetSimilarityHistory(channelKey?: string): void {
   publishReader()
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:message_similarity_v1': PreferenceStore<typeof DEFAULT_MESSAGE_SIMILARITY_SETTINGS>
     messageSimilarityRevision: Store<number>

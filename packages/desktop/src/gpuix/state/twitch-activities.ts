@@ -9,12 +9,12 @@ import type {
 import { z } from 'zod'
 
 import { runInBackground } from '../../services/background-task'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
 import type { DesktopBackend } from '../backend/server'
 import { accountsStore } from './accounts'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export interface ActivitiesState {
   snapshot: TwitchActivitiesSnapshot | null
@@ -379,7 +379,7 @@ export function wireTwitchActivities(backend: {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     twitchActivities: Store<Map<string, ActivitiesState>>
     twitchWhispers: Store<TwitchWhisper[]>

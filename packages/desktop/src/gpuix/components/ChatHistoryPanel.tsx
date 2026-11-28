@@ -18,10 +18,10 @@ import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils
 import type { ChatHistoryQuery } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
 import { chatMessageKey, formatChatTranscript } from '../chat-tools'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { settingsStore } from '../state/app'
-import { useStoreSelector } from '../state/create-store'
+import { useStoreSelector } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import {
   HistoryButton as Button,

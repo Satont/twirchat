@@ -3,11 +3,11 @@ import { describe, expect, test } from 'bun:test'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { buildMessageTokens, mergePlainText } from '../src/gpuix/message-tokens'
-import { createStore } from '../src/gpuix/state/create-store'
 import {
   createMentionAppearances,
   mentionAppearanceKey,
 } from '../src/gpuix/state/mention-appearances'
+import { createStore } from '../src/state/create-store'
 import { messageLength, messageLengthLimit } from '../src/views/main/utils/chat-send-targets'
 import {
   codePointRangeToUtf16,

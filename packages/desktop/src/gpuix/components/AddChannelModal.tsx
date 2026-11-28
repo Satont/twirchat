@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 import type { WatchedPlatform } from '../../watched-channels/plugin-channel-types'
 import { usePopupContextId } from '../hooks/use-popup-hotkeys'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 /**
  * Add-channel modal — Modal wrapper around AddChannelForm
  * (port of AddChannelModal.vue).

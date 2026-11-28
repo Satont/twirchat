@@ -1,7 +1,7 @@
 import type { KickRefreshRequest } from '@twirchat/shared'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { kickBackendFailure } from '../platforms/kick/retry'
 import { refreshedTokenSchema } from './response-schemas'
 

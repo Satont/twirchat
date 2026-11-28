@@ -7,11 +7,11 @@ import {
   isPluginWatchedChannel,
   type DesktopWatchedChannel,
 } from '../../watched-channels/plugin-channel-types'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { watchedStatusesStore } from '../state/app'
-import { useStoreSelector } from '../state/create-store'
 import type { PluginChannelFeedStatus } from '../state/home-plugin-channels'
 import { useOverlayClose } from '../state/overlays'
+import { useStoreSelector } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { Text } from './ui/Text'

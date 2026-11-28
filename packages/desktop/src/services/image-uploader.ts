@@ -4,7 +4,7 @@ import { extname, isAbsolute } from 'node:path'
 
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 
 const settingsSchema = z.object({
   provider: z.literal('twir').optional(),

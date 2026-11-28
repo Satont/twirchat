@@ -6,7 +6,7 @@ import type {
   ChatterRole,
   ChatterUser,
 } from '../../../gpuix/backend/api'
-import { t } from '../../../gpuix/i18n'
+import { t } from '../../../i18n'
 
 export function supportsChatters(platform: Platform | undefined): platform is 'twitch' | 'kick' {
   return platform === 'twitch' || platform === 'kick'

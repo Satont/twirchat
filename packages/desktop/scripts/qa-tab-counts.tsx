@@ -18,7 +18,8 @@ const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { AppNavigation } = await import('../src/gpuix/components/AppNavigation')
 const { ChannelTabBar } = await import('../src/gpuix/components/ChannelTabBar')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 
 interface AutomationNode {

@@ -49,8 +49,8 @@ import {
 } from '../chat-timeline'
 import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../hooks/use-translation'
 import { parseHotkeyChoice } from '../hotkey-bindings'
-import { useT } from '../i18n'
 import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
@@ -93,7 +93,6 @@ import {
   type ComposerMentionTarget,
 } from '../state/composer'
 import { focusComposerByKey } from '../state/composer-focus'
-import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import {
   donationFeed,
@@ -129,6 +128,7 @@ import {
   twitchAutoModStore,
   type TwitchAutoModRow,
 } from '../state/twitch-automod'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { createWatchedFeedReader, observeWatchedFeedSources } from '../state/watched-feed'
 import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
 import { useWindowPresentation } from '../state/window-presentation'

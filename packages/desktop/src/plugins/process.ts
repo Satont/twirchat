@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import {
   MAX_CONNECTIONS,
   MAX_PENDING_REQUESTS,

@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import {
   validateMessageSimilaritySettings,
   type MessageSimilaritySettings,
 } from '../../services/message-similarity'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT, type MessageKey } from '../i18n'
-import { useStore } from '../state/create-store'
+import { useT } from '../hooks/use-translation'
 import {
   loadMessageSimilaritySettings,
   messageSimilarityPreferences,
   messageSimilarityStore,
 } from '../state/message-similarity'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormField, FormInput } from './ui/Form'

@@ -81,6 +81,37 @@ const directory = mkdtempSync(join(tmpdir(), 'twirchat-quality-'))
 fixtures.push(
   { directory: desktop, code: 'import type { Message } from "@twirchat/shared/types"' },
   { directory: `${gpuix}/components`, code: 'import { useBackend } from "../backend/context"' },
+  { directory: `${gpuix}/components`, code: 'import { useT } from "@gpuix/hooks/use-translation"' },
+  {
+    directory: `${gpuix}/backend`,
+    code: 'import { useT } from "../hooks/use-translation"',
+    workspaceImports: 1,
+  },
+  { directory: `${desktop}/services`, code: 'import { t } from "../i18n"' },
+  { directory: `${desktop}/i18n`, code: 'import { createStore } from "../state/create-store"' },
+  { directory: `${desktop}/i18n`, code: 'import "react/jsx-runtime"', workspaceImports: 1 },
+  { directory: `${desktop}/state`, code: 'import "@gpuix/react"', workspaceImports: 1 },
+  { directory: `${desktop}/state`, code: 'import "@gpuix/native"', workspaceImports: 1 },
+  {
+    directory: `${desktop}/i18n`,
+    code: 'type Locale = import("@gpuix/backend/api").DesktopApi',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${desktop}/i18n`,
+    code: 'import "@desktop/gpuix/hooks/use-translation"',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${desktop}/services`,
+    code: 'import("@gpuix/hooks/use-translation.ts")',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${desktop}/platforms`,
+    code: 'export * from "../gpuix/hooks/use-translation"',
+    workspaceImports: 1,
+  },
   { directory: `${gpuix}/state`, code: 'import { createStore } from "./create-store"' },
   { directory: `${gpuix}/backend`, code: 'import { getDb } from "../../store/db"' },
   { directory: `${gpuix}/backend`, code: 'import "@desktop/platforms/twitch/adapter"' },

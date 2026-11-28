@@ -59,8 +59,9 @@ in-process facade with exactly the same shape as the Wails gateway:
 
 ### State
 
-`src/gpuix/state/` — observable stores on `useSyncExternalStore`
-(`create-store.ts`), replacing Pinia:
+`src/gpuix/state/` — view state built on `src/state/create-store.ts` and
+subscribed to through `use-store.ts`. Desktop translations and active language
+live in `src/i18n`; `hooks/use-translation.ts` subscribes React to that state.
 
 - `app.ts` — backend event projection, chat buffers, stream status polling, and shared UI state.
 - `accounts.ts` — persistent active and saved account snapshots used by views and classifiers.
@@ -77,7 +78,7 @@ in-process facade with exactly the same shape as the Wails gateway:
 > store `.set()` expecting synchronous repaint from an event handler.
 >
 > **Hot reload persistence**: desktop `bun --hot` re-evaluates the whole module
-> graph on save. `persistent-resources.ts` retains each named store or controller
+> graph on save. `src/state/persistent-resources.ts` retains each named store or controller
 > on `globalThis`; owners declare the exact key and type at module scope. Remounts
 > keep messages, settings, tabs, caches and pending preference writes. Store
 > `.set(value)` assigns a value and `.modify(update)` applies an updater; function

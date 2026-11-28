@@ -205,7 +205,7 @@ test('a retained moderation view cannot keep a deleted-message tombstone after i
 
 test('similarity runtime migration retires the old cache and subscription while retaining the reader store', async () => {
   const moduleUrl = import.meta.resolve('../src/gpuix/state/message-similarity')
-  const storeUrl = import.meta.resolve('../src/gpuix/state/create-store')
+  const storeUrl = import.meta.resolve('../src/state/create-store')
   const source = `
     import assert from 'node:assert/strict'
     const { createStore } = await import(${JSON.stringify(storeUrl)})

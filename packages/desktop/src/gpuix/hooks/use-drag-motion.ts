@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { registerSupplementalHotkeys } from '../state/action-bindings'
-import { useStoreSelector } from '../state/create-store'
+import { useStoreSelector } from '../state/use-store'
 import { windowActivityStore } from '../state/window-activity'
 import { useWindowScope } from '../state/window-scope'
 

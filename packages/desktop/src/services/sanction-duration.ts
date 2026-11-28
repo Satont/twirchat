@@ -1,4 +1,4 @@
-import { tPlural } from '../gpuix/i18n'
+import { tPlural } from '../i18n'
 
 /** Human-readable chat sanction duration, e.g. `10m`, `2h` or `2 часа`. */
 export function formatSanctionDuration(seconds: number): string {

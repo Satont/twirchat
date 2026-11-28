@@ -1,9 +1,9 @@
 import { z } from 'zod'
 
-import { useStoreSelector } from './create-store'
-import { persistentResource } from './persistent-resources'
+import { persistentResource } from '../../state/persistent-resources'
 import type { PreferenceStore } from './preferences'
 import { createPreferenceStore, type PreferenceApi } from './preferences'
+import { useStoreSelector } from './use-store'
 import { useWindowScope } from './window-scope'
 
 export interface WindowPresentation {
@@ -88,7 +88,7 @@ export async function changeWindowPresentation(
   await windowPresentationPreferences.save(api, { ...Object.fromEntries(retained), [scope]: next })
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:window_presentation_v1': PreferenceStore<Record<string, WindowPresentation>>
   }

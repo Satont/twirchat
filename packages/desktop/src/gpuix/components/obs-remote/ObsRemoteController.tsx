@@ -12,8 +12,8 @@ import type {
   ObsRemoteProfile,
   ObsRemoteProfileDraft,
 } from '../../backend/obs-remote'
-import { useT } from '../../i18n'
-import { useStoreSelector } from '../../state/create-store'
+import { useT } from '../../hooks/use-translation'
+import { useStoreSelector } from '../../state/use-store'
 import { useWindowScope } from '../../state/window-scope'
 import { windowVisibilityStore } from '../../state/window-visibility'
 import { useTheme } from '../../theme-context'

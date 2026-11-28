@@ -8,7 +8,7 @@ import type { ChannelChatters, ChattersTarget, ChatterUser } from '../backend/ap
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { nativeWindow } from '../native-window'
 import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor } from '../theme'

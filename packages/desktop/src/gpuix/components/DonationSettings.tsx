@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useTheme } from '../theme-context'
 import { DonationBrandMark } from './DonationBrandMark'
 import { SettingsFooter } from './settings/SettingsLayout'

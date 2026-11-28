@@ -10,6 +10,7 @@ import {
 } from '@gpuix/react'
 import type { ReactNode } from 'react'
 
+import { t } from '../i18n'
 import { registerWindowsNotificationHandler } from '../services/system-integration'
 import {
   createWindowSessionController,
@@ -22,7 +23,6 @@ import {
 import { BackendContext } from './backend/context'
 import type { DesktopBackend } from './backend/server'
 import { registerBundledFonts } from './fonts'
-import { t } from './i18n'
 import { initializeManagedRenderer } from './managed-renderer'
 import { nativeWindow, type NativeWindowOptions, type NativeWindowControls } from './native-window'
 import { observeNativeHotkeyPlan } from './state/action-bindings'

@@ -1,7 +1,7 @@
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
-import { t } from './i18n'
+import { t } from '../i18n'
 import { compileRuleRegex } from './rule-regex'
 
 export function chatMessageKey(message: NormalizedChatMessage): string {

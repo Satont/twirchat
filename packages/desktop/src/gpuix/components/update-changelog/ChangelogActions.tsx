@@ -2,7 +2,7 @@ import { useTheme } from '@desktop/gpuix/theme-context'
 
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { Icon } from '../ui'
 import { ACTIONS_PADDING, ACTIONS_PADDING_TOP } from './constants'
 

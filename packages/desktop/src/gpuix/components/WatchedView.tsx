@@ -14,8 +14,8 @@ import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-ty
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
+import { useT } from '../hooks/use-translation'
 import { parseHotkeyChoice } from '../hotkey-bindings'
-import { useT } from '../i18n'
 import { dockSideAt, resizedPair, type DockSide } from '../layout-operations'
 import { nativeWindow, type NativePaintedElementBounds } from '../native-window'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
@@ -28,7 +28,6 @@ import {
 } from '../state/app'
 import { chatTabsStore } from '../state/chat-tabs'
 import { focusComposerForPane } from '../state/composer-focus'
-import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import { setHomePluginChannel } from '../state/home-plugin-channels'
 import {
@@ -45,6 +44,7 @@ import {
   setPanelSources,
 } from '../state/layout'
 import { allPanels, layoutRevisionStore, layoutStore } from '../state/layout-state'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { AddChannelForm } from './AddChannelForm'

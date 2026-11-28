@@ -1,6 +1,6 @@
 import { useActionToast } from '@gpuix/components/action-toast'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useTheme } from '@gpuix/theme-context'
 import { memo } from 'react'
 

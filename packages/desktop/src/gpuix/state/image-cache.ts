@@ -18,8 +18,8 @@ import { runInBackground } from '../../services/background-task'
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import { type ImageSweepLimits, sweepImageDirectoryOnce } from '../../services/image-cache-sweep'
 import { fetchProviderImage } from '../../services/provider-relay'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
 export const imageCacheRevisionStore = persistentResource('imageCacheRevision', () =>
   createStore<number>(0),
@@ -284,7 +284,7 @@ export function imageFailed(url: string | undefined): boolean {
   return imageSnapshot(url) === null
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     imageCacheRevision: Store<number>
   }

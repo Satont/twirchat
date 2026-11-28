@@ -1,9 +1,9 @@
 import type { Account, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t } from '../i18n'
 import { createMentionMatcher } from './chat-tools'
 import { compileFilterExpression, compileRuleRegex, type FilterContext } from './filter-expression'
-import { t } from './i18n'
 import type { RuleRegex } from './rule-regex'
 
 export interface TextRule {

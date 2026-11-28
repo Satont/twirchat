@@ -1,8 +1,8 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { runInBackground } from '../../services/background-task'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
 type ModerationPlatform = 'twitch' | 'kick'
 
@@ -111,7 +111,7 @@ export function ensureAvatar(message: NormalizedChatMessage): void {
   )
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     avatarRevision: Store<number>
   }

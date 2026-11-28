@@ -1,7 +1,7 @@
 import type { KeyEvent } from '@gpuix/react'
 import { z } from 'zod'
 
-import { t } from './i18n'
+import { t } from '../i18n'
 
 function defineHotkeyActions<const Actions extends Record<string, readonly string[]>>(
   actions: Actions,

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { backendFetch } from '../runtime-config'
 import { deleteOldestEntry } from './bounded-cache'
 import { resolveMentionUser } from './mention-user'

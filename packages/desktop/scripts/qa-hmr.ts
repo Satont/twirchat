@@ -22,9 +22,11 @@ import { getDesktopBackend } from ${JSON.stringify(join(desktop, 'src/gpuix/back
 import { useBackend } from ${JSON.stringify(join(desktop, 'src/gpuix/backend/context.ts'))}
 import { useDesktopWindows } from ${JSON.stringify(join(desktop, 'src/gpuix/state/desktop-windows.ts'))}
 import { useWindowScope } from ${JSON.stringify(join(desktop, 'src/gpuix/state/window-scope.ts'))}
-import { useStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/create-store.ts'))}
+import { useStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/use-store.ts'))}
 import { registerHotkeyActions } from ${JSON.stringify(join(desktop, 'src/gpuix/state/hotkeys.ts'))}
 import { focusNativeQaWindow } from ${JSON.stringify(join(desktop, 'scripts/qa-x11.ts'))}
+import { setLanguage } from ${JSON.stringify(join(desktop, 'src/i18n/index.ts'))}
+import { useT } from ${JSON.stringify(join(desktop, 'src/gpuix/hooks/use-translation.ts'))}
 import { moderationRevisionStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/app.ts'))}
 import { mountDesktopWindows } from ${JSON.stringify(join(desktop, 'src/gpuix/window-manager.tsx'))}
 declare global {
@@ -44,6 +46,8 @@ function Probe() {
   const scope = useWindowScope()
   const renderer = useGpuixRequired()
   const retained = useStore(moderationRevisionStore)
+  const { language, t } = useT()
+  const settingsTitle = t('settings.title')
   const [count] = React.useState(round)
   const [clicked, setClicked] = React.useState(false)
   const [shortcuts, setShortcuts] = React.useState(0)
@@ -68,16 +72,21 @@ function Probe() {
   }, [renderer])
   React.useEffect(() => {
     if (!clicked || shortcuts !== 1) return
+    // Change language while mounted; the next hot remount must retain it.
+    if (stage === 1 && language !== 'ru') {
+      setLanguage('ru')
+      return
+    }
     globalThis.__hmrFirstRenderer ??= renderer
     appendFileSync(${JSON.stringify(reports)}, JSON.stringify({
       round, stage, count, scope, window: windows?.descriptor.id,
       sameReact: globalThis.__hmrFirstReact === React,
       sameRenderer: globalThis.__hmrFirstRenderer === renderer,
       sameBackend: currentBackend === globalThis.__hmrFirstBackend,
-      retained, clicked, shortcuts,
+      retained, clicked, shortcuts, language, settingsTitle,
     }) + '\\n')
     moderationRevisionStore.set(stage)
-  }, [currentBackend, windows, scope, renderer, retained, count, clicked, shortcuts])
+  }, [currentBackend, windows, scope, renderer, retained, count, clicked, shortcuts, language, settingsTitle])
   return React.createElement('div', {
     testId:'hmr-probe', ref:button, onClick:() => setClicked(true),
     style:{width:180,height:60,padding:12,backgroundColor:'#333344'},
@@ -94,6 +103,8 @@ const roundSchema = z.object({
   scope: z.string(),
   window: z.string().optional(),
   retained: z.number(),
+  language: z.literal('ru'),
+  settingsTitle: z.literal('Настройки'),
   clicked: z.boolean(),
   shortcuts: z.number(),
 })

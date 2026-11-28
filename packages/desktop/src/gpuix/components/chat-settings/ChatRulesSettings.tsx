@@ -5,7 +5,7 @@ import { sanitizeDisplayText, truncateGraphemes } from '../../../views/shared/ut
 import { useBackend } from '../../backend/context'
 import { compileFilterExpression } from '../../filter-expression'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import {
   compileMessageRules,
   validateChatRules,
@@ -18,8 +18,8 @@ import {
 import { accountsStore } from '../../state/accounts'
 import { homeMessagesStore, watchedMessagesStore } from '../../state/app'
 import { chatRulesPreferences, chatRulesStore } from '../../state/chat-rules'
-import { useStore } from '../../state/create-store'
 import { useTextInputFocusTracking } from '../../state/focus'
+import { useStore } from '../../state/use-store'
 import { useTheme } from '../../theme-context'
 import { SettingsFooter } from '../settings/SettingsLayout'
 import { Icon } from '../ui/Icon'

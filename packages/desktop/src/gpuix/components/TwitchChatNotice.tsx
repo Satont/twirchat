@@ -5,9 +5,10 @@ import type {
 } from '@twirchat/shared/types'
 import type { ReactNode } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
-import { useT, type MessageKey } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import type { IconName } from '../icons'
 import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'

@@ -26,7 +26,7 @@ src/
 │   │   ├── layout.ts       # Per-tab watched-channel split layouts
 │   │   ├── caches.ts       # Avatar + mention-color session caches
 │   │   ├── image-cache.ts  # Remote images → disk (GPUI can't fetch http on Linux)
-│   │   ├── create-store.ts # Store factory (macrotask-deferred notifications!)
+│   │   ├── use-store.ts    # React subscriptions to observable stores
 │   │   ├── focus.ts        # Text-editor focus tracking (hotkey suppression)
 │   │   └── hotkeys.ts      # Global hotkeys (Ctrl+K, Ctrl+Tab…)
 │   ├── components/         # React UI (ChatView, ChatMessage, panels, dialogs…)
@@ -34,6 +34,8 @@ src/
 │   ├── icons.ts            # Monochrome SVG sources for <svg>
 │   ├── message-tokens.ts   # Message → flex-wrap token list (emotes/links/mentions)
 │   └── README.md           # Detailed GPUIX architecture + known limitations
+├── i18n/                   # Desktop catalogs, translation and active language
+├── state/                  # Observable store factory and HMR resource registry
 ├── store/                  # SQLite (bun:sqlite): accounts, settings, messages…
 ├── platforms/              # Twitch (twurple) / Kick (Centrifugo) / YouTube (gRPC)
 ├── chat/aggregator.ts      # Dedup + 7TV enrichment

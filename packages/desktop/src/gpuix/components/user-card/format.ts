@@ -8,7 +8,7 @@
 
 import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'
 
-import { t, tPlural } from '../../i18n'
+import { t, tPlural } from '../../../i18n'
 
 /** Channel-wise sRGB mix: `pctA` (0..1) of `a` blended with the rest of `b`. */
 export function hexMix(a: string, b: string, pctA: number): string {

@@ -1,6 +1,6 @@
 import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { FormField, FormInput, ActionButton } from '@gpuix/components/ui/Form'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import type { IconName } from '@gpuix/icons'
 import { useTheme } from '@gpuix/theme-context'
 import { useState, type ReactNode } from 'react'

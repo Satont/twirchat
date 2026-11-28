@@ -1,6 +1,6 @@
 import { useTheme } from '@desktop/gpuix/theme-context'
 
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import type { ReleaseNoteKind } from '../../release-notes'
 import { Icon } from '../ui'
 import { Text } from '../ui/Text'

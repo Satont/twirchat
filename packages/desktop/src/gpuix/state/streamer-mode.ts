@@ -5,11 +5,11 @@ import {
   type StreamerModeSettings,
   type StreamerModeStatus,
 } from '../../services/streamer-mode'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
 import type { DesktopBackend } from '../backend/server'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export const streamerModeStore = persistentResource('streamerMode', () =>
   createStore<StreamerModeStatus>({
@@ -99,7 +99,7 @@ interface StreamerModeRequestState {
   error: string | null
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     streamerMode: Store<StreamerModeStatus>
     streamerModeRequests: Store<StreamerModeRequestState>

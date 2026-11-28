@@ -6,7 +6,7 @@ import { resolveTwirTargets, type TwirChannelTarget } from '../../services/twir-
 import type { TwirNowPlaying } from '../../services/twir-now-playing'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useDesktopWindows } from '../state/desktop-windows'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'

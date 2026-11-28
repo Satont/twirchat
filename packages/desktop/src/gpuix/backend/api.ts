@@ -75,6 +75,7 @@ import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
 import type { DonationService } from '../../donations/service'
+import { t } from '../../i18n'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import type { PluginTransportInfo } from '../../plugins/api'
@@ -172,7 +173,6 @@ import {
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { PluginChannels } from '../../watched-channels/plugin-channels'
-import { t } from '../i18n'
 import {
   platformCommandResultSchema,
   streamStatusResponseSchema,

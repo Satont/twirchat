@@ -1,6 +1,6 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
-import { t } from './i18n'
+import { t } from '../i18n'
 import { compileRuleRegex, RuleRegex } from './rule-regex'
 
 type Value =

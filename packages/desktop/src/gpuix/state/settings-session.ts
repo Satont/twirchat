@@ -1,5 +1,5 @@
+import { createStore } from '../../state/create-store'
 import { activeTabStore, type MainTab } from './app'
-import { createStore } from './create-store'
 
 export interface SettingsSessionState {
   dirty: boolean

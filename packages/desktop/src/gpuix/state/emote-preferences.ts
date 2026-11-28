@@ -3,7 +3,7 @@ import type { Emote, Platform } from '@twirchat/shared/types'
 
 import { validateEmotePreferences, favoriteEmoteKey } from '../../services/emote-preferences'
 import { DEFAULT_EMOTE_PREFERENCES, emoteProvider } from '../../services/provider-emotes'
-import { persistentResource } from './persistent-resources'
+import { persistentResource } from '../../state/persistent-resources'
 import type { PreferenceStore } from './preferences'
 export { validateEmotePreferences, favoriteEmoteKey } from '../../services/emote-preferences'
 import { createPreferenceStore, type PreferenceApi } from './preferences'
@@ -65,7 +65,7 @@ export function platformSupportsPersonalEmotes(platform: Platform): boolean {
   return platform !== 'youtube'
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:emote_preferences_v1': PreferenceStore<typeof DEFAULT_EMOTE_PREFERENCES>
   }

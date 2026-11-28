@@ -3,13 +3,13 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { runInBackground } from '../../services/background-task'
 import type { TranslationResult, TranslationSettingsView } from '../../services/translation'
 import { DEFAULT_TRANSLATION_SETTINGS, resolveChannelTranslation } from '../../services/translation'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopBackend } from '../backend/server'
 import { chatMessageKey } from '../chat-tools'
 import { accountsStore } from './accounts'
 import { watchedChannelsStore } from './app'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export const translationSettingsStore = persistentResource('translationSettings', () =>
   createStore<{
@@ -193,7 +193,7 @@ export function wireAutoTranslations(backend: DesktopBackend): () => void {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     translationSettings: Store<{
       value: TranslationSettingsView

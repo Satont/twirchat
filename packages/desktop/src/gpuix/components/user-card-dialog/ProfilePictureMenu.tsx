@@ -6,7 +6,7 @@ import { Modal } from '@gpuix/components/ui/Modal'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { usePopupHotkeys } from '@gpuix/hooks/use-popup-hotkeys'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import { useState } from 'react'
 

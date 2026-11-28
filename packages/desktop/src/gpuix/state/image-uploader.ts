@@ -1,7 +1,7 @@
 import type { ImageUploaderSettings } from '../../services/image-uploader'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export const imageUploaderSettingsStore = persistentResource('imageUploaderSettings', () =>
   createStore<ImageUploaderSettings | null>(null),
@@ -33,7 +33,7 @@ export async function loadImageUploaderSettings(
   return pending
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     imageUploaderSettings: Store<ImageUploaderSettings | null>
   }

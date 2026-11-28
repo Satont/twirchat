@@ -27,13 +27,15 @@ function workspaceLink(path) {
   return /(?:^|\/)node_modules\/@twirchat\/(desktop|backend|shared)(?:\/|$)/u.exec(path)
 }
 
-function desktopRuntimeImport(specifier, filePath, link) {
-  const target = filePath
+function desktopImportPath(specifier, filePath, link) {
+  return filePath
     ? link?.[1] === 'desktop'
       ? filePath.slice(link.index + link[0].length)
       : filePath.replace(/^packages\/desktop\//u, '')
-    : specifier.replace(/^@desktop\/+/u, 'src/').replace(/^@twirchat\/desktop\/+/u, '')
-  return /^src\/(store|platforms)(?:\/|$)/u.exec(target)?.[1]
+    : specifier
+        .replace(/^@desktop\/+/u, 'src/')
+        .replace(/^@gpuix\/+/u, 'src/gpuix/')
+        .replace(/^@twirchat\/desktop\/+/u, '')
 }
 
 function importSpecifier(node) {
@@ -90,15 +92,21 @@ const workspaceImportBoundaries = {
       aliasPath: 'Use a canonical workspace import without dot segments or backslashes.',
       desktopRuntime:
         'Use the desktop backend bridge instead of importing desktop src/{{area}} from GPUIX.',
+      desktopFoundation:
+        'Desktop localization and state primitives must not depend on GPUIX or React.',
+      localeHook:
+        'Use the desktop localization service; React translation hooks belong to GPUIX presentation.',
     },
   },
   create(context) {
     const from = workspacePackage(context.filename)
     if (!from) return {}
     const importer = workspaceRelativePath(context.filename)
+    const desktopSource = importer.startsWith('packages/desktop/src/')
+    const desktopGpuix = importer.startsWith('packages/desktop/src/gpuix/')
     const isGpuixPresentation =
-      importer.startsWith('packages/desktop/src/gpuix/') &&
-      !importer.startsWith('packages/desktop/src/gpuix/backend/')
+      desktopGpuix && !importer.startsWith('packages/desktop/src/gpuix/backend/')
+    const desktopFoundation = /^packages\/desktop\/src\/(?:i18n|state)\//u.test(importer)
 
     return {
       'ImportDeclaration, ExportNamedDeclaration[source], ExportAllDeclaration, ImportExpression, TSImportType, TSImportEqualsDeclaration, CallExpression[callee.name="require"]'(
@@ -120,9 +128,29 @@ const workspaceImportBoundaries = {
         const filePath = file ? workspaceRelativePath(file) : undefined
         const link = filePath ? workspaceLink(filePath) : undefined
         const target = alias ?? link?.[1] ?? (file ? workspacePackage(file) : undefined)
-        if (isGpuixPresentation && target === 'desktop') {
-          const area = desktopRuntimeImport(specifier, filePath, link)
-          if (area) context.report({ node: source, messageId: 'desktopRuntime', data: { area } })
+        const desktopPath = target === 'desktop' ? desktopImportPath(specifier, filePath, link) : ''
+        if (isGpuixPresentation) {
+          const area = /^src\/(store|platforms)(?:\/|$)/u.exec(desktopPath)?.[1]
+          if (area) {
+            context.report({ node: source, messageId: 'desktopRuntime', data: { area } })
+            return
+          }
+        }
+        if (
+          desktopFoundation &&
+          (/^src\/gpuix(?:\/|$)/u.test(desktopPath) ||
+            /^(?:react|react-dom|@gpuix\/[^/]+)(?:\/|$)/u.test(specifier))
+        ) {
+          context.report({ node: source, messageId: 'desktopFoundation' })
+          return
+        }
+        if (
+          desktopSource &&
+          !isGpuixPresentation &&
+          /^src\/gpuix\/hooks\/use-translation(?:\.[cm]?[jt]sx?)?$/u.test(desktopPath)
+        ) {
+          context.report({ node: source, messageId: 'localeHook' })
+          return
         }
         if (!target || target === from) return
         if (target !== 'shared') {

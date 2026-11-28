@@ -3,7 +3,7 @@ import {
   validateChatPausePreferences,
   type ChatPausePreferences,
 } from '../../services/chat-pause'
-import { persistentResource } from './persistent-resources'
+import { persistentResource } from '../../state/persistent-resources'
 import type { PreferenceStore } from './preferences'
 import { createPreferenceStore, type PreferenceApi } from './preferences'
 
@@ -18,7 +18,7 @@ export const chatPauseStore = chatPausePreferences.store
 export const loadChatPausePreferences = (api: PreferenceApi): Promise<void> =>
   chatPausePreferences.load(api)
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:ui.chatPause': PreferenceStore<ChatPausePreferences>
   }

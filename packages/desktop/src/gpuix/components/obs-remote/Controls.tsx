@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { useTheme } from '../../theme-context'
 import { ActionButton } from '../ui/Form'
 import { Text } from '../ui/Text'

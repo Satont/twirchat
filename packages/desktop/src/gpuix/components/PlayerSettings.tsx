@@ -7,7 +7,7 @@ import {
 } from '../../services/channel-actions'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormField, FormInput } from './ui/Form'

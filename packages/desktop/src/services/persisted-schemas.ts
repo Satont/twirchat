@@ -45,7 +45,7 @@ import type {
 } from '@twirchat/shared/youtube-chat'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { normalizePaletteColor } from '../shared/theme-palette'
 import { MAX_FEED_SOURCES } from '../views/main/utils/layout-tree'
 

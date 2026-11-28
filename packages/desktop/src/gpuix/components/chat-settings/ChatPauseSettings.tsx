@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { t as translate } from '../../../i18n'
 import {
   PAUSE_MODIFIER_KEYS,
   validateChatPausePreferences,
@@ -8,9 +9,9 @@ import {
 } from '../../../services/chat-pause'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { t as translate, useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { chatPausePreferences, chatPauseStore } from '../../state/chat-pause'
-import { useStore } from '../../state/create-store'
+import { useStore } from '../../state/use-store'
 import { useTheme } from '../../theme-context'
 import { SettingsFooter } from '../settings/SettingsLayout'
 import { ActionButton, FormField, FormInput } from '../ui/Form'

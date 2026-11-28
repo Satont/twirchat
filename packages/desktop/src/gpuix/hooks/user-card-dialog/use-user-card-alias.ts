@@ -1,7 +1,7 @@
 import { useBackend } from '@gpuix/backend/context'
 import { errorText } from '@gpuix/components/user-card/format'
 import { aliasesLoadedStore, aliasesStore, showNotice } from '@gpuix/state/app'
-import { useStore, useStoreSelector } from '@gpuix/state/create-store'
+import { useStore, useStoreSelector } from '@gpuix/state/use-store'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useCallback, useEffect, useState } from 'react'
 

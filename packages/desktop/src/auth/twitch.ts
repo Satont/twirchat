@@ -2,7 +2,7 @@ import { logger } from '@twirchat/shared'
 import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { AccountStore } from '../store/account-store'
 import { getTwitchDesktopClientId } from './client-config'
 import { createOAuthRefresher, OAuthRefreshError } from './refresh-token'

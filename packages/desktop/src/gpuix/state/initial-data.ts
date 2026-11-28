@@ -1,9 +1,9 @@
 import type { Platform, PlatformStatusInfo } from '@twirchat/shared/types'
 
+import { setLanguage } from '../../i18n'
 import { mergeChatMessageSnapshot } from '../../views/main/utils/chat-message-buffer'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopBackend } from '../backend/server'
-import { setLanguage } from '../i18n'
 import { accountsStore, savedAccountsStore } from './accounts'
 import {
   aliasesLoadedStore,

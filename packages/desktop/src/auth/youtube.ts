@@ -6,7 +6,7 @@ import {
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { AccountStore } from '../store/account-store'
 import { getYouTubeDesktopCredentials } from './client-config'
 import { postOAuthForm } from './oauth-form'

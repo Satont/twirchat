@@ -2,7 +2,7 @@ import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { platformSchema } from '../../services/persisted-schemas'
-import { persistentResource } from './persistent-resources'
+import { persistentResource } from '../../state/persistent-resources'
 import { createPreferenceStore, type PreferenceStore } from './preferences'
 
 const disabledPlatformsSchema = z.array(platformSchema)
@@ -18,7 +18,7 @@ export const homeComposerPlatformPreferences = persistentResource(
   createHomeComposerPlatformPreferences,
 )
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:ui.homeComposerDisabledPlatforms': PreferenceStore<Platform[]>
   }

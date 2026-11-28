@@ -15,7 +15,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { PLUGIN_API_VERSION, type PluginInfo } from './api'
 import {
   MANIFEST_FILENAME,

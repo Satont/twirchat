@@ -1,5 +1,5 @@
 import { SettingsSectionContext } from '@gpuix/components/settings/SettingsLayout'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useFont, useTheme } from '@gpuix/theme-context'
 import { formatMessageTime } from '@gpuix/timestamp-format'
 import { useContext } from 'react'

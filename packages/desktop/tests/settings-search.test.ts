@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { translatorFor, type Language } from '../src/gpuix/i18n'
-import { en } from '../src/gpuix/i18n/locales/en'
-import { ru } from '../src/gpuix/i18n/locales/ru'
+import { type Language } from '@twirchat/shared/types'
+
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_SECTIONS,
@@ -13,6 +12,9 @@ import {
   visibleSettingsSections,
   type SettingsSectionId,
 } from '../src/gpuix/settings-search'
+import { translatorFor } from '../src/i18n'
+import { en } from '../src/i18n/locales/en'
+import { ru } from '../src/i18n/locales/ru'
 
 const ids = (query: string) => searchSettings(query).sections.map((section) => section.id)
 

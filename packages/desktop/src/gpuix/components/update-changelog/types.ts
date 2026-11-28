@@ -1,4 +1,4 @@
-import type { MessageKey } from '../../i18n'
+import type { MessageKey } from '../../../i18n'
 import type { IconName } from '../../icons'
 import type { ReleaseNoteKind } from '../../release-notes'
 

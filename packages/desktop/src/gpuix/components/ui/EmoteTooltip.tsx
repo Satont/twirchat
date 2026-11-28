@@ -11,10 +11,9 @@ import { emoteProvider } from '../../../services/provider-emotes'
 import { sanitizeDisplayText } from '../../../views/shared/utils/display-text'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { PREFIX_MODIFIERS, SUFFIX_MODIFIERS, type EmoteModifier } from '../../message-tokens'
 import { showNotice } from '../../state/app'
-import { useStoreSelector } from '../../state/create-store'
 import {
   emotePreferencesStore,
   favoriteEntry,
@@ -22,6 +21,7 @@ import {
   loadEmotePreferences,
   toggleFavoriteEmote,
 } from '../../state/emote-preferences'
+import { useStoreSelector } from '../../state/use-store'
 import type { Theme } from '../../theme'
 import { useFont } from '../../theme-context'
 import { Icon } from './Icon'

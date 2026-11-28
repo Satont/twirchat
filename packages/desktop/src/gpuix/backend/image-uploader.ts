@@ -7,6 +7,7 @@ import {
   TwirReconnectRequired,
   twirUploadTokens,
 } from '../../auth/twir-upload'
+import { t } from '../../i18n'
 import { runInBackground } from '../../services/background-task'
 import {
   DEFAULT_IMAGE_UPLOADER_SETTINGS,
@@ -21,7 +22,6 @@ import {
 } from '../../services/image-uploader'
 import { decryptAsync, encryptAsync } from '../../store/crypto'
 import { getDb } from '../../store/db'
-import { t } from '../i18n'
 import { browserCommand } from './open-url'
 
 const SETTINGS_KEY = 'secret:image-uploader'

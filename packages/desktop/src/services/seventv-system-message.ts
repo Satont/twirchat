@@ -1,7 +1,7 @@
 import type { BackendToDesktopMessage } from '@twirchat/shared/protocol'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 
 type SevenTvSystemMessage = Extract<BackendToDesktopMessage, { type: 'seventv_system_message' }>
 

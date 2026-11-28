@@ -19,6 +19,7 @@ type LayoutIOBackend = {
 }
 type LayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removePanel'> }
 type CloneLayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removeWatchedChannelsLayout'> }
+import { t } from '../../i18n'
 import {
   findNodeById,
   findParentOfNode,
@@ -26,7 +27,6 @@ import {
   panelWatchedSources,
   retainAvailableFeedSources,
 } from '../../views/main/utils/layout-tree'
-import { t } from '../i18n'
 import {
   dockPanel,
   directionalFocusTarget,

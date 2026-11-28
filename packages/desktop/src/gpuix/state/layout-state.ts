@@ -1,7 +1,7 @@
 import type { LayoutNode, PanelNode, WatchedChannelsLayout } from '@twirchat/shared/types'
 
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
 export interface LayoutState {
   layout: WatchedChannelsLayout | null
@@ -33,7 +33,7 @@ export function allPanels(layout: WatchedChannelsLayout | null): PanelNode[] {
   return panels
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     layouts: Store<Map<string, LayoutState>>
     layoutRevision: Store<number>

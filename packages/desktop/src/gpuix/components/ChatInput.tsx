@@ -34,6 +34,7 @@ import {
   type ReactNode,
 } from 'react'
 
+import { t as translate } from '../../i18n'
 import type { JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { normalizePrivateCommand } from '../../services/private-commands'
 import {
@@ -66,7 +67,7 @@ import {
 } from '../commands'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
-import { t as translate, useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { nativeWindow, type NativeTextAction } from '../native-window'
 import { savedAccountsStore } from '../state/accounts'
 import {
@@ -92,7 +93,6 @@ import {
   updateComposer,
 } from '../state/composer'
 import { useComposerFocusRegistration } from '../state/composer-focus'
-import { useStore, useStoreSelector } from '../state/create-store'
 import { customCommandsStore, loadCustomCommands } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
 import { homeComposerPlatformPreferences } from '../state/home-composer-platforms'
@@ -100,6 +100,7 @@ import type { PluginChannelFeedStatus } from '../state/home-plugin-channels'
 import { resolvePaneAccount } from '../state/pane-accounts'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { useWindowScope } from '../state/window-scope'
 import { platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'

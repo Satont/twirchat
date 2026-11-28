@@ -3,7 +3,7 @@ import { setTimeout as wait } from 'node:timers/promises'
 import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { postOAuthForm } from './oauth-form'
 import { oauthTokenSchema } from './response-schemas'
 

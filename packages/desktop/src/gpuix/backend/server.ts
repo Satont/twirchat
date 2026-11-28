@@ -36,6 +36,7 @@ import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
 import { createDonationService } from '../../donations/service'
 import { createDonationShareClient } from '../../donations/share-client'
+import { setLanguage, t } from '../../i18n'
 import {
   pushOverlayEvent,
   pushOverlayMessage,
@@ -86,7 +87,6 @@ import {
 } from '../../watched-channels/home-plugin-preference'
 import { WatchedChannelManager } from '../../watched-channels/manager'
 import { createPluginChannels } from '../../watched-channels/plugin-channels'
-import { setLanguage, t } from '../i18n'
 import {
   createDesktopApi,
   planTwitchActivitySnapshot,

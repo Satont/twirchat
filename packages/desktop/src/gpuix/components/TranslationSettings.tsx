@@ -1,6 +1,7 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import type {
   TranslationSettings as Settings,
   TranslationProvider,
@@ -9,13 +10,13 @@ import type {
 } from '../../services/translation'
 import { TRANSLATION_PROVIDERS, validateTranslationSettings } from '../../services/translation'
 import { useBackend } from '../backend/context'
-import { useT, type MessageKey } from '../i18n'
-import { useStore } from '../state/create-store'
+import { useT } from '../hooks/use-translation'
 import {
   applyTranslationSettings,
   loadTranslationSettings,
   translationSettingsStore,
 } from '../state/translation'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormField, FormInput } from './ui/Form'

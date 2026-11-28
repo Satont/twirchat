@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { readableOn, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'

@@ -21,6 +21,7 @@ import type {
 } from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 
+import { t, tPlural } from '../../i18n'
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
@@ -33,7 +34,7 @@ import {
 } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
-import { t, tPlural, useLanguage } from '../i18n'
+import { useLanguage } from '../hooks/use-translation'
 import { icons } from '../icons'
 import { resolveMentionAvatarStyle } from '../mention-avatar'
 import {
@@ -44,7 +45,7 @@ import {
 import { buildMessageTokens } from '../message-tokens'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
-import { useStoreSelector } from '../state/create-store'
+import { useStoreSelector } from '../state/use-store'
 import { semantic, platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'

@@ -11,7 +11,7 @@ import {
   HistoryToggle as Toggle,
 } from '../../components/ChatHistoryFields'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { useTheme } from '../../theme-context'
 import { SettingsFooter } from '../settings/SettingsLayout'
 import { Text } from '../ui/Text'

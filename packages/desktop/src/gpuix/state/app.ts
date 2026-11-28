@@ -11,10 +11,15 @@ import type {
   Platform,
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
+import { type Language } from '@twirchat/shared/types'
 
+import { getLanguage, t } from '../../i18n'
 import { similarityChannelKey } from '../../services/message-similarity'
 import { formatSanctionDuration } from '../../services/sanction-duration'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import {
   appendLiveChatMessagesWithCount,
   mergeChatMessageSnapshot,
@@ -33,14 +38,10 @@ import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
 import type { DesktopBackend } from '../backend/server'
-import { getLanguage, t, type Language } from '../i18n'
 import { accountsStore, savedAccountsStore } from './accounts'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
 import { donationFeed, sharedDonationFeeds } from './donation-feed'
 import { mentionAppearances } from './mention-appearances'
 import { classifyIncomingSimilarity, hydrateSimilarityHistory } from './message-similarity'
-import { persistentResource } from './persistent-resources'
 import { recordWatchedFeedAppend } from './watched-feed'
 
 export function hydrateMessageHistory(messages: readonly NormalizedChatMessage[]): void {
@@ -361,7 +362,7 @@ export function moderationOutcomeFor(
   return moderationViewStore.get().outcomeFor(message)
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     moderationState: ModerationState
     moderationView: Store<ModerationView>
@@ -847,7 +848,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     settings: Store<AppSettings | null>
     aliases: Store<UserAlias[]>

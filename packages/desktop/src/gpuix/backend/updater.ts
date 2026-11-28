@@ -17,10 +17,10 @@ import { GithubSource, UpdateManager } from 'velopack'
 import type { UpdateInfo } from 'velopack'
 
 import { APP_VERSION } from '../../build-info'
+import { t } from '../../i18n'
 import { getDbPath } from '../../runtime-config'
 import { exitAfterFlushingDiagnosticLogs } from '../../services/diagnostic-logging'
 import { getDb } from '../../store/db'
-import { t } from '../i18n'
 import { prepareLinuxUpdateLocator } from '../linux-update-runtime'
 import type { DesktopEvents } from './events'
 

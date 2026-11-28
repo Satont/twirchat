@@ -1,9 +1,9 @@
 import { z } from 'zod'
 
+import { t } from '../../i18n'
 import { ObsRemoteSession, type ObsRemoteSnapshot } from '../../services/obs-remote'
 import { decryptAsync, encryptAsync } from '../../store/crypto'
 import { getDb } from '../../store/db'
-import { t } from '../i18n'
 
 const CONNECTIONS_KEY = 'secret:obs-remote-connections'
 const MAX_CONNECTIONS = 32

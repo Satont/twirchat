@@ -2,10 +2,10 @@ import { chatMessageKey } from '@gpuix/chat-tools'
 import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { resolveMentionAvatarStyle } from '@gpuix/mention-avatar'
 import { settingsStore } from '@gpuix/state/app'
-import { useStoreSelector } from '@gpuix/state/create-store'
+import { useStoreSelector } from '@gpuix/state/use-store'
 import { useTheme } from '@gpuix/theme-context'
 import {
   HISTORY_DISPLAY_LIMIT,

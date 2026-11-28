@@ -1,4 +1,4 @@
-import { createStore, type Store } from './create-store'
+import { createStore, type Store } from '../../state/create-store'
 
 export interface PreferenceApi {
   getUiState(params: { key: string }): Promise<string | null>

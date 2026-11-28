@@ -1,6 +1,6 @@
 import { generateCodeChallenge, generateCodeVerifier, generateState } from '@twirchat/shared/pkce'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 
 const SESSION_TTL_MS = 10 * 60 * 1000
 const MAX_PENDING_SESSIONS = 16

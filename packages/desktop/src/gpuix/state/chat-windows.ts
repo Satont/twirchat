@@ -1,6 +1,6 @@
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
 interface ChatWindowRegistration {
   tabId?: string
@@ -67,7 +67,7 @@ export function activateChatSearchWindow(scope: string): boolean {
   return true
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     chatWindows: Store<Map<string, ChatWindowRegistration>>
     chatWindowRuntime: ChatWindowRuntime

@@ -7,7 +7,10 @@ import type {
 } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t } from '../../i18n'
 import { panelNodeSchema, watchedChannelsLayoutSchema } from '../../services/persisted-schemas'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import {
   getAllPanels,
   layoutChannelNames,
@@ -20,7 +23,6 @@ import type {
   WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
-import { t } from '../i18n'
 import {
   activeWatchedTabStore,
   tabChannelIdsStore,
@@ -28,9 +30,7 @@ import {
   watchedChannelsStore,
 } from './app'
 import { chatRulesPreferences, chatRulesStore } from './chat-rules'
-import { createStore, type Store } from './create-store'
 import { layoutStore, type LayoutState } from './layout-state'
-import { persistentResource } from './persistent-resources'
 import { setMainTab } from './settings-session'
 import { clearTabUnread } from './tab-unread'
 
@@ -658,7 +658,7 @@ export function tabsForChannels(
   })
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     chatTabs: Store<ChatTabsState>
   }

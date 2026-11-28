@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useOverlayClose } from '../state/overlays'
 import { withAlpha } from '../theme'

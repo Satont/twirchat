@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react'
 
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'

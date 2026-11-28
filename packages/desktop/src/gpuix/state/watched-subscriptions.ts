@@ -1,10 +1,10 @@
 import type { WatchedChannelsLayout } from '@twirchat/shared/types'
 
+import { t } from '../../i18n'
 import { runInBackground } from '../../services/background-task'
 import { getAllPanels, panelWatchedSources } from '../../views/main/utils/layout-tree'
 import type { DesktopWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
-import { t } from '../i18n'
 import { showNotice, watchedChannelsStore } from './app'
 import { chatTabsStore } from './chat-tabs'
 import { chatWindowsStore } from './chat-windows'

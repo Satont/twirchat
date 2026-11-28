@@ -1,6 +1,6 @@
 import { logger } from '@twirchat/shared/logger'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { AccountStore } from '../store/account-store'
 import { postOAuthForm } from './oauth-form'
 import { expiresAt, hasOAuthErrorMessage, oauthTokenSchema } from './response-schemas'

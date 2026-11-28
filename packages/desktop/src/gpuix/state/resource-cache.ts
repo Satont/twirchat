@@ -1,5 +1,5 @@
 import { runInBackground } from '../../services/background-task'
-import { createStore, type Store } from './create-store'
+import { createStore, type Store } from '../../state/create-store'
 
 export type ResourceSnapshot<T> =
   | { status: 'ready'; value: T }

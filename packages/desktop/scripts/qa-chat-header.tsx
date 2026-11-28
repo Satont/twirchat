@@ -11,7 +11,7 @@ const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await im
 const { BackendContext } = await import('../src/gpuix/backend/context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
-const { setLanguage } = await import('../src/gpuix/i18n')
+const { setLanguage } = await import('../src/i18n')
 const {
   settingsStore,
   streamStatusStore,

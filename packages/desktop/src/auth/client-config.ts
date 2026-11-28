@@ -1,4 +1,4 @@
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 declare const embeddedDonationAlertsDesktopClientId: string | undefined
 declare const embeddedTwitchDesktopClientId: string | undefined
 declare const embeddedYouTubeDesktopClientId: string | undefined

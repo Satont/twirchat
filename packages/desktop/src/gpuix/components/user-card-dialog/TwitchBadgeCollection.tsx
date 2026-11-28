@@ -1,7 +1,7 @@
 import { ActionButton } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useTwitchUserBadges } from '@gpuix/hooks/user-card-dialog/use-twitch-user-badges'
-import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 import { memo } from 'react'
 

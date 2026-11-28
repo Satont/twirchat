@@ -1,7 +1,8 @@
 import type { AppSettings, CustomPalette, ThemeMode } from '@twirchat/shared/types'
 import { useState } from 'react'
 
-import { useT, type MessageKey } from '../i18n'
+import { type MessageKey } from '../../i18n'
+import { useT } from '../hooks/use-translation'
 import { useTextInputFocusTracking } from '../state/focus'
 import { THEME_PRESETS } from '../theme'
 import { useTheme } from '../theme-context'

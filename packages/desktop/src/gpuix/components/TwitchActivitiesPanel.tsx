@@ -4,11 +4,11 @@ import type {
 } from '@twirchat/shared/twitch-activities'
 import { useEffect, useRef, useState } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT, type MessageKey } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { accountsStore } from '../state/accounts'
-import { useStore, useStoreSelector } from '../state/create-store'
 import {
   EMPTY_ACTIVITIES,
   loadTwitchActivities,
@@ -19,6 +19,7 @@ import {
   lastWhisperRecipientStore,
   rememberWhisperRecipient,
 } from '../state/twitch-activities'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { activityCapabilityText } from './twitch-activities/controllers'
 import { Following } from './twitch-activities/Following'

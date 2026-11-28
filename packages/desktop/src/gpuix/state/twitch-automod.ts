@@ -1,14 +1,14 @@
+import { t } from '../../i18n'
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import type {
   TwitchAutoModEvent,
   TwitchAutoModHold,
   TwitchAutoModResolution,
 } from '../../services/twitch-automod'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
-import { t } from '../i18n'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 type Decision = 'approve' | 'deny'
 
@@ -178,7 +178,7 @@ export async function decideTwitchAutoModMessage(
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     twitchAutoMod: Store<ReadonlyMap<string, TwitchAutoModQueue>>
   }
