@@ -316,6 +316,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Decode `user.update` into the user ID and its first usable active-set target. Validate each encountered connection array as a whole before selecting a target; later arrays are not inspected once a target is found. The subscription manager now handles routing and switch lifetime without parsing provider payloads. Malformed connection arrays are reported by the EventAPI decoder, even for users without current subscriptions.
 - **Safeguard:** Decoder tests cover ignored fields, malformed entries in the selected array, first-target precedence, and untrusted input targets. Existing dispatch tests cover switch coalescing, cancellation, and publication order.
 
+### Round 61 — Give hosted EventAPI contracts one owner
+
+- **Decision:** EventAPI schemas own the types derived from them. The socket client, subscription manager, emote conversion, and loopback fixtures import the types directly from that boundary. Unused aliases and sub-schema exports are removed; accepted payloads and socket behavior are unchanged.
+- **Safeguard:** Workspace typechecks verify the migrated imports; loopback and dispatch tests continue to exercise the actual schemas and transport.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

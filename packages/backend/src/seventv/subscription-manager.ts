@@ -14,7 +14,7 @@ import {
 } from './emote'
 import type { SevenTVEmote } from './emote'
 import { sevenTVEventClient, type SevenTVEventClient } from './event-client'
-import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-client'
+import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-schemas'
 
 const log = logger('seventv:manager')
 const emoteSetEvents = ['emote_set.update', 'emote_set.delete']

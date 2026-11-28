@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test'
 
 import { SevenTVEventClient } from '../src/seventv/event-client'
-import type { SevenTVEventMessage } from '../src/seventv/event-client'
-import { sevenTVEventMessageSchema } from '../src/seventv/event-schemas'
+import { sevenTVEventMessageSchema, type SevenTVEventMessage } from '../src/seventv/event-schemas'
 
 type EventSocket = Bun.ServerWebSocket<SevenTVEventMessage[]>
 

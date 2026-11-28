@@ -1,4 +1,4 @@
-import type { SevenTVEventImageFile, SevenTVEventEmoteValue } from './event-client.ts'
+import type { SevenTVEventImageFile, SevenTVEventEmoteValue } from './event-schemas'
 
 export interface SevenTvEmoteInput {
   alias: string

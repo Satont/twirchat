@@ -10,7 +10,7 @@ export const sevenTVHelloSchema = z.object({
   session_id: z.string(),
   subscription_limit: z.number(),
 })
-export const eventImageFileSchema = z.object({
+const eventImageFileSchema = z.object({
   url: z.string().nullish(),
   name: z.string().nullish(),
   mime: z.string().nullish(),
@@ -34,13 +34,13 @@ const actorSchema = z
   .optional()
   .catch(undefined)
 const emoteChangeTypeSchema = z.enum(['object', 'emote'])
-export const emoteInsertSchema = z.object({
+const emoteInsertSchema = z.object({
   key: z.literal('emotes'),
   index: z.number(),
   type: emoteChangeTypeSchema,
   value: sevenTVEventEmoteValueSchema,
 })
-export const emoteRemoveSchema = z.object({
+const emoteRemoveSchema = z.object({
   key: z.literal('emotes'),
   index: z.number(),
   type: emoteChangeTypeSchema,
@@ -55,7 +55,7 @@ export const emoteUpdateSchema = z
     value: sevenTVEventEmoteValueSchema,
   })
   .transform((update): typeof update & { kind: 'emote' } => ({ ...update, kind: 'emote' }))
-export const fieldUpdateSchema = z
+const fieldUpdateSchema = z
   .object({
     key: z.string().refine((key) => key !== 'emotes'),
     index: z.number().optional(),
@@ -64,16 +64,16 @@ export const fieldUpdateSchema = z
     value: z.unknown(),
   })
   .transform((update): typeof update & { kind: 'field' } => ({ ...update, kind: 'field' }))
-export const emoteSetUpdateSchema = z.object({
+const emoteSetUpdateSchema = z.object({
   id: z.string(),
   actor: actorSchema,
   pushed: z.array(emoteInsertSchema).optional(),
   pulled: z.array(emoteRemoveSchema).optional(),
   updated: z.array(z.union([emoteUpdateSchema, fieldUpdateSchema])).optional(),
 })
-export const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema })
+const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema })
 const connectionFieldsSchema = z.array(z.object({ key: z.string(), value: z.unknown() }))
-export const userUpdateSchema = z
+const userUpdateSchema = z
   .object({
     id: z.string(),
     updated: z
@@ -112,3 +112,11 @@ export const sevenTVEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('emote_set.delete'), body: emoteSetDeleteSchema }),
   z.object({ type: z.literal('user.update'), body: userUpdateSchema }),
 ])
+
+export type SevenTVEventMessage = z.infer<typeof sevenTVEventMessageSchema>
+export type SevenTVHello = z.infer<typeof sevenTVHelloSchema>
+export type SevenTVEvent = z.infer<typeof sevenTVEventSchema>
+export type SevenTVEventImageFile = z.infer<typeof eventImageFileSchema>
+export type SevenTVEventEmoteValue = z.infer<typeof sevenTVEventEmoteValueSchema>
+export type EmoteSetDeleteEvent = z.infer<typeof emoteSetDeleteSchema>
+export type UserUpdateEvent = z.infer<typeof userUpdateSchema>

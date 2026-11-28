@@ -1,28 +1,12 @@
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import * as schemas from './event-schemas'
+import type { SevenTVEvent, SevenTVEventMessage, SevenTVHello } from './event-schemas'
 import { sevenTVEventMessageSchema, sevenTVHelloSchema, sevenTVEventSchema } from './event-schemas'
 
 const log = logger('seventv:event')
 
 const SEVENTV_EVENT_API_URL = 'wss://events.7tv.io/v3'
-
-export type SevenTVEventMessage = z.infer<typeof schemas.sevenTVEventMessageSchema>
-export type SevenTVHello = z.infer<typeof schemas.sevenTVHelloSchema>
-export type UserUpdateEvent = z.infer<typeof schemas.userUpdateSchema>
-export type SevenTVEventImageFile = z.infer<typeof schemas.eventImageFileSchema>
-export type SevenTVEventEmoteData = z.infer<typeof schemas.sevenTVEventEmoteValueSchema.shape.data>
-export type SevenTVEventEmoteValue = z.infer<typeof schemas.sevenTVEventEmoteValueSchema>
-export type SevenTVEventEmoteInsert = z.infer<typeof schemas.emoteInsertSchema>
-export type SevenTVEventEmoteRemove = z.infer<typeof schemas.emoteRemoveSchema>
-export type SevenTVEventEmoteUpdate = z.infer<typeof schemas.emoteUpdateSchema>
-export type SevenTVEventFieldUpdate = z.infer<typeof schemas.fieldUpdateSchema>
-export type SevenTVEvent = z.infer<typeof schemas.sevenTVEventSchema>
-export type EmoteSetUpdateEvent = z.infer<typeof schemas.emoteSetUpdateSchema>
-export type EmoteSetDeleteEvent = z.infer<typeof schemas.emoteSetDeleteSchema>
-
-export type SevenTVEventHandler = (event: SevenTVEvent) => void
 
 export class SevenTVEventClient {
   private ws: WebSocket | null = null
@@ -41,7 +25,7 @@ export class SevenTVEventClient {
 
   private subscriptions = new Map<string, { type: string; condition: Record<string, string> }>()
 
-  onEvent: SevenTVEventHandler | null = null
+  onEvent: ((event: SevenTVEvent) => void) | null = null
   onConnected: ((reconnected: boolean) => void) | null = null
   onDisconnected: (() => void) | null = null
 
