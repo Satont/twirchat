@@ -4,10 +4,16 @@ import type { DesktopToBackendMessage } from '@twirchat/shared'
 import { z } from 'zod'
 
 import { ClientStore } from '../src/db'
-import { sevenTVCache, sevenTVEventClient, sevenTVManager } from '../src/seventv'
+import { sevenTVCache } from '../src/seventv/cache'
 import { sevenTVChannelKey } from '../src/seventv/channel-key'
 import type { WsData } from '../src/ws/connection-manager'
-import { handleWsClose, handleWsMessage, handleWsOpen } from '../src/ws/handlers'
+import {
+  handleWsClose,
+  handleWsMessage,
+  handleWsOpen,
+  sevenTVEventClient,
+  sevenTVManager,
+} from '../src/ws/handlers'
 
 function send(ws: WebSocket, message: DesktopToBackendMessage) {
   ws.send(JSON.stringify(message))

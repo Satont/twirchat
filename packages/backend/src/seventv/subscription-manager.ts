@@ -11,7 +11,7 @@ import {
   removeSetEmote,
   updateSetEmote,
 } from './emote'
-import { sevenTVEventClient, type SevenTVEventClient } from './event-client'
+import type { SevenTVEventClient } from './event-client'
 import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-schemas'
 
 const log = logger('seventv:manager')
@@ -51,10 +51,10 @@ export class SevenTVSubscriptionManager {
   private backfillController: AbortController | undefined
   private backfillRunning = false
 
-  // Callback to send messages to desktop clients
-  sendToClient: ((clientSecret: string, message: BackendToDesktopMessage) => void) | null = null
-
-  constructor(private readonly eventClient: SevenTVEventClient = sevenTVEventClient) {
+  constructor(
+    private readonly eventClient: SevenTVEventClient,
+    private readonly sendToClient: (clientSecret: string, message: BackendToDesktopMessage) => void,
+  ) {
     eventClient.onEvent = (event) => this.handleEvent(event)
     eventClient.onConnected = (reconnected) => {
       if (!reconnected) return
@@ -717,7 +717,7 @@ export class SevenTVSubscriptionManager {
     channelId: string,
     emoteSet: Pick<CachedEmoteSet, 'emotes'>,
   ): void {
-    this.sendToClient?.(clientSecret, {
+    this.sendToClient(clientSecret, {
       channelId,
       emotes: Array.from(emoteSet.emotes.values()),
       platform,
@@ -726,7 +726,7 @@ export class SevenTVSubscriptionManager {
   }
 
   private broadcastToChannel(channel: ChannelSubscription, message: BackendToDesktopMessage): void {
-    for (const client of channel.clients) this.sendToClient?.(client, message)
+    for (const client of channel.clients) this.sendToClient(client, message)
   }
 
   getStats(): {
@@ -741,5 +741,3 @@ export class SevenTVSubscriptionManager {
     }
   }
 }
-
-export const sevenTVManager = new SevenTVSubscriptionManager()

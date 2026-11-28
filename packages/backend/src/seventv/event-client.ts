@@ -318,5 +318,3 @@ export class SevenTVEventClient {
     return this.subscriptions.size
   }
 }
-
-export const sevenTVEventClient = new SevenTVEventClient()

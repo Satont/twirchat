@@ -336,6 +336,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Use the shared `SevenTVEmote` protocol type for the hosted cache and message production. Map GraphQL and EventAPI data in the emote module and remove the duplicate backend types and field-copy factory.
 - **Safeguard:** A GraphQL-to-desktop fixture pins the emitted fields, exact alias, provider emote ID, and image preference. Existing EventAPI dispatch tests cover alias updates and notifications.
 
+### Round 65 — Compose hosted 7TV at the WebSocket boundary
+
+- **Decision:** The WebSocket handlers compose one EventAPI client and subscription manager with a required delivery callback. Importing the manager or image proxy no longer creates or configures the production EventAPI client. Remove the 7TV barrel once all callers import the actual owners.
+- **Safeguard:** Dispatch tests own their EventAPI clients; the loopback case verifies subscriptions and dispatches on the same socket. Desktop socket lifetime tests exercise the production composition and retain replacement and cancellation coverage.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

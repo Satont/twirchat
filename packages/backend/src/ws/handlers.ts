@@ -1,5 +1,4 @@
 import type { DesktopToBackendMessage } from '@twirchat/shared'
-import type { BackendToDesktopMessage } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import type { ServerWebSocket } from 'bun'
 
@@ -9,7 +8,8 @@ import { ClientStore } from '../db/index.ts'
 import { AccountStore } from '../db/index.ts'
 import { verifyDonationShareIdentity } from '../donations/share-identity.ts'
 import { createDonationShareRelay } from '../donations/share-relay.ts'
-import { sevenTVManager } from '../seventv/index.ts'
+import { SevenTVEventClient } from '../seventv/event-client'
+import { SevenTVSubscriptionManager } from '../seventv/subscription-manager'
 import { YouTubeChatRelay } from '../youtube/relay.ts'
 import { connectionManager } from './connection-manager.ts'
 import type { WsData } from './connection-manager.ts'
@@ -31,10 +31,13 @@ export const donationShareRelay = createDonationShareRelay({
   },
 })
 
-// Setup 7TV manager to send messages to clients
-sevenTVManager.sendToClient = (clientSecret: string, message: BackendToDesktopMessage) => {
-  connectionManager.send(clientSecret, message)
-}
+export const sevenTVEventClient = new SevenTVEventClient()
+export const sevenTVManager = new SevenTVSubscriptionManager(
+  sevenTVEventClient,
+  (client, message) => {
+    connectionManager.send(client, message)
+  },
+)
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   log.info('WebSocket opened', { client: ws.data.clientSecret.slice(0, 8) })

@@ -20,7 +20,7 @@ import { userProfileRoutes } from './routes/user-profile.ts'
 import { json } from './routes/utils.ts'
 import { webhookRoutes } from './routes/webhooks.ts'
 import { youtubeRoutes } from './routes/youtube.ts'
-import { handleSevenTVImageProxy } from './seventv/index.ts'
+import { handleSevenTVImageProxy } from './seventv/image-proxy'
 import type { WsData } from './ws/connection-manager.ts'
 import { handleWsClose, handleWsMessage, handleWsOpen, youtubeChatRelay } from './ws/handlers.ts'
 
