@@ -31,7 +31,6 @@ import {
   type KickRefreshEntry,
 } from './kick-refresh'
 import { authUrlSchema, exchangedTokenSchema } from './response-schemas'
-import { successPage } from './server'
 
 const log = logger('auth-kick')
 
@@ -107,7 +106,6 @@ export async function getKickAuthUrl(codeChallenge: string, state: string): Prom
  * user info from Kick API, and persists the account in SQLite.
  */
 export async function handleKickCallback(url: URL): Promise<{
-  response: Response
   user: { platform: 'kick'; username: string; displayName: string }
   channelSlug: string
 }> {
@@ -202,9 +200,6 @@ export async function handleKickCallback(url: URL): Promise<{
 
   return {
     channelSlug: user.name,
-    response: new Response(successPage('Kick'), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    }),
     user: {
       displayName: user.name,
       platform: 'kick' satisfies Platform,

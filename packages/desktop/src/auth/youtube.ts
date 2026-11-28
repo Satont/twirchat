@@ -13,7 +13,6 @@ import { postOAuthForm } from './oauth-form'
 import { createPkceSessions } from './pkce-sessions'
 import { createOAuthRefresher } from './refresh-token'
 import { expiresAt, oauthTokenSchema } from './response-schemas'
-import { successPage } from './server'
 
 const log = logger('auth-youtube')
 const sessions = createPkceSessions()
@@ -136,9 +135,6 @@ export async function handleYouTubeCallback(url: URL) {
 
   return {
     channelSlug: username,
-    response: new Response(successPage('YouTube'), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    }),
     user: {
       displayName,
       username,

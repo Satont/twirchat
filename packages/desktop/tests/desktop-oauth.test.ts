@@ -4,11 +4,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  KICK_REDIRECT_URI,
   TWITCH_TOKEN_URL,
+  VKPLAY_DEV_API_BASE,
+  VKPLAY_REDIRECT_URI,
   YOUTUBE_REDIRECT_URI,
   YOUTUBE_TOKEN_URL,
 } from '@twirchat/shared/constants'
 
+import { prepareKickAuth } from '../src/auth/kick'
+import { handleAuthCallback } from '../src/auth/server'
 import {
   connectTwitchDevice,
   refreshTwitchToken,
@@ -22,8 +27,11 @@ import {
   requestTwitchPointsDeviceCode,
   TWITCH_TV_CLIENT_ID,
 } from '../src/auth/twitch-points'
+import { getVkPlayAuthUrl } from '../src/auth/vkplay'
 import { getYouTubeAuthUrl, handleYouTubeCallback, refreshYouTubeToken } from '../src/auth/youtube'
+import { getBackendUrl } from '../src/runtime-config'
 import { AccountStore } from '../src/store/account-store'
+import { ChannelStore } from '../src/store/channel-store'
 import { getDb, initDb } from '../src/store/db'
 
 const originalFetch = globalThis.fetch
@@ -31,6 +39,7 @@ const oauthEnvironment = {
   TWIRCHAT_TWITCH_CLIENT_ID: 'public-client',
   TWIRCHAT_YOUTUBE_CLIENT_ID: 'installed-client',
   TWIRCHAT_YOUTUBE_CLIENT_SECRET: 'installed-secret',
+  TWIRCHAT_VKPLAY_CLIENT_ID: 'vkplay-public-client',
 }
 const savedEnvironment = Object.entries(oauthEnvironment).map(([key]) => [key, process.env[key]])
 let directory = ''
@@ -64,6 +73,14 @@ function readForm(init?: RequestInit): URLSearchParams {
   expect(init?.redirect).toBe('error')
   if (!(init?.body instanceof URLSearchParams)) throw new Error('Expected an OAuth form.')
   return init.body
+}
+
+async function expectSuccessPage(response: Response, provider: string): Promise<void> {
+  expect(response.status).toBe(200)
+  expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+  const body = await response.text()
+  expect(body).toContain(`<h1>Successfully connected to ${provider}!</h1>`)
+  expect(body).toContain('setTimeout(() => window.close(), 2000)')
 }
 
 const code = {
@@ -355,9 +372,91 @@ test('YouTube validates one-time PKCE and exchanges and refreshes directly with 
   await expect(handleYouTubeCallback(callback)).rejects.toThrow('session expired')
   expect(requests).toBe(0)
   callback.searchParams.set('state', state)
-  expect((await handleYouTubeCallback(callback)).response.ok).toBe(true)
+  const response = await handleAuthCallback(new Request(callback))
+  await expectSuccessPage(response, 'YouTube')
+  expect(ChannelStore.findByPlatform('youtube')).toEqual(['ucfixture'])
   await expect(handleYouTubeCallback(callback)).rejects.toThrow('session expired')
   await expect(refreshYouTubeToken('youtube:UCfixture')).resolves.toBe('google-new')
   expect(requests).toBe(3)
   expect(AccountStore.getTokens('youtube:UCfixture')?.refreshToken).toBe('google-refresh')
+})
+
+test('Kick callback exchanges its PKCE code and returns the loopback success page', async () => {
+  const { codeChallenge, state } = prepareKickAuth()
+  mockFetch(async (url, init) => {
+    if (url === `${getBackendUrl()}/api/auth/kick/exchange`) {
+      expect(init?.method).toBe('POST')
+      if (typeof init?.body !== 'string') throw new Error('Expected a Kick exchange body.')
+      const body: unknown = JSON.parse(init.body)
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        !('codeVerifier' in body) ||
+        typeof body.codeVerifier !== 'string'
+      ) {
+        throw new Error('Expected a Kick code verifier.')
+      }
+      expect(body).toMatchObject({ code: 'kick-code', redirectUri: KICK_REDIRECT_URI })
+      expect(new Bun.CryptoHasher('sha256').update(body.codeVerifier).digest('base64url')).toBe(
+        codeChallenge,
+      )
+      return Response.json({ accessToken: 'kick-access', refreshToken: 'kick-refresh' })
+    }
+    if (url === 'https://api.kick.com/public/v1/users') {
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer kick-access')
+      return Response.json({ data: [{ user_id: 42, name: 'Kick Login' }], message: 'OK' })
+    }
+    throw new Error(`Unexpected URL ${url}`)
+  })
+
+  const callback = new URL(KICK_REDIRECT_URI)
+  callback.search = new URLSearchParams({ code: 'kick-code', state }).toString()
+  await expectSuccessPage(await handleAuthCallback(new Request(callback)), 'Kick')
+  expect(AccountStore.findByPlatform('kick')?.id).toBe('kick:42')
+  expect(ChannelStore.findByPlatform('kick')).toEqual(['kick login'])
+})
+
+test('VK Play loopback GET relays the fragment to the POST callback', async () => {
+  const fragmentPage = await handleAuthCallback(new Request(VKPLAY_REDIRECT_URI))
+  expect(fragmentPage.status).toBe(200)
+  expect(fragmentPage.headers.get('content-type')).toBe('text/html; charset=utf-8')
+  const html = await fragmentPage.text()
+  expect(html).toContain('location.hash.slice(1)')
+  expect(html).toContain("method: 'POST'")
+  expect(html).toContain('body: fragment.toString()')
+
+  mockFetch(async (url, init) => {
+    if (url !== `${VKPLAY_DEV_API_BASE}/v1/current_user`) throw new Error(`Unexpected URL ${url}`)
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer vk-access')
+    return Response.json({
+      data: { channel: { url: 'streamer' }, user: { id: 42, nick: 'Streamer' } },
+    })
+  })
+  const state = new URL(getVkPlayAuthUrl()).searchParams.get('state')
+  if (!state) throw new Error('Expected VK Play OAuth state.')
+  const callback = new Request(VKPLAY_REDIRECT_URI, {
+    method: 'POST',
+    body: new URLSearchParams({
+      access_token: 'vk-access',
+      expire_time: String(Math.floor(Date.now() / 1000) + 3600),
+      state,
+      token_type: 'Bearer',
+    }),
+  })
+  await expectSuccessPage(await handleAuthCallback(callback), 'VK Play Live')
+  expect(AccountStore.findByPlatform('vkplay')?.id).toBe('vkplay:42')
+  expect(ChannelStore.findByPlatform('vkplay')).toEqual(['streamer'])
+})
+
+test('desktop OAuth loopback escapes callback failures and keeps unknown routes unhandled', async () => {
+  const callback = new URL(KICK_REDIRECT_URI)
+  callback.search = new URLSearchParams({
+    error: 'denied',
+    error_description: '<denied> & closed',
+  }).toString()
+  const response = await handleAuthCallback(new Request(callback))
+  expect(response.status).toBe(500)
+  expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+  expect(await response.text()).toContain('&lt;denied&gt; &amp; closed')
+  expect((await handleAuthCallback(new Request(new URL('/unknown', callback)))).status).toBe(404)
 })

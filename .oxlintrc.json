@@ -95,6 +95,12 @@
   },
   "overrides": [
     {
+      "files": ["packages/desktop/src/auth/**/*.ts"],
+      "rules": {
+        "import/no-cycle": "error"
+      }
+    },
+    {
       "files": ["packages/desktop/src/gpuix/**/*.ts", "packages/desktop/src/gpuix/**/*.tsx"],
       "rules": {
         "project-quality/no-blocking-native-geometry": "error",
