@@ -206,6 +206,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The backend disposer awaits the existing SQLite and file-log flush after stopping its producers. It also attempts the flush if teardown fails, and reports a write error without turning it into an exit failure. The normal window/tray quit path already waits for backend disposal before calling `process.exit()`, which does not run the async `beforeExit` fallback.
 - **Safeguard:** A headless subprocess boots the actual backend and exits explicitly after recording a final message. It verifies both persisted outputs and a clean exit with a warning if the file destination cannot be written. Updater-initiated exit and OS signals have separate lifetimes and are unchanged.
 
+### Round 39 — Share the graceful desktop exit with updates
+
+- **Decision:** An updater can launch the install helper only when the desktop composition has supplied an exit callback. The helper launch and restart arguments stay unchanged; after handoff, the owner requests normal window shutdown and waits for final session writes before disposing the backend. The normal quit and update paths share a single teardown and diagnostic flush.
+- **Safeguard:** If window cleanup stalls, start backend disposal after five seconds; if shutdown itself stalls, stop waiting before the install helper's 60-second limit. Tests cover handoff order, duplicate exit requests, stalled windows, and teardown failures. The singleton wiring takes effect on a fresh process; restarting a pre-change development process is required.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { APP_ENV } from '../build-info'
 import { t } from '../i18n'
 import { getDbPath, setRuntimeConfig } from '../runtime-config'
+import { createDesktopExit } from '../services/desktop-exit'
 import { exitAfterFlushingDiagnosticLogs } from '../services/diagnostic-logging'
 import { assertGuiQaEnvironment } from '../services/gui-qa'
 import { establishLinuxSingleInstance } from '../services/linux-single-instance'
@@ -51,7 +52,12 @@ else if (process.platform === 'linux' && process.env.GPUIX_BACKGROUND === '1') {
 setRuntimeConfig({ nodeEnv: APP_ENV })
 const instance = await establishLinuxSingleInstance(getDbPath())
 if (instance.kind === 'forwarded') process.exit(0)
-const backend = getDesktopBackend()
+const desktopExit = (globalThis.twirchatDesktopExit ??= createDesktopExit({
+  closeWindows: (): Promise<void> => windows.quit(),
+  shutdown: shutdownDesktop,
+  exit: exitAfterFlushingDiagnosticLogs,
+}))
+const backend = getDesktopBackend(desktopExit.scheduleUpdateExit)
 initCosmeticCaches(backend.api)
 void Promise.all([
   loadEmotePreferences(backend.api),
@@ -81,6 +87,7 @@ declare global {
   var __twirchatProviderFocusWired: boolean | undefined
   var __twirchatStreamerModeWired: boolean | undefined
   var __twirchatStopWatchedSubscriptions: (() => void) | undefined
+  var twirchatDesktopExit: ReturnType<typeof createDesktopExit> | undefined
 }
 const g = globalThis
 
@@ -136,9 +143,7 @@ const windows = mountDesktopWindows(
     if (descriptor.kind === 'image') return <ChatImageWindow src={descriptor.src} />
     return <ChatWindow descriptor={descriptor} />
   },
-  () => {
-    void shutdownDesktop().then(exitAfterFlushingDiagnosticLogs, exitAfterFlushingDiagnosticLogs)
-  },
+  desktopExit.quit,
 )
 
 if (instance.kind === 'primary') instance.bindActivation(() => windows.activate())

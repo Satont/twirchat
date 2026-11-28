@@ -19,7 +19,6 @@ import type { UpdateInfo } from 'velopack'
 import { APP_VERSION } from '../../build-info'
 import { t } from '../../i18n'
 import { getDbPath } from '../../runtime-config'
-import { exitAfterFlushingDiagnosticLogs } from '../../services/diagnostic-logging'
 import { prepareLinuxUpdateLocator } from '../../services/linux-update-runtime'
 import { getDb } from '../../store/db'
 import type { DesktopEvents } from './events'
@@ -81,7 +80,6 @@ export interface UpdaterRuntime {
   prepareApplyManager(manager: UpdaterManager): Promise<UpdaterManager>
   getSkippedHash(): string | null
   setSkippedHash(hash: string): void
-  scheduleExit(): void
 }
 
 const defaultRuntime: UpdaterRuntime = {
@@ -101,10 +99,13 @@ const defaultRuntime: UpdaterRuntime = {
   },
   getSkippedHash,
   setSkippedHash,
-  scheduleExit: () => setTimeout(exitAfterFlushingDiagnosticLogs, 300),
 }
 
-export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): Updater {
+export function createUpdater(
+  events: DesktopEvents,
+  scheduleUpdateExit?: () => void,
+  runtime = defaultRuntime,
+): Updater {
   let manager: UpdaterManager | null | undefined
   let state: UpdateState = { kind: 'idle' }
   let downloadProgress = 0
@@ -264,7 +265,7 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
 
     async apply() {
       if (state.kind === 'applying') return state.result
-      if (checking || state.kind !== 'ready') return
+      if (!scheduleUpdateExit || checking || state.kind !== 'ready') return
       const mgr = getManager()
       if (!mgr) return
       const info = state.info
@@ -274,7 +275,7 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
           emit('applying', t('runtime.updater.applying'))
           // Updater waits for this process to exit (up to 60s), applies, restarts.
           applyManager.waitExitThenApplyUpdate(info, false, true)
-          runtime.scheduleExit()
+          scheduleUpdateExit()
         } catch (error) {
           state = { kind: 'ready', info }
           emit('update-error', t('runtime.updater.installFailed', { error: String(error) }))

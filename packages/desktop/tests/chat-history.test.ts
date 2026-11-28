@@ -78,8 +78,9 @@ function legacy(path: string, dataColumn = true): void {
 }
 
 describe('durable chat history', () => {
-  for (const writable of [true, false]) {
-    test(`explicit desktop exit ${writable ? 'persists the final file log line' : 'survives a file log error'}`, async () => {
+  for (const mode of ['quit', 'write-error', 'update']) {
+    test(`desktop ${mode} drains buffered history before exiting`, async () => {
+      const writable = mode !== 'write-error'
       const dbPath = join(directory, 'shutdown.sqlite')
       const logPath = join(directory, 'logs')
       if (!writable) writeFileSync(logPath, 'A file cannot hold logs')
@@ -90,12 +91,20 @@ describe('durable chat history', () => {
           `
           import { getDesktopBackend } from './src/gpuix/backend/server'
           import { defaultChatLoggingSettings, recordChatMessage, saveChatLoggingSettings } from './src/gpuix/backend/chat-history'
+          import { createDesktopExit } from './src/services/desktop-exit'
           import { exitAfterFlushingDiagnosticLogs } from './src/services/diagnostic-logging'
-          const backend = getDesktopBackend()
+          const owner = createDesktopExit({
+            closeWindows: async () => owner.quit(),
+            shutdown: () => backend.dispose(),
+            exit: exitAfterFlushingDiagnosticLogs,
+            updateDelayMs: 0,
+          })
+          const backend = getDesktopBackend(owner.scheduleUpdateExit)
           await saveChatLoggingSettings({ ...defaultChatLoggingSettings(), enabled: true, timestamps: false, directory: ${JSON.stringify(logPath)} })
-          recordChatMessage(${JSON.stringify(message('last'))})
-          await backend.dispose()
-          exitAfterFlushingDiagnosticLogs()
+          const message = ${JSON.stringify(message('last'))}
+          recordChatMessage({ ...message, timestamp: new Date(message.timestamp) })
+          if (${JSON.stringify(mode)} === 'update') owner.scheduleUpdateExit()
+          else owner.quit()
         `,
         ],
         {

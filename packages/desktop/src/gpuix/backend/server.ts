@@ -126,7 +126,7 @@ function openBrowser(url: string): void {
   }
 }
 
-function boot(): DesktopRuntime {
+function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
   log.info('Starting GPUIX backend...')
 
   // Runtime config: baked in at release build (--define), env overridable in dev.
@@ -537,7 +537,7 @@ function boot(): DesktopRuntime {
     },
     onStatus: (channel, status) => events.emit('plugin_channel_status', { channel, status }),
   })
-  const updater = createUpdater(events)
+  const updater = createUpdater(events, scheduleUpdateExit)
   const api: DesktopApi = createDesktopApi({
     donations,
     updater,
@@ -858,6 +858,6 @@ declare global {
   var __twirchatDevHook: ((action: string, payload?: unknown) => Promise<unknown>) | undefined
 }
 
-export function getDesktopBackend(): DesktopRuntime {
-  return (globalThis.__twirchatGpuixBackend ??= boot())
+export function getDesktopBackend(scheduleUpdateExit?: () => void): DesktopRuntime {
+  return (globalThis.__twirchatGpuixBackend ??= boot(scheduleUpdateExit))
 }

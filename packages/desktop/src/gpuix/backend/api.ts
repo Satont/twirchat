@@ -211,7 +211,7 @@ import type {
   TranslationLanguage,
 } from './translation'
 import type { TwitchHistoryRuntime } from './twitch-history'
-import { createUpdater, type Updater } from './updater'
+import type { Updater } from './updater'
 import {
   getUserNotes,
   setUserNotes,
@@ -896,8 +896,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 // ── API factory ─────────────────────────────────────────────────────────────
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
-  const { aggregator, watchedChannelManager, currentStatuses } = ctx
-  const updater = ctx.updater ?? createUpdater(ctx.events)
+  const { aggregator, watchedChannelManager, currentStatuses, updater } = ctx
   let twitchAuth:
     | {
         controller: AbortController
@@ -1557,10 +1556,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       getPaintNameImage(name, paint, fontSize, fontFamily),
 
     getAppVersion: async () => APP_VERSION,
-    checkForUpdate: () => updater.check(),
-    downloadUpdate: () => updater.download(),
-    applyUpdate: () => updater.apply(),
-    skipUpdate: ({ hash }) => updater.skip(hash),
+    checkForUpdate: async () =>
+      updater?.check() ?? { updateAvailable: false, currentVersion: APP_VERSION },
+    downloadUpdate: async () =>
+      updater?.download() ?? { success: false, error: t('runtime.updater.noUpdateToDownload') },
+    applyUpdate: async () => updater?.apply(),
+    skipUpdate: async ({ hash }) => updater?.skip(hash),
     getReleaseNotes: async ({ version }) => {
       const cached = readCachedReleaseNotes(version)
       // Preview remounts must not burn the unauthenticated GitHub API limit.
