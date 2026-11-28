@@ -18,13 +18,22 @@ function workspacePackage(filename) {
   return directory === 'packages' && workspaceName.test(name ?? '') ? name : undefined
 }
 
-function workspacePackageForFile(filename) {
-  const path = relative(workspaceRoot, filename).split(sep).join('/')
+function workspaceRelativePath(filename) {
+  return relative(workspaceRoot, filename).split(sep).join('/')
+}
+
+function workspaceLink(path) {
   if (path.startsWith('../')) return undefined
-  return (
-    /(?:^|\/)node_modules\/@twirchat\/(desktop|backend|shared)(?:\/|$)/u.exec(path)?.[1] ??
-    workspacePackage(filename)
-  )
+  return /(?:^|\/)node_modules\/@twirchat\/(desktop|backend|shared)(?:\/|$)/u.exec(path)
+}
+
+function desktopRuntimeImport(specifier, filePath, link) {
+  const target = filePath
+    ? link?.[1] === 'desktop'
+      ? filePath.slice(link.index + link[0].length)
+      : filePath.replace(/^packages\/desktop\//u, '')
+    : specifier.replace(/^@desktop\/+/u, 'src/').replace(/^@twirchat\/desktop\/+/u, '')
+  return /^src\/(store|platforms)(?:\/|$)/u.exec(target)?.[1]
 }
 
 function importSpecifier(node) {
@@ -79,19 +88,26 @@ const workspaceImportBoundaries = {
       direction: '{{from}} cannot import {{target}}. Put cross-app contracts in @twirchat/shared.',
       sharedEntry: 'Import shared code through @twirchat/shared rather than its filesystem path.',
       aliasPath: 'Use a canonical workspace import without dot segments or backslashes.',
+      desktopRuntime:
+        'Use the desktop backend bridge instead of importing desktop src/{{area}} from GPUIX.',
     },
   },
   create(context) {
     const from = workspacePackage(context.filename)
     if (!from) return {}
+    const importer = workspaceRelativePath(context.filename)
+    const isGpuixPresentation =
+      importer.startsWith('packages/desktop/src/gpuix/') &&
+      !importer.startsWith('packages/desktop/src/gpuix/backend/')
 
     return {
       'ImportDeclaration, ExportNamedDeclaration[source], ExportAllDeclaration, ImportExpression, TSImportType, TSImportEqualsDeclaration, CallExpression[callee.name="require"]'(
         node,
       ) {
         const source = importSource(node)
-        const specifier = importSpecifier(source)
-        if (specifier === undefined) return
+        const rawSpecifier = importSpecifier(source)
+        if (rawSpecifier === undefined) return
+        const specifier = rawSpecifier.split(/[?#]/u, 1)[0]
         const alias = packageForAlias(specifier)
         if (
           (alias || /^@gpuix[/\\]/u.test(specifier)) &&
@@ -101,7 +117,13 @@ const workspaceImportBoundaries = {
           return
         }
         const file = alias ? undefined : importedFile(context.filename, specifier)
-        const target = alias ?? (file ? workspacePackageForFile(file) : undefined)
+        const filePath = file ? workspaceRelativePath(file) : undefined
+        const link = filePath ? workspaceLink(filePath) : undefined
+        const target = alias ?? link?.[1] ?? (file ? workspacePackage(file) : undefined)
+        if (isGpuixPresentation && target === 'desktop') {
+          const area = desktopRuntimeImport(specifier, filePath, link)
+          if (area) context.report({ node: source, messageId: 'desktopRuntime', data: { area } })
+        }
         if (!target || target === from) return
         if (target !== 'shared') {
           context.report({ node: source, messageId: 'direction', data: { from, target } })

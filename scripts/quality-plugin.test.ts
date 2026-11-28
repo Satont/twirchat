@@ -76,9 +76,56 @@ const fixtures: QualityFixture[] = [
 const desktop = 'packages/desktop/src'
 const backend = 'packages/backend/src'
 const shared = 'packages/shared'
+const gpuix = `${desktop}/gpuix`
 const directory = mkdtempSync(join(tmpdir(), 'twirchat-quality-'))
 fixtures.push(
   { directory: desktop, code: 'import type { Message } from "@twirchat/shared/types"' },
+  { directory: `${gpuix}/components`, code: 'import { useBackend } from "../backend/context"' },
+  { directory: `${gpuix}/state`, code: 'import { createStore } from "./create-store"' },
+  { directory: `${gpuix}/backend`, code: 'import { getDb } from "../../store/db"' },
+  { directory: `${gpuix}/backend`, code: 'import "@desktop/platforms/twitch/adapter"' },
+  { directory: `${desktop}/services`, code: 'import { getDb } from "../store/db"' },
+  { directory: `${gpuix}/components`, code: 'import "@desktop/storehouse"' },
+  { directory: gpuix, code: 'import "@desktop/gpuix/state/create-store?path=../foo/../bar"' },
+  { directory: gpuix, code: 'import "@desktop/store?reload"', workspaceImports: 1 },
+  { directory: gpuix, code: 'import "@desktop//store/db"', workspaceImports: 1 },
+  { directory: gpuix, code: 'import "../store?reload"', workspaceImports: 1 },
+  { directory: gpuix, code: 'import "../store/db?reload=/../other"', workspaceImports: 1 },
+  {
+    directory: `${gpuix}/components`,
+    code: 'import { SettingsStore } from "../../store"',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${gpuix}/state`,
+    code: 'import(`../.././platforms/twitch/adapter`)',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${gpuix}/hooks`,
+    code: 'type Query = import("@desktop/store/message-store").ChatHistoryQuery',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${gpuix}/backend-tools`,
+    code: 'export * from "@desktop/platforms/kick/adapter"',
+    workspaceImports: 1,
+  },
+  {
+    directory: gpuix,
+    code: 'const adapter = require("@twirchat/desktop/src/platforms/youtube/adapter")',
+    workspaceImports: 1,
+  },
+  {
+    directory: gpuix,
+    code: 'import "../../node_modules/@twirchat/desktop/src/store/db"',
+    workspaceImports: 1,
+  },
+  {
+    directory: gpuix,
+    code: `import(${JSON.stringify(pathToFileURL(join(directory, desktop, 'store/db.ts')).href)})`,
+    workspaceImports: 1,
+  },
   { directory: backend, code: 'import("@twirchat/shared/youtube/session")' },
   { directory: shared, code: 'export { value } from "./types"' },
   { directory: desktop, code: 'import { render } from "@gpuix/components/Example"' },
