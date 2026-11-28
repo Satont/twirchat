@@ -121,41 +121,8 @@ settings file contains port 45823.
 
 ## Docker Deployment
 
-### Simple (without reverse proxy)
-
-```bash
-docker pull ghcr.io/YOUR_USERNAME/twirchat/backend:latest
-
-docker run -d \
-  -p 3000:3000 \
-  -e NODE_ENV=production \
-  ghcr.io/YOUR_USERNAME/twirchat/backend:latest
-```
-
-### Production (with Caddy)
-
-For production with SSL/TLS and domain:
-
-```bash
-# Clone repository
-git clone https://github.com/YOUR_USERNAME/twirchat.git
-cd twirchat
-
-# Update Caddyfile.prod with your domain
-# Edit: chat.twir.app -> your-domain.com
-
-# Start services
-cd docker
-docker compose up -d
-```
-
-Caddy will automatically:
-
-- Obtain Let's Encrypt certificates
-- Handle HTTP -> HTTPS redirect
-- Proxy WebSocket connections
-- Enable HTTP/2 and HTTP/3
-- Compress responses with gzip/zstd
+Follow the [backend deployment guide](docs/releasing.md#deploy-the-backend) for production
+configuration, backups, upgrades, and rollback.
 
 ## Local Build
 
@@ -189,8 +156,9 @@ bun run dev
 # Compile to binary
 bun run build:prod
 
-# Docker build
-docker build -t twirchat-backend .
+# Docker build (from repository root)
+cd ../..
+docker build -f packages/backend/Dockerfile -t twirchat-backend .
 ```
 
 ## Desktop Updates (Velopack)

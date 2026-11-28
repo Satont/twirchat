@@ -4,11 +4,14 @@ The backend serves public platform metadata, provider relays, Twitch history, an
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) ≥ 1.1
+- [Bun](https://bun.sh), using the [version pinned by the workspace](../../.bun-version)
 - [Docker](https://docs.docker.com/get-docker/) (for PostgreSQL)
-- A Kick developer app — register at [kick.com/settings/developer](https://kick.com/settings/developer)
+- [Kick](https://kick.com/settings/developer) and [Twitch](https://dev.twitch.tv/console/apps) developer apps
 
-## Quick start
+## Local development
+
+Run these commands from `packages/backend`. For production, follow the
+[backend deployment guide](../../docs/releasing.md#deploy-the-backend).
 
 ```sh
 # 1. Start PostgreSQL
@@ -30,18 +33,9 @@ Migrations run automatically on first startup — no manual setup needed.
 
 ## Environment variables
 
-| Variable               | Default                                    | Description                                                                                                     |
-| ---------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `PORT`                 | `3000`                                     | HTTP + WebSocket listen port                                                                                    |
-| `DATABASE_URL`         | —                                          | PostgreSQL connection string — `postgres://user:pass@host:port/db`. Bun also accepts `POSTGRES_URL` or `PGURL`. |
-| `KICK_CLIENT_ID`       | —                                          | From [kick.com/settings/developer](https://kick.com/settings/developer)                                         |
-| `KICK_CLIENT_SECRET`   | —                                          | From [kick.com/settings/developer](https://kick.com/settings/developer)                                         |
-| `KICK_REDIRECT_URI`    | `http://localhost:3000/auth/kick/callback` | Must match the URI registered in your Kick app                                                                  |
-| `KICK_WEBHOOK_URL`     | —                                          | Public HTTPS URL that Kick POSTs events to (`/webhook/kick`)                                                    |
-| `KICK_WEBHOOK_SECRET`  | —                                          | HMAC secret for verifying Kick payloads — generate with `openssl rand -hex 32`                                  |
-| `TWITCH_CLIENT_ID`     | —                                          | Confidential Twitch app ID for public Helix requests                                                            |
-| `TWITCH_CLIENT_SECRET` | —                                          | Confidential Twitch app secret                                                                                  |
-| `YOUTUBE_API_KEY`      | —                                          | Optional key for YouTube channel resolution and the anonymous gRPC relay                                        |
+Use the [local template](.env.example) for examples and [the startup schema](src/config.ts)
+for required values, defaults, and validation. In particular, `DATABASE_URL` itself is required;
+Bun's connection-string aliases are not accepted in its place by this application.
 
 ## Local webhook testing (ngrok)
 
@@ -66,27 +60,17 @@ ngrok http 3000
 
 ## HTTP endpoints
 
-| Method   | Path                      | Auth                     | Description                                                      |
-| -------- | ------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `GET`    | `/ws`                     | `X-Client-Secret` header | WebSocket upgrade — desktop client connection                    |
-| `POST`   | `/api/auth/kick/start`    | body `clientSecret`      | Start Kick PKCE OAuth flow; returns `{ url }` to open in browser |
-| `GET`    | `/auth/kick/callback`     | —                        | Kick OAuth redirect target (browser)                             |
-| `GET`    | `/api/accounts`           | `X-Client-Secret` header | List connected platform accounts for this client                 |
-| `DELETE` | `/api/accounts/:platform` | `X-Client-Secret` header | Disconnect a platform account                                    |
-| `POST`   | `/webhook/kick`           | HMAC signature           | Receive Kick event webhooks                                      |
-| `GET`    | `/health`                 | —                        | Health check — returns `{ ok: true }`                            |
+[The server entry point](src/index.ts) registers HTTP and WebSocket routes. The desktop supplies
+`X-Client-Secret` when opening `/ws` and on routes that require a hosted client identity, such as
+[saved accounts](src/routes/accounts.ts). It is not a server-wide authentication requirement.
 
-### Client authentication
+[Kick OAuth routes](src/routes/auth.ts) distinguish the current desktop PKCE flow (`start`,
+`exchange`, and `refresh` under `/api/auth/kick`) from the legacy hosted flow. The desktop handles
+the current callback locally. The legacy flow still serves `/auth/kick/callback`, persists accounts
+in PostgreSQL, and uses the [Kick webhook route](src/routes/webhooks.ts).
 
-Routes that require desktop authentication use the `X-Client-Secret` header. The desktop app generates this identifier on first launch and persists it locally. New identifiers are registered on first use.
-
-## Architecture
-
-- **`Bun.sql`** — connects to PostgreSQL using `POSTGRES_*` env vars automatically; no extra driver config needed.
-- **Migrations** — run on startup via `runMigrations()` (`src/db/migrations.ts`); creates `desktop_clients`, `platform_accounts`, and `kick_oauth_sessions` tables.
-- **WebSocket** — `GET /ws` upgraded by `Bun.serve`; messages use the shared protocol from `@twirchat/shared/protocol`.
-- **Kick OAuth** — PKCE flow; session stored in DB during the OAuth dance, then exchanged for tokens and saved to `platform_accounts`.
-- **Kick webhooks** — HMAC-verified POST to `/webhook/kick`; normalized events are broadcast to all connected desktop clients over WebSocket.
+The server applies [database migrations](src/db/migrations.ts) at startup. WebSocket messages use
+the [shared protocol](../shared/protocol.ts).
 
 ## Provider emotes and cosmetics relay
 

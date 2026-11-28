@@ -13,7 +13,7 @@ src/
 ├── index.ts                  # Bun.serve entry point
 ├── config.ts                 # Environment config loader
 ├── db/
-│   ├── index.ts             # Bun.sql connection
+│   ├── index.ts             # Database exports
 │   ├── store.ts             # Data access layer (ClientStore, AccountStore)
 │   └── migrations.ts        # Schema migrations
 ├── auth/
@@ -122,7 +122,7 @@ log.error('Auth failed', { platform, error: String(err) })
 **Client Authentication**
 
 - Desktop generates random secret on first launch
-- All requests (except OAuth callbacks/webhooks) require `X-Client-Secret` header
+- WebSocket upgrades require `X-Client-Secret`; for HTTP, inspect each route’s authentication
 - Secret stored in `desktop_clients` table, auto-registered on first use
 
 **OAuth Flows**
@@ -153,59 +153,16 @@ bun run test
 
 ## ENVIRONMENT VARIABLES
 
-Required:
-
-- `DATABASE_URL` — PostgreSQL connection string
-- `KICK_CLIENT_ID` — From Kick developer settings
-- `KICK_CLIENT_SECRET` — From Kick developer settings
-
-Optional:
-
-- `PORT` — Server port (default: 3000)
-- `KICK_REDIRECT_URI` — OAuth callback URL
-- `KICK_WEBHOOK_URL` — Public HTTPS URL for webhooks
-- `KICK_WEBHOOK_SECRET` — HMAC secret for webhook verification
-- `YOUTUBE_CLIENT_ID` — Google Cloud OAuth
-- `YOUTUBE_CLIENT_SECRET` — Google Cloud OAuth
-
-See `src/config.ts` for all options.
-
-## LOCAL DEVELOPMENT
-
-**Database**
-
-```bash
-docker compose up -d  # PostgreSQL on port 5432
-```
-
-**Webhooks (ngrok)**
-
-```bash
-ngrok http 3000
-# Set KICK_WEBHOOK_URL=https://xxx.ngrok.io/webhook/kick
-```
-
-**Migrations**
-Run automatically on startup. Manual run not needed.
-
-## HTTP ENDPOINTS
-
-| Method | Path                      | Auth            | Description             |
-| ------ | ------------------------- | --------------- | ----------------------- |
-| GET    | `/ws`                     | X-Client-Secret | WebSocket upgrade       |
-| GET    | `/health`                 | —               | Health check            |
-| GET    | `/api/accounts`           | X-Client-Secret | List connected accounts |
-| DELETE | `/api/accounts/:platform` | X-Client-Secret | Disconnect account      |
-| POST   | `/api/auth/kick/start`    | body secret     | Start Kick OAuth        |
-| GET    | `/auth/kick/callback`     | —               | Kick OAuth callback     |
-| POST   | `/webhook/kick`           | HMAC            | Kick event webhooks     |
+[`src/config.ts`](src/config.ts) owns startup validation and defaults. See the
+[backend README](README.md#local-development) for local setup and production deployment links.
+The [server entry point](src/index.ts) registers HTTP and WebSocket routes.
 
 ## NOTES
 
 **Kick EventSub**
 
 - Subscriptions managed in `kick-subscriptions.ts`
-- Webhook events normalized and broadcast to all connected desktop clients
+- Webhook events are normalized and routed to the channel owner's connected desktop clients
 
 **7TV Integration**
 

@@ -286,6 +286,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The cache owns snapshot expiry. Remove unused cache mutation methods and write-only snapshot timestamps; the subscription manager applies emote changes through the catalog helpers without refreshing the TTL.
 - **Safeguard:** Tests pin exact alias casing and confirm that the cache returns the same stale snapshot until cleanup, including the five-minute expiry boundary.
 
+### Round 55 — Consolidate backend deployment guidance
+
+- **Decision:** Keep one production runbook and one production Compose model. The old documentation entry points link to the runbook; the compatibility Compose include and standalone Caddy example remain available. Local setup points to the startup schema and distinguishes current desktop OAuth from legacy hosted routes.
+- **Safeguard:** CI resolves both production Compose entry points against the same example environment and compares the effective models without starting services.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
