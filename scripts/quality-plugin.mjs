@@ -92,8 +92,9 @@ const workspaceImportBoundaries = {
       aliasPath: 'Use a canonical workspace import without dot segments or backslashes.',
       desktopRuntime:
         'Use the desktop backend bridge instead of importing desktop src/{{area}} from GPUIX.',
-      desktopFoundation:
-        'Desktop localization and state primitives must not depend on GPUIX or React.',
+      desktopFoundation: 'Desktop localization and state primitives must not import UI packages.',
+      desktopGpuix:
+        'Only GPUIX code can import its application modules. Use the owning desktop contract or service instead.',
       localeHook:
         'Use the desktop localization service; React translation hooks belong to GPUIX presentation.',
     },
@@ -136,11 +137,11 @@ const workspaceImportBoundaries = {
             return
           }
         }
-        if (
-          desktopFoundation &&
-          (/^src\/gpuix(?:\/|$)/u.test(desktopPath) ||
-            /^(?:react|react-dom|@gpuix\/[^/]+)(?:\/|$)/u.test(specifier))
-        ) {
+        if (desktopSource && !desktopGpuix && /^src\/gpuix(?:\/|$)/u.test(desktopPath)) {
+          context.report({ node: source, messageId: 'desktopGpuix' })
+          return
+        }
+        if (desktopFoundation && /^(?:react|react-dom|@gpuix\/[^/]+)(?:\/|$)/u.test(specifier)) {
           context.report({ node: source, messageId: 'desktopFoundation' })
           return
         }

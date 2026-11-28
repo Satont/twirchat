@@ -1,10 +1,10 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { ChannelChatters, ChattersTarget, ChatterUser } from '../../services/chatters-types'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { filterChatterGroups } from '../../views/main/utils/chatters'
 import { initialsOf } from '../../views/shared/utils/display-text'
-import type { ChannelChatters, ChattersTarget, ChatterUser } from '../backend/api'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'

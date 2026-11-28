@@ -42,6 +42,7 @@ import type {
   Badge,
   ChatSendReceipt,
   AppSettings,
+  ModerationAction,
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
@@ -88,6 +89,14 @@ import {
   type ChatImagePreview,
 } from '../../services/chat-image-preview-cache'
 import { ChatToolsError, createChatToolsService } from '../../services/chat-tools'
+import type {
+  ChannelChatters,
+  ChatterGroup,
+  ChatterRole,
+  ChattersTarget,
+  ChatterUser,
+  TwitchViewerRole,
+} from '../../services/chatters-types'
 import type { CosmeticPaint } from '../../services/cosmetic-paint'
 import {
   getUserCosmetics,
@@ -119,6 +128,7 @@ import {
   type MentionUserRequest,
 } from '../../services/mention-user'
 import { createModerationService } from '../../services/moderation/service'
+import type { ModerationPlatform } from '../../services/moderation/types'
 import { createNightbotCommandsClient } from '../../services/nightbot-commands'
 import { createPotatCommandsClient } from '../../services/potat-commands'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
@@ -154,7 +164,7 @@ import {
 import { loadTwitchUserCardDetails } from '../../services/twitch-user-card'
 import { enrichTwitchUserProfile, getTwitchUserBanner } from '../../services/twitch-user-profile'
 import type { TwitchUserCredentials } from '../../services/twitch-users'
-import { getTwitchViewerList, type TwitchViewerRole } from '../../services/twitch-viewer-list'
+import { getTwitchViewerList } from '../../services/twitch-viewer-list'
 import { updateTwitchStream } from '../../services/update-stream'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
@@ -239,41 +249,6 @@ export interface UserAlias {
 type UpdateStreamInput = Omit<UpdateStreamRequest, 'platform' | 'userAccessToken'> & {
   platform: 'twitch' | 'kick'
 }
-
-export type ModerationPlatform = 'twitch' | 'kick'
-export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
-export type ChatterRole = TwitchViewerRole | 'ogs'
-
-export interface ChatterUser {
-  userId?: string
-  username: string
-  displayName: string
-  avatarUrl?: string
-}
-
-export interface ChatterGroup {
-  role: ChatterRole
-  users: ChatterUser[]
-}
-
-export interface ChattersTarget {
-  platform: 'twitch' | 'kick'
-  channelSlug: string
-  accountId?: string
-}
-
-interface ChannelChattersBase {
-  platform: 'twitch' | 'kick'
-  channelSlug: string
-  total: number
-  groups: ChatterGroup[]
-}
-
-export type ChannelChatters = ChannelChattersBase &
-  (
-    | { channelId: string; source?: 'community'; error?: never }
-    | { channelId?: never; source?: never; error: string }
-  )
 
 interface AuthRequest {
   platform: Platform

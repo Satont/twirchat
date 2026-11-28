@@ -1,5 +1,12 @@
-import type { NativeWindowBounds } from '../gpuix/native-window'
 import type { UserCardTarget } from '../views/main/utils/chatCommands'
+
+export interface NativeWindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+  mode: 'windowed' | 'maximized' | 'fullscreen'
+}
 
 export type DesktopWindowDescriptor = {
   id: string

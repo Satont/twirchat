@@ -1,5 +1,5 @@
-import type { ModerationPlatform } from '../../../gpuix/backend/api'
 import { t } from '../../../i18n'
+import type { ModerationPlatform } from '../../../services/moderation/types'
 
 const activationDistance = 32
 const deleteDistance = 80

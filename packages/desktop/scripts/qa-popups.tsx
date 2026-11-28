@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 
-import type { ChannelChatters, ChattersTarget } from '../src/gpuix/backend/api'
+import type { ChannelChatters, ChattersTarget } from '../src/services/chatters-types'
 import type { UserCardTarget } from '../src/views/main/utils/chatCommands'
 
 const React = await import('react')

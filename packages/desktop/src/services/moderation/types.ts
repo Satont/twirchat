@@ -1,3 +1,5 @@
+export type ModerationPlatform = 'twitch' | 'kick'
+
 export interface ModerationError {
   code: string
   status: number

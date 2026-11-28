@@ -1,12 +1,12 @@
 import type { Account, Platform, WatchedChannel } from '@twirchat/shared/types'
 
+import { t } from '../../../i18n'
 import type {
   ChattersTarget,
   ChatterGroup,
   ChatterRole,
   ChatterUser,
-} from '../../../gpuix/backend/api'
-import { t } from '../../../i18n'
+} from '../../../services/chatters-types'
 
 export function supportsChatters(platform: Platform | undefined): platform is 'twitch' | 'kick' {
   return platform === 'twitch' || platform === 'kick'

@@ -1,4 +1,3 @@
-import type { ModerationPlatform } from '@gpuix/backend/api'
 import type { UserAlias } from '@gpuix/backend/api'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
@@ -16,6 +15,7 @@ import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { getBackendUrl } from '../../runtime-config'
+import type { ModerationPlatform } from '../../services/moderation/types'
 import { ActionToastProvider } from './action-toast'
 import { Modal } from './ui/Modal'
 import type { MetadataItem, UserCardTab } from './user-card-dialog'

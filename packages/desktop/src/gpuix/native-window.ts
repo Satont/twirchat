@@ -1,14 +1,8 @@
 import type { NativeRenderer, WindowOptions } from '@gpuix/react'
 
+import type { NativeWindowBounds } from '../services/window-session'
 import type { WindowVisibility } from './state/window-visibility'
 
-export interface NativeWindowBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-  mode: 'windowed' | 'maximized' | 'fullscreen'
-}
 export type NativePaintedElementBounds = Pick<NativeWindowBounds, 'x' | 'y' | 'width' | 'height'>
 
 export type NativeImagePaste =

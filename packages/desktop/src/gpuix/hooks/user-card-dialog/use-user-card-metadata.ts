@@ -5,7 +5,7 @@ import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-type ModerationPlatform = 'twitch' | 'kick'
+import type { ModerationPlatform } from '../../../services/moderation/types'
 
 interface UseUserCardMetadataOptions {
   target: UserCardTarget

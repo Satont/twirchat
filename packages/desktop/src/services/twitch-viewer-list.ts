@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { TwitchTokenValidationError, validateTwitchUserToken } from '../auth/twitch-user-token'
+import type { TwitchViewerRole } from './chatters-types'
 import { getTwitchChatters, TwitchChattersError } from './twitch-chatters'
 
 const COMMUNITY_VIEWER_LIMIT = 1000
@@ -19,7 +20,6 @@ const communitySchema = z
   .refine(({ broadcasters, viewers }) => broadcasters !== undefined || viewers !== undefined)
 
 type CommunityChatters = z.infer<typeof communitySchema>
-export type TwitchViewerRole = 'broadcaster' | 'moderators' | 'vips' | 'bots' | 'chatters'
 
 const communityRoles: readonly [keyof CommunityChatters, TwitchViewerRole][] = [
   ['broadcasters', 'broadcaster'],
