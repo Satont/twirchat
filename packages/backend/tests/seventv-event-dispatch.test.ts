@@ -4,6 +4,7 @@ import type { BackendToDesktopMessage, Platform } from '@twirchat/shared'
 import { z } from 'zod'
 
 import { sevenTVCache } from '../src/seventv/cache'
+import { sevenTVChannelKey } from '../src/seventv/channel-key'
 import { SevenTVEventClient, sevenTVEventClient } from '../src/seventv/event-client'
 import { sevenTVEventMessageSchema, sevenTVEventSchema } from '../src/seventv/event-schemas'
 import { SevenTVSubscriptionManager } from '../src/seventv/subscription-manager'
@@ -106,8 +107,8 @@ const switchTo = (id: string, events = sevenTVEventClient) =>
 afterEach(() => {
   globalThis.WebSocket = originalWebSocket
   sevenTVEventClient.onEvent = originalHandler
-  sevenTVCache.invalidate('kick', 'dispatch-kick')
-  sevenTVCache.invalidate('twitch', 'dispatch-twitch')
+  sevenTVCache.invalidate(sevenTVChannelKey('kick', 'dispatch-kick'))
+  sevenTVCache.invalidate(sevenTVChannelKey('twitch', 'dispatch-twitch'))
 })
 
 test('7TV object change fields validate emote contents for insert, remove and update', () => {
@@ -188,11 +189,9 @@ test('real object dispatches update both platform caches and attribute chat noti
   ]
   try {
     for (const channel of channels) {
-      sevenTVCache.set(channel.platform, channel.channelId, {
+      sevenTVCache.set(sevenTVChannelKey(channel.platform, channel.channelId), {
         id: setId,
         name: 'Fixture set',
-        channelId: channel.channelId,
-        platform: channel.platform,
         emotes: new Map(),
       })
       await manager.subscribeClient(channel.client, [channel], () => true)
@@ -214,7 +213,9 @@ test('real object dispatches update both platform caches and attribute chat noti
     await until(() => received.length === 4)
     for (const channel of channels) {
       expect(
-        sevenTVCache.get(channel.platform, channel.channelId)?.emotes.get('RAGEY'),
+        sevenTVCache
+          .get(sevenTVChannelKey(channel.platform, channel.channelId))
+          ?.emotes.get('RAGEY'),
       ).toMatchObject({
         id: emote.id,
         alias: 'RAGEY',
@@ -254,7 +255,11 @@ test('real object dispatches update both platform caches and attribute chat noti
     )
     await until(() => received.length === 8)
     for (const channel of channels) {
-      expect(sevenTVCache.get(channel.platform, channel.channelId)?.emotes.has('RAGEY')).toBe(false)
+      expect(
+        sevenTVCache
+          .get(sevenTVChannelKey(channel.platform, channel.channelId))
+          ?.emotes.has('RAGEY'),
+      ).toBe(false)
       expect(received.findLast((entry) => entry.client === channel.client)?.message).toMatchObject({
         type: 'seventv_system_message',
         action: 'removed',
@@ -268,6 +273,54 @@ test('real object dispatches update both platform caches and attribute chat noti
       manager.unsubscribeClient(channel.client, channel.platform, channel.channelId)
     connect.mockRestore()
     await server.stop(true)
+  }
+})
+
+test('identical channel IDs on different platforms keep separate snapshots and viewers', async () => {
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager()
+  const received: BackendToDesktopMessage[] = []
+  manager.sendToClient = (_, message) => received.push(message)
+  const channelId = 'same:Viewer'
+  try {
+    sevenTVCache.set(sevenTVChannelKey('kick', channelId), {
+      id: setId,
+      name: 'Kick set',
+      emotes: new Map(),
+    })
+    sevenTVCache.set(sevenTVChannelKey('twitch', channelId), {
+      id: 'other-set',
+      name: 'Twitch set',
+      emotes: new Map(),
+    })
+    await manager.subscribeClient(
+      'both',
+      [
+        { platform: 'kick', channelId },
+        { platform: 'twitch', channelId },
+      ],
+      () => true,
+    )
+    expect(received).toMatchObject([
+      { type: 'seventv_emote_set', platform: 'kick', channelId },
+      { type: 'seventv_emote_set', platform: 'twitch', channelId },
+    ])
+    manager.unsubscribeClient('both', 'twitch', channelId)
+    received.length = 0
+    dispatch()
+    expect(received).toMatchObject([
+      { type: 'seventv_emote_added', platform: 'kick', channelId },
+      { type: 'seventv_system_message', platform: 'kick', channelId, action: 'added' },
+    ])
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', channelId))?.emotes.has('RAGEY')).toBe(true)
+    expect(sevenTVCache.get(sevenTVChannelKey('twitch', channelId))?.emotes.has('RAGEY')).toBe(
+      false,
+    )
+  } finally {
+    manager.cleanupClient('both')
+    sevenTVCache.invalidate(sevenTVChannelKey('kick', channelId))
+    sevenTVCache.invalidate(sevenTVChannelKey('twitch', channelId))
+    connect.mockRestore()
   }
 })
 
@@ -289,11 +342,9 @@ test('a shared set keeps routing to each channel until its last viewer leaves', 
   }
   try {
     for (const { platform, channelId } of [first, second]) {
-      sevenTVCache.set(platform, channelId, {
+      sevenTVCache.set(sevenTVChannelKey(platform, channelId), {
         id: setId,
         name: 'Shared',
-        platform,
-        channelId,
         emotes: new Map(),
       })
     }
@@ -394,7 +445,7 @@ test('set switches retain existing updates until the latest lookup commits', asy
     )
     stale.resolve(result('stale'))
     await Bun.sleep(0)
-    expect(sevenTVCache.get('kick', channel.channelId)?.id).toBe('latest')
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', channel.channelId))?.id).toBe('latest')
     expect(
       received.filter(
         ({ message }) =>
@@ -445,7 +496,7 @@ test('duplicate active-set switches keep the lookup that already owns the target
     switchTo('next', events)
     pending.resolve(result('next'))
     await Bun.sleep(0)
-    expect(sevenTVCache.get('kick', channel.channelId)?.id).toBe('next')
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', channel.channelId))?.id).toBe('next')
     expect(lookup).toHaveBeenCalledTimes(2)
     expect(messages).toEqual([
       { type: 'seventv_emote_set', ...channel, emotes: [] },
@@ -489,14 +540,14 @@ test('returning to the active set retires the pending lookup for the same future
     retired.resolve(result('next'))
     await Bun.sleep(0)
     expect(messages).toEqual([])
-    expect(sevenTVCache.get('kick', 'dispatch-kick')?.id).toBe('initial')
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', 'dispatch-kick'))?.id).toBe('initial')
     current.resolve(result('next'))
     await until(() => messages.length >= 2)
     expect(messages.map(({ type }) => type)).toEqual([
       'seventv_emote_set',
       'seventv_system_message',
     ])
-    expect(sevenTVCache.get('kick', 'dispatch-kick')?.id).toBe('next')
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', 'dispatch-kick'))?.id).toBe('next')
   } finally {
     retired.resolve(result('next'))
     current.resolve(result('next'))
@@ -530,7 +581,9 @@ test('a pending set read belongs to the channel until its final viewer leaves', 
     expect(events.subscriptionCount).toBe(0)
     pending.resolve(result('next'))
     await Bun.sleep(0)
-    expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('initial')
+    expect(sevenTVCache.get(sevenTVChannelKey(channel.platform, channel.channelId))?.id).toBe(
+      'initial',
+    )
   } finally {
     pending.resolve(result('next'))
     manager.cleanupClient('first')
@@ -612,7 +665,7 @@ test('reconnect refreshes retained viewers quietly and does not overwrite a newe
     hello(secondSocket, 'second')
     await until(() => commands.length >= 10 && messages.length > 0)
     expect(messages.map(({ type }) => type)).toEqual(['seventv_emote_set'])
-    expect(sevenTVCache.get('twitch', channel.channelId)?.id).toBe(setId)
+    expect(sevenTVCache.get(sevenTVChannelKey('twitch', channel.channelId))?.id).toBe(setId)
     expect(
       commands.slice(-4).map((raw) => sevenTVEventMessageSchema.parse(JSON.parse(raw))),
     ).toEqual([
@@ -632,11 +685,10 @@ test('reconnect refreshes retained viewers quietly and does not overwrite a newe
     await until(() => messages.length > 0)
     expect(lookup).toHaveBeenCalledTimes(4)
     expect(messages.map(({ type }) => type)).toEqual(['seventv_emote_set'])
-    expect(sevenTVCache.get('twitch', channel.channelId)?.id).toBe(setId)
-    expect([...(sevenTVCache.get('twitch', channel.channelId)?.emotes.keys() ?? [])]).toEqual([
-      'missed-during-outage',
-      emote.name,
-    ])
+    expect(sevenTVCache.get(sevenTVChannelKey('twitch', channel.channelId))?.id).toBe(setId)
+    expect([
+      ...(sevenTVCache.get(sevenTVChannelKey('twitch', channel.channelId))?.emotes.keys() ?? []),
+    ]).toEqual(['missed-during-outage', emote.name])
   } finally {
     events.disconnect()
     stale.resolve(connectionSnapshot('aborted'))
@@ -661,7 +713,7 @@ test('a cold channel without an active set does not acquire upstream interests',
     expect(connect).not.toHaveBeenCalled()
     expect(events.subscriptionCount).toBe(0)
     expect(manager.getStats().connectedClients).toBe(0)
-    expect(sevenTVCache.get('kick', 'dispatch-kick')).toBeUndefined()
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', 'dispatch-kick'))).toBeUndefined()
   } finally {
     manager.cleanupClient('viewer')
     connect.mockRestore()
@@ -725,7 +777,9 @@ test('a confirmed missing active set clears the catalog and keeps the user subsc
       }),
     )
     await until(() => events.subscriptionCount === 3)
-    expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('restored')
+    expect(sevenTVCache.get(sevenTVChannelKey(channel.platform, channel.channelId))?.id).toBe(
+      'restored',
+    )
     expect(
       received
         .filter(({ message }) => message.type === 'seventv_emote_set')
@@ -761,9 +815,9 @@ test.each(['stale response', 'failed read'])(
     }
     const join = (viewer: string) => manager.subscribeClient(viewer, [channel], () => true)
     const expire = () => {
-      const snapshot = sevenTVCache.get(channel.platform, channel.channelId)
+      const snapshot = sevenTVCache.get(sevenTVChannelKey(channel.platform, channel.channelId))
       if (!snapshot) throw new Error('Expected a cached snapshot')
-      sevenTVCache.set(channel.platform, channel.channelId, snapshot, -1)
+      sevenTVCache.set(sevenTVChannelKey(channel.platform, channel.channelId), snapshot, -1)
       sevenTVCache.cleanup()
     }
     try {
@@ -772,7 +826,9 @@ test.each(['stale response', 'failed read'])(
       const delayed = join('delayed')
       manager.cleanupClient('initial')
       await join('replacement')
-      expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('replacement')
+      expect(sevenTVCache.get(sevenTVChannelKey(channel.platform, channel.channelId))?.id).toBe(
+        'replacement',
+      )
       manager.cleanupClient('replacement')
       if (outcome === 'stale response') {
         expire()
@@ -788,7 +844,7 @@ test.each(['stale response', 'failed read'])(
           emotes: [expect.objectContaining({ alias: 'NewAlias' })],
         },
       ])
-      expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe(
+      expect(sevenTVCache.get(sevenTVChannelKey(channel.platform, channel.channelId))?.id).toBe(
         outcome === 'stale response' ? undefined : 'replacement',
       )
       expect(manager.getStats()).toMatchObject({ connectedClients: 1, emoteSetSubscriptions: 1 })
@@ -815,7 +871,7 @@ test('reattaching the same snapshot does not invalidate a newer join lookup', as
     manager.subscribeClient(viewer, [{ platform: 'kick', channelId: 'dispatch-kick' }], () => true)
   try {
     await join('initial')
-    sevenTVCache.invalidate('kick', 'dispatch-kick')
+    sevenTVCache.invalidate(sevenTVChannelKey('kick', 'dispatch-kick'))
     const reattach = join('reattach')
     events.onEvent?.(
       sevenTVEventSchema.parse({ type: 'emote_set.update', body: { id: setId, pushed: [pushed] } }),
@@ -827,7 +883,7 @@ test('reattaching the same snapshot does not invalidate a newer join lookup', as
     manager.cleanupClient('reattach')
     second.resolve(connectionSnapshot('fresh'))
     await refresh
-    expect(sevenTVCache.get('kick', 'dispatch-kick')?.id).toBe('fresh')
+    expect(sevenTVCache.get(sevenTVChannelKey('kick', 'dispatch-kick'))?.id).toBe('fresh')
   } finally {
     first.resolve(connectionSnapshot('stale'))
     second.resolve(connectionSnapshot('fresh'))
@@ -866,18 +922,18 @@ test('an expired active set refreshes for all viewers when another joins', async
     const snapshot = {
       id: setId,
       name: 'Expired',
-      platform: channel.platform,
-      channelId: channel.channelId,
       emotes: new Map(),
     }
-    sevenTVCache.set(channel.platform, channel.channelId, snapshot)
+    sevenTVCache.set(sevenTVChannelKey(channel.platform, channel.channelId), snapshot)
     await manager.subscribeClient('viewer', [channel], () => true)
-    sevenTVCache.set(channel.platform, channel.channelId, snapshot, -1)
+    sevenTVCache.set(sevenTVChannelKey(channel.platform, channel.channelId), snapshot, -1)
     received.length = 0
     await manager.subscribeClient('joiner', [channel], () => true)
     expect(lookup).toHaveBeenCalledTimes(1)
     expect(received).toEqual(['viewer', 'joiner'])
-    expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('refreshed')
+    expect(sevenTVCache.get(sevenTVChannelKey(channel.platform, channel.channelId))?.id).toBe(
+      'refreshed',
+    )
     expect(manager.getStats()).toMatchObject({ connectedClients: 2, emoteSetSubscriptions: 1 })
   } finally {
     for (const client of ['viewer', 'joiner']) manager.cleanupClient(client)

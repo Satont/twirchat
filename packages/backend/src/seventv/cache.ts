@@ -1,12 +1,9 @@
-import type { Platform } from '@twirchat/shared'
-
+import type { SevenTVChannelKey } from './channel-key'
 import type { SevenTVEmote } from './emote.ts'
 
 interface SnapshotMetadata {
   userId?: string
   platformUserId?: string
-  channelId: string
-  platform: Platform
   emotes: Map<string, SevenTVEmote>
 }
 
@@ -21,45 +18,27 @@ interface CacheEntry {
 const CATALOG_TTL_MS = 5 * 60 * 1000
 
 export class SevenTVCache {
-  private cache = new Map<string, CacheEntry>() // ChannelKey -> entry
+  private cache = new Map<SevenTVChannelKey, CacheEntry>()
 
-  private getKey(platform: Platform, channelId: string): string {
-    return `${platform}:${channelId}`
+  get(key: SevenTVChannelKey): CachedEmoteSet | undefined {
+    // Return even if expired - caller can decide to use stale data.
+    return this.cache.get(key)?.data
   }
 
-  get(platform: Platform, channelId: string): CachedEmoteSet | undefined {
-    const key = this.getKey(platform, channelId)
+  isExpired(key: SevenTVChannelKey): boolean {
     const entry = this.cache.get(key)
-
-    if (!entry) {
-      return undefined
-    }
-
-    // Return even if expired - caller can decide to use stale data
-    return entry.data
+    return !entry || Date.now() > entry.expiresAt
   }
 
-  isExpired(platform: Platform, channelId: string): boolean {
-    const key = this.getKey(platform, channelId)
-    const entry = this.cache.get(key)
-
-    if (!entry) {
-      return true
-    }
-    return Date.now() > entry.expiresAt
-  }
-
-  set(platform: Platform, channelId: string, data: CachedEmoteSet, ttl = CATALOG_TTL_MS): void {
-    const key = this.getKey(platform, channelId)
-
+  set(key: SevenTVChannelKey, data: CachedEmoteSet, ttl = CATALOG_TTL_MS): void {
     this.cache.set(key, {
       data,
       expiresAt: Date.now() + ttl,
     })
   }
 
-  invalidate(platform: Platform, channelId: string): void {
-    this.cache.delete(this.getKey(platform, channelId))
+  invalidate(key: SevenTVChannelKey): void {
+    this.cache.delete(key)
   }
 
   invalidateAll(): void {

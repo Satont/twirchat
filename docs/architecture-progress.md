@@ -301,6 +301,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The shared platform catalog defines the platform IDs and the `Platform` union. One backend schema validates the full set at WebSocket, account route, and PostgreSQL row boundaries. Feature-specific subsets keep their own policies. Existing desktop type imports still erase at runtime; desktop runtime validators and historical migrations are unchanged.
 - **Safeguard:** HTTP and WebSocket tests pin accepted IDs, case-sensitive rejection, and the narrower OAuth and donation subsets.
 
+### Round 58 — Use one channel key throughout hosted 7TV
+
+- **Decision:** Reserve the exact platform and channel ID together before a join yields. Reuse that typed key for pending requests, live channels, detached joins, and cache access. Catalog snapshots retain provider IDs but no longer carry a redundant copy of the local channel identity.
+- **Safeguard:** Cross-platform dispatch tests pin isolation for the same channel ID, including case and colon preservation on the wire. Existing cache expiry, reconnect, and overlapping join tests continue to exercise snapshot ownership.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

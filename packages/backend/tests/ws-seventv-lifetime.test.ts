@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import { ClientStore } from '../src/db'
 import { sevenTVCache, sevenTVEventClient, sevenTVManager } from '../src/seventv'
+import { sevenTVChannelKey } from '../src/seventv/channel-key'
 import type { WsData } from '../src/ws/connection-manager'
 import { handleWsClose, handleWsMessage, handleWsOpen } from '../src/ws/handlers'
 
@@ -163,7 +164,7 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
         lookup.resolve(response('obsolete'))
         if (scenario === 'supersede') {
           await olderCommands
-          expect(sevenTVCache.get('kick', 'pending')).toBeUndefined()
+          expect(sevenTVCache.get(sevenTVChannelKey('kick', 'pending'))).toBeUndefined()
           latestLookup.resolve(response('latest'))
         }
         await Promise.all(requestsDone)
@@ -173,10 +174,10 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
             ? ['committed', 'pending', 'latest', 'unrelated']
             : ['committed', 'pending', 'unrelated'],
         )
-        expect(sevenTVCache.get('kick', 'pending')?.id).toBe(
+        expect(sevenTVCache.get(sevenTVChannelKey('kick', 'pending'))?.id).toBe(
           subscribeAgain ? 'set-latest' : undefined,
         )
-        expect(sevenTVCache.get('kick', 'next')).toBeUndefined()
+        expect(sevenTVCache.get(sevenTVChannelKey('kick', 'next'))).toBeUndefined()
         const expectedChannels =
           scenario === 'supersede'
             ? ['unrelated', 'pending']
@@ -235,7 +236,7 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
       await Promise.all(requestsDone)
       await ping(replacement)
       expect(requests).toEqual(['committed', 'pending', 'replacement'])
-      expect(sevenTVCache.get('kick', 'pending')).toBeUndefined()
+      expect(sevenTVCache.get(sevenTVChannelKey('kick', 'pending'))).toBeUndefined()
       expect(sevenTVManager.getStats()).toMatchObject({
         connectedClients: 1,
         emoteSetSubscriptions: overlap ? 2 : 1,
