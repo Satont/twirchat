@@ -226,6 +226,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The desktop backend owns the one activity snapshot broker shared by UI reads and fallback polling. Disposal stops the poller, then retires broker admission and rejects queued snapshots and larger same-channel waiters. Already-started reads can settle; an existing subset still shares the active result. Credential preparation already underway can finish but cannot admit a retired snapshot.
 - **Safeguard:** Tests hold an active read open during shutdown, verify that queued and larger requests reject immediately, and check both same-turn retirement and admission after credential preparation. The account-switch identity fence and the live concurrency limit are unchanged.
 
+### Round 43 — Fence channel catalog warmup between provider stages
+
+- **Decision:** A channel warmup checks its runtime lifetime after identity resolution, after native emote and badge reads, and before accepting catalog results or caching failures. A manual reload cannot continue into a new lifetime after waiting for another read or invalidating caches. Already-started provider calls can settle; stopping does not abort them.
+- **Safeguard:** Deferred identity, native emote, and cache-invalidation fixtures stop and restart the runtime while each operation is pending. The retired work cannot start the next stage or publish. Concurrency limits and normal account/preference refresh behavior are unchanged. Audit the presence identity lookup and provider stop ordering separately; neither is changed by this slice.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

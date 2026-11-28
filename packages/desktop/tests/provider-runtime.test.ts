@@ -543,6 +543,42 @@ test('an explicitly empty live 7TV set does not resurrect removed emotes from a 
   expect(urls.at(-1)).toBe('https://7tv.io/v3/users/twitch/42')
 })
 
+for (const blockedStage of ['identity', 'native']) {
+  test(`retiring a warmup during ${blockedStage} skips the remaining stages`, async () => {
+    const started = Promise.withResolvers<void>()
+    const blocked = Promise.withResolvers<void>()
+    const stages: string[] = []
+    const step = async (name: string) => {
+      stages.push(name)
+      if (name !== blockedStage) return
+      started.resolve()
+      await blocked.promise
+    }
+    const { runtime, published } = fixture({
+      resolve: async () => {
+        await step('identity')
+        return { platformUserId: '42', login: 'viewer' }
+      },
+      native: async () => {
+        await step('native')
+        return []
+      },
+      catalog: async () => {
+        await step('catalog')
+        return []
+      },
+    })
+    const pending = runtime.warm('twitch', 'viewer')
+    await started.promise
+    runtime.stop()
+    runtime.start()
+    blocked.resolve()
+    expect(await pending).toEqual([])
+    expect(stages).toEqual(blockedStage === 'identity' ? ['identity'] : ['identity', 'native'])
+    expect(published).toEqual([])
+  })
+}
+
 test('stopping invalidates in-flight catalog and author publications even if the runtime restarts', async () => {
   const { promise: gate, resolve: release } = Promise.withResolvers<void>()
   const authorUpdates: string[][] = []
@@ -595,6 +631,29 @@ test('logout discards an old account catalog response before it can be published
     ),
   ).toBe(true)
   expect(state.published.at(-1)?.catalog[0]?.alias).toBe('PublicAlias')
+})
+
+test('a manual reload cannot resume in a new provider lifetime after invalidation', async () => {
+  const started = Promise.withResolvers<void>()
+  const blocked = Promise.withResolvers<void>()
+  let catalogReads = 0
+  const { runtime } = fixture({
+    invalidate: () => {
+      started.resolve()
+      return blocked.promise
+    },
+    catalog: async () => {
+      catalogReads++
+      return []
+    },
+  })
+  const pending = runtime.reload('twitch', 'viewer')
+  await started.promise
+  runtime.stop()
+  runtime.start()
+  blocked.resolve()
+  await expect(pending).rejects.toThrow('Emote providers are stopped.')
+  expect(catalogReads).toBe(0)
 })
 
 test('manual reload bypasses provider TTL and native cache and publishes all aliases', async () => {

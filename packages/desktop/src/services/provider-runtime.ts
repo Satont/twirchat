@@ -228,10 +228,11 @@ export class ProviderRuntime {
     if (this.queue.length >= 128) return entry.catalog
     const requestedAt = this.catalogRevision
     const lifecycle = this.lifecycle
+    const isCurrent = () => lifecycle === this.lifecycle
     const task = (async () => {
       if (!(await this.acquire())) return []
       try {
-        if (this.stopped || lifecycle !== this.lifecycle) return []
+        if (!isCurrent()) return []
         const account = this.dependencies
           .accounts()
           .find((candidate) => candidate.platform === platform)
@@ -248,6 +249,7 @@ export class ProviderRuntime {
         } catch {
           /* Global catalogs and existing data remain useful if identity lookup fails. */
         }
+        if (!isCurrent()) return []
         if (resolved) {
           entry.numericId = resolved.platformUserId
           entry.slug = normalize(resolved.login)
@@ -265,6 +267,7 @@ export class ProviderRuntime {
             ? this.dependencies.badges(entry.slug).catch(() => undefined)
             : Promise.resolve(undefined),
         ])
+        if (!isCurrent()) return []
         const sevenTV = forceRemote ? undefined : this.dependencies.sevenTv(platform, entry.slug)
         const catalog = await this.dependencies.catalog(platform, entry.slug, {
           nativeEmotes: native,
@@ -273,7 +276,7 @@ export class ProviderRuntime {
           personalUserId: account?.platformUserId,
           preferences: prefs,
         })
-        if (this.stopped || lifecycle !== this.lifecycle) return []
+        if (!isCurrent()) return []
         if (requestedAt !== this.catalogRevision)
           return mergeProviderEmotes([entry.catalog], this.preferences)
         entry.catalog = catalog
@@ -290,6 +293,7 @@ export class ProviderRuntime {
         if (requestedAt !== this.catalogRevision) entry.expires = 0
         return mergeProviderEmotes([entry.catalog], this.preferences)
       } catch (error) {
+        if (!isCurrent()) return []
         entry.expires = this.now() + 30000
         if (forceRemote) throw error
         return mergeProviderEmotes([entry.catalog], this.preferences)
@@ -298,7 +302,7 @@ export class ProviderRuntime {
       }
     })().finally(() => {
       entry.pending = undefined
-      if (!this.stopped && lifecycle === this.lifecycle && requestedAt !== this.catalogRevision)
+      if (isCurrent() && requestedAt !== this.catalogRevision)
         runInBackground(
           this.warm(platform, channelId, channelSlug, true),
           'provider-runtime background operation failed',
@@ -379,16 +383,24 @@ export class ProviderRuntime {
     channel: string,
     kind: 'channel' | 'subscriber' = 'channel',
   ): Promise<void> {
-    if (this.stopped) throw new Error('Emote providers are stopped.')
+    const lifecycle = this.lifecycle
+    const checkRunning = () => {
+      if (this.stopped || lifecycle !== this.lifecycle)
+        throw new Error('Emote providers are stopped.')
+    }
+    checkRunning()
     if (kind === 'subscriber' && !this.preferences.enabled.twitch)
       throw new Error('Enable Twitch emotes in Emote settings before reloading subscriber emotes.')
     if (kind === 'subscriber' && platform !== 'twitch')
       throw new Error('Subscriber emote catalogs are supported for Twitch accounts.')
     const entry = this.entry(platform, channel)
     await entry.pending
+    checkRunning()
     await this.dependencies.invalidate?.()
+    checkRunning()
     entry.expires = 0
     await this.warm(platform, channel, undefined, true, true)
+    checkRunning()
     const failures = this.dependencies.errors?.() ?? []
     if (failures.length)
       throw new Error(
