@@ -9,21 +9,13 @@
     "typecheck": "tsgo --noEmit",
     "test": "bun test --isolate tests/",
     "build": "bun run build:prod",
-    "build:prod": "bun run typecheck && bun build --compile --minify --sourcemap src/index.ts --outfile=.out/backend",
-    "generate:7tv": "graphql-codegen --config codegen.ts"
+    "build:prod": "bun run typecheck && bun build --compile --minify --sourcemap src/index.ts --outfile=.out/backend"
   },
   "dependencies": {
-    "@graphql-typed-document-node/core": "3.2.0",
     "@twirchat/shared": "workspace:*",
-    "@urql/core": "6.0.3",
-    "graphql": "17.0.2",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "7.4.6",
-    "@graphql-codegen/client-preset": "6.2.3",
-    "@graphql-codegen/typescript": "6.1.2",
-    "@graphql-codegen/typescript-operations": "6.2.0",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:"

@@ -147,9 +147,6 @@ bun run typecheck
 # Build single binary
 bun run build:prod
 
-# Generate 7TV GraphQL types
-bun run generate:7tv
-
 # Run tests with file isolation for provider mocks and caches
 bun run test
 ```
@@ -212,9 +209,8 @@ Run automatically on startup. Manual run not needed.
 
 **7TV Integration**
 
-- GraphQL API client in `src/seventv/`
-- Generated types in `src/seventv/gql/`
-- Bundle warning: documents map not tree-shakeable (production: use babel/swc plugin)
+- `src/seventv/client.ts` owns the GraphQL operations and validates responses at runtime.
+- Both catalog lookups use the same emote-set selection and decoder; no code generation is required.
 
 **Twitch Badges**
 

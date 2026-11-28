@@ -256,6 +256,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** A pending switch carries its target and serves as its own identity fence. Repeated events for that target leave the existing lookup and revision untouched. A different target still supersedes the request, including a return to the currently active set.
 - **Safeguard:** A duplicate cannot discard a successful lookup by starting a second read that fails. An older response for a superseded target cannot publish even if a later switch names the same target again.
 
+### Round 49 — Make the hosted 7TV GraphQL client the sole operation owner
+
+- **Decision:** Both runtime operations share one catalog field selection and one response decoder. Keep the operation names, variables, and null/omission behavior. Remove the unused parallel SDL, query copies, generated types, and codegen dependencies rather than adding generation or sidecar files to the build.
+- **Safeguard:** The client contract test checks the two request envelopes and rejects an incomplete catalog on either path. The production binary still bundles the client without loading query files at runtime.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
