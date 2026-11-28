@@ -449,26 +449,27 @@ export class ProviderRuntime {
     )
       return
     const authorKey = key(platform, userId)
+    const lifecycle = this.lifecycle
     let author = this.authors.get(authorKey)
     if (author?.pending && author.setId === setId) return author.pending
     if (author && author.setId === setId && author.expires > this.now()) return
     if (this.queue.length >= 128) return
-    if (!author || author.setId !== setId) {
+    const replaced = !author || author.setId !== setId
+    if (!author || replaced) {
       author = { platform, userId, setId, catalog: [], expires: 0 }
       this.authors.delete(authorKey)
       this.authors.set(authorKey, author)
-      this.publishAuthor(author)
       while (this.authors.size > 256) deleteOldestEntry(this.authors)
     }
     const current = author
-    const lifecycle = this.lifecycle
+    const isCurrent = () => this.lifecycle === lifecycle && this.authors.get(authorKey) === current
     const task = (async () => {
       if (!(await this.acquire())) return
       try {
+        if (!isCurrent()) return
         const catalog =
           setId && this.dependencies.personalSet ? await this.dependencies.personalSet(setId) : []
-        if (this.stopped || lifecycle !== this.lifecycle || this.authors.get(authorKey) !== current)
-          return
+        if (!isCurrent()) return
         current.catalog = catalog.map((emote) => ({
           ...emote,
           source: 'personal',
@@ -477,7 +478,7 @@ export class ProviderRuntime {
         current.expires = this.now() + 300000
         this.publishAuthor(current)
       } catch {
-        current.expires = this.now() + 30000
+        if (isCurrent()) current.expires = this.now() + 30000
       } finally {
         this.release()
       }
@@ -485,6 +486,7 @@ export class ProviderRuntime {
       current.pending = undefined
     })
     current.pending = task
+    if (replaced) this.publishAuthor(current)
     return task
   }
   setActiveChannel(channel: ProviderActiveChannel | null): void {

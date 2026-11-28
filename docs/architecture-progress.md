@@ -216,6 +216,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Stop the account coordinator when backend disposal begins. Late watches and account refreshes cannot recreate clients. The coordinator retains channel ownership while existing transports emit their final AutoMod clears, then releases it. Individual transports remain restartable during normal operation.
 - **Safeguard:** The regression verifies that shutdown closes the existing socket once and late commands neither read the active account nor create another connection.
 
+### Round 41 — Skip retired personal-emote requests
+
+- **Decision:** The provider runtime checks the same author-cache identity and lifetime before starting and after awaiting a personal-set read. Replaced or evicted work releases its concurrency slot without calling the provider. Reads already underway can settle, but cannot publish or change the retired entry's retry deadline.
+- **Safeguard:** With all provider slots occupied, queue an old personal set and its replacement, then release the slots. Only the replacement reaches the provider. A synchronous subscriber reacting to a new author entry joins its pending read instead of issuing a duplicate.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

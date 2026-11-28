@@ -404,6 +404,48 @@ test('personal emotes load only on visible author requests and cannot leak the c
   expect(state.runtime.enrich(other).emotes).toEqual([])
 })
 
+test('a reentrant author subscriber joins the pending personal set request', async () => {
+  const requested: string[] = []
+  let joined: Promise<void> | undefined
+  const { runtime } = fixture({
+    personalSet: async (setId) => {
+      requested.push(setId)
+      return [emote(setId, 'seventv')]
+    },
+    publishAuthor: (_platform, _author, catalog) => {
+      if (!catalog.length) joined = warm()
+    },
+  })
+  function warm(): Promise<void> {
+    return runtime.warmAuthorPersonal('twitch', 'author', 'selected')
+  }
+  await warm()
+  expect(joined).toBeDefined()
+  await joined
+  expect(requested).toEqual(['selected'])
+})
+
+test('a replaced queued author set never starts a provider request', async () => {
+  const { promise: gate, resolve: release } = Promise.withResolvers<void>()
+  const requested: string[] = []
+  const { runtime } = fixture({
+    resolve: async (_platform, channel) => {
+      await gate
+      return { platformUserId: channel, login: channel }
+    },
+    personalSet: async (setId) => {
+      requested.push(setId)
+      return [emote(setId, 'seventv')]
+    },
+  })
+  const busy = ['one', 'two', 'three'].map((channel) => runtime.warm('twitch', channel))
+  const retired = runtime.warmAuthorPersonal('twitch', 'author', 'old')
+  const current = runtime.warmAuthorPersonal('twitch', 'author', 'new')
+  release()
+  await Promise.all([...busy, retired, current])
+  expect(requested).toEqual(['new'])
+})
+
 test('an old personal set response cannot replace a newer author set or publish after stop', async () => {
   const { promise: gate, resolve: release } = Promise.withResolvers<void>()
   const updates: string[][] = []
