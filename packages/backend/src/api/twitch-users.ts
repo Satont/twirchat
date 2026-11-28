@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken } from './app-credentials.ts'
 
 export interface HelixUser {
   id: string

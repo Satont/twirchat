@@ -1,7 +1,7 @@
 import type { UserProfileRequest, UserProfileSnapshot } from '@twirchat/shared/user-profile'
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken } from './stream-status'
+import { fetchTwitchHelixWithAppToken } from './app-credentials'
 
 export interface UserProfileDependencies {
   fetch(url: string, init?: RequestInit): Promise<Response>

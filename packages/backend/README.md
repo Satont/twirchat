@@ -62,7 +62,7 @@ ngrok http 3000
 | `start`      | `bun src/index.ts`                 | Start without watching (production-like)     |
 | `build:prod` | typechecks + `bun build --compile` | Compile to single binary in `.out/backend`   |
 | `typecheck`  | `tsgo --noEmit`                    | Type-check with `@typescript/native-preview` |
-| `test`       | `bun test tests/`                  | Run tests                                    |
+| `test`       | `bun test --isolate tests/`        | Run tests with isolated module state         |
 
 ## HTTP endpoints
 

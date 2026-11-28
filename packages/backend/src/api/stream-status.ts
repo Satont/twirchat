@@ -10,131 +10,7 @@ import type { StreamStatusResponse } from '@twirchat/shared'
  */
 import { z } from 'zod'
 
-import { config } from '../config.ts'
-
-// ----------------------------------------------------------------
-// Twitch App Token (cached in-memory with expiry)
-// ----------------------------------------------------------------
-
-// Bun.serve answers in `routes` must finish well within its idleTimeout.
-const TWITCH_REQUEST_TIMEOUT_MS = 8000
-
-let twitchAppToken: string | null = null
-let twitchAppTokenExpiresAt = 0
-let pendingTwitchAppToken: Promise<string> | null = null
-
-function invalidateTwitchAppToken(): void {
-  twitchAppToken = null
-  twitchAppTokenExpiresAt = 0
-}
-
-function getTwitchHelixHeaders(token: string, headers?: RequestInit['headers']): Headers {
-  const nextHeaders = new Headers(headers)
-  nextHeaders.set('Authorization', `Bearer ${token}`)
-  nextHeaders.set('Client-Id', config.TWITCH_CLIENT_ID)
-
-  return nextHeaders
-}
-
-async function getTwitchAppToken(): Promise<string> {
-  if (twitchAppToken && Date.now() < twitchAppTokenExpiresAt - 60_000) {
-    return twitchAppToken
-  }
-  // Concurrent requests after a restart or expiry share one token request.
-  pendingTwitchAppToken ??= requestTwitchAppToken().finally(() => {
-    pendingTwitchAppToken = null
-  })
-  return pendingTwitchAppToken
-}
-
-async function requestTwitchAppToken(): Promise<string> {
-  const res = await fetch('https://id.twitch.tv/oauth2/token', {
-    body: new URLSearchParams({
-      client_id: config.TWITCH_CLIENT_ID,
-      client_secret: config.TWITCH_CLIENT_SECRET,
-      grant_type: 'client_credentials',
-    }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    method: 'POST',
-    signal: AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
-  })
-
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Failed to get Twitch app token: ${res.status} ${body}`)
-  }
-
-  const data = z
-    .object({ access_token: z.string(), expires_in: z.number() })
-    .parse(await res.json())
-
-  twitchAppToken = data.access_token
-  twitchAppTokenExpiresAt = Date.now() + data.expires_in * 1000
-
-  return twitchAppToken
-}
-
-async function fetchTwitchHelixWithAppToken(
-  input: string | URL,
-  init: RequestInit = {},
-): Promise<Response> {
-  const token = await getTwitchAppToken()
-  const response = await fetch(input, {
-    ...init,
-    headers: getTwitchHelixHeaders(token, init.headers),
-    signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
-  })
-
-  if (response.status !== 401) {
-    return response
-  }
-
-  invalidateTwitchAppToken()
-
-  const refreshedToken = await getTwitchAppToken()
-  return fetch(input, {
-    ...init,
-    headers: getTwitchHelixHeaders(refreshedToken, init.headers),
-    signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
-  })
-}
-
-// ----------------------------------------------------------------
-// Kick App Token (client_credentials)
-// ----------------------------------------------------------------
-
-let kickAppToken: string | null = null
-let kickAppTokenExpiresAt = 0
-
-async function getKickAppToken(): Promise<string> {
-  if (kickAppToken && Date.now() < kickAppTokenExpiresAt - 60_000) {
-    return kickAppToken
-  }
-
-  const res = await fetch('https://id.kick.com/oauth/token', {
-    body: new URLSearchParams({
-      client_id: config.KICK_CLIENT_ID,
-      client_secret: config.KICK_CLIENT_SECRET,
-      grant_type: 'client_credentials',
-    }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    method: 'POST',
-  })
-
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Failed to get Kick app token: ${res.status} ${body}`)
-  }
-
-  const data = z
-    .object({ access_token: z.string(), expires_in: z.number() })
-    .parse(await res.json())
-
-  kickAppToken = data.access_token
-  kickAppTokenExpiresAt = Date.now() + data.expires_in * 1000
-
-  return kickAppToken
-}
+import { fetchTwitchHelixWithAppToken, getKickAppHeaders } from './app-credentials.ts'
 
 // ----------------------------------------------------------------
 // Twitch stream status
@@ -207,16 +83,10 @@ async function getTwitchStreamStatus(channelId: string): Promise<StreamStatusRes
 // ----------------------------------------------------------------
 
 async function getKickStreamStatus(channelSlug: string): Promise<StreamStatusResponse> {
-  const token = await getKickAppToken()
-
+  const headers = await getKickAppHeaders()
   const res = await fetch(
     `https://api.kick.com/public/v1/channels?slug=${encodeURIComponent(channelSlug)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Client-ID': config.KICK_CLIENT_ID,
-      },
-    },
+    { headers },
   )
 
   if (!res.ok) {
@@ -279,6 +149,3 @@ export async function handleStreamStatus(url: URL): Promise<StreamStatusResponse
 
   throw new Error(`Unsupported platform: ${platform}`)
 }
-
-// Re-export app token helpers for use in other API modules
-export { fetchTwitchHelixWithAppToken, getKickAppToken, getTwitchAppToken }

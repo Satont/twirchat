@@ -150,8 +150,8 @@ bun run build:prod
 # Generate 7TV GraphQL types
 bun run generate:7tv
 
-# Run tests
-bun test tests/
+# Run tests with file isolation for provider mocks and caches
+bun run test
 ```
 
 ## ENVIRONMENT VARIABLES

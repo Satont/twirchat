@@ -7,7 +7,7 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "tsgo --noEmit",
-    "test": "bun test tests/",
+    "test": "bun test --isolate tests/",
     "build": "bun run build:prod",
     "build:prod": "bun run typecheck && bun build --compile --minify --sourcemap src/index.ts --outfile=.out/backend",
     "generate:7tv": "graphql-codegen --config codegen.ts"
