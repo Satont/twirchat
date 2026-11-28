@@ -18,6 +18,7 @@ type SystemMessageHandler = (
 
 const RECONNECT_DELAY_MS = 3000
 const MAX_RECONNECT_DELAY_MS = 30_000
+const HEARTBEAT_INTERVAL_MS = 30_000
 
 /**
  * Manages the persistent WebSocket connection from desktop to backend.
@@ -30,32 +31,39 @@ export class BackendConnection {
   private systemMessageHandlers: SystemMessageHandler[] = []
   private reconnectDelay = RECONNECT_DELAY_MS
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private stopped = false
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private socketListeners: AbortController | null = null
+  private stopped = true
 
   constructor(private readonly clientSecret: string) {}
 
   connect(): void {
-    this.stopped = false
+    if (!this.stopped) return
     this._connect()
+    this.stopped = false
+    this.heartbeatTimer = setInterval(() => {
+      this.send({ type: 'ping' })
+    }, HEARTBEAT_INTERVAL_MS)
   }
 
   disconnect(): void {
+    if (this.stopped) return
     this.stopped = true
-    this.notifyConnectionStatus(false)
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    // Remove all listeners before closing to prevent callbacks
-    // from firing during teardown (avoids Bun WebWorker UAF).
-    if (this.ws) {
-      this.ws.onopen = null
-      this.ws.onmessage = null
-      this.ws.onclose = null
-      this.ws.onerror = null
-      this.ws.close()
-      this.ws = null
-    }
+    const ws = this.ws
+    this.ws = null
+    // Detach EventTarget callbacks before closing the socket (avoids Bun teardown races).
+    this.socketListeners?.abort()
+    this.socketListeners = null
+    ws?.close()
+    this.notifyConnectionStatus(false)
   }
 
   send(msg: DesktopToBackendMessage): void {
@@ -104,7 +112,10 @@ export class BackendConnection {
         'X-Client-Secret': this.clientSecret,
       },
     })
-    ws.addEventListener('open', () => {
+    const listeners = new AbortController()
+    const options = { signal: listeners.signal }
+    this.socketListeners = listeners
+    const handleOpen = () => {
       if (this.ws !== ws || this.stopped) return
       this.notifyConnectionStatus(true)
       log.info('Connected')
@@ -117,9 +128,9 @@ export class BackendConnection {
           log.error('Failed to resubscribe to 7TV', { error: String(error) })
         })
       }
-    })
+    }
 
-    ws.addEventListener('message', (evt) => {
+    const handleMessage = (evt: WebSocketEventMap['message']) => {
       if (this.ws !== ws || this.stopped) return
       try {
         if (typeof evt.data !== 'string') return
@@ -179,25 +190,33 @@ export class BackendConnection {
       } catch (error) {
         log.error('Failed to parse message', { error: String(error) })
       }
-    })
+    }
 
-    ws.addEventListener('close', () => {
+    const handleClose = () => {
       if (this.ws !== ws) return
+      listeners.abort()
+      this.socketListeners = null
       this.ws = null
-      this.notifyConnectionStatus(false)
       if (!this.stopped) {
         log.info(`Disconnected. Reconnecting in ${this.reconnectDelay}ms...`)
         this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null
+          if (this.stopped) return
           this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS)
           this._connect()
         }, this.reconnectDelay)
       }
-    })
+      this.notifyConnectionStatus(false)
+    }
 
-    ws.addEventListener('error', (evt) => {
+    const handleError = (evt: WebSocketEventMap['error']) => {
       log.error('WebSocket error', { event: JSON.stringify(evt) })
-    })
+    }
 
+    ws.addEventListener('open', handleOpen, options)
+    ws.addEventListener('message', handleMessage, options)
+    ws.addEventListener('close', handleClose, options)
+    ws.addEventListener('error', handleError, options)
     this.ws = ws
   }
 }

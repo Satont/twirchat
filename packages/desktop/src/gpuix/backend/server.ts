@@ -734,9 +734,6 @@ function boot(): DesktopRuntime {
   })
 
   backendConn.connect()
-  setInterval(() => {
-    backendConn.send({ type: 'ping' })
-  }, 30_000)
 
   // ── Connect authenticated own channels; watched chats follow open layouts ──
 
@@ -793,6 +790,7 @@ function boot(): DesktopRuntime {
       providerRuntime.stop()
       twitchEventSub.stop()
       twitchActivityRefresh.stop()
+      backendConn.disconnect()
     },
   }
 }
