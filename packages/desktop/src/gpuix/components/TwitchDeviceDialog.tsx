@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import type { DesktopEventMap } from '../backend/events'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'

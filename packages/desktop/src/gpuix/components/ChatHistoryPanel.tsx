@@ -16,8 +16,8 @@ import {
   type HistoryVisibleRange,
 } from '../../views/main/utils/history-display'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
+import { useBackend } from '../backend-context'
 import type { ChatHistoryQuery } from '../backend/chat-history'
-import { useBackend } from '../backend/context'
 import { chatMessageKey } from '../chat-tools'
 import { useT } from '../hooks/use-translation'
 import { resolveMentionAvatarStyle } from '../mention-avatar'

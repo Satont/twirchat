@@ -55,7 +55,7 @@ import {
 import { resolveUserCardCommand, type UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import type { PluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import {
   commandApplies,
   runCommandActions,

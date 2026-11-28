@@ -6,7 +6,7 @@ import { DEFAULT_TRANSLATION_SETTINGS, resolveChannelTranslation } from '../../s
 import type { Store } from '../../state/create-store'
 import { createStore } from '../../state/create-store'
 import { persistentResource } from '../../state/persistent-resources'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 import { chatMessageKey } from '../chat-tools'
 import { accountsStore } from './accounts'
 import { watchedChannelsStore } from './app'

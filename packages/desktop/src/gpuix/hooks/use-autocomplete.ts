@@ -57,7 +57,7 @@ import {
 import { rankEmoteMatches } from '../../views/main/utils/emoteCompletion'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import {
   isJeetbotReloadCommand,
   isTwirReloadCommand,

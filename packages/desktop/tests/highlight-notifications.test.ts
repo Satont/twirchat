@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
+import type { DesktopBackend } from '../src/gpuix/backend/contract'
 import { createDesktopEvents } from '../src/gpuix/backend/events'
-import type { DesktopBackend } from '../src/gpuix/backend/server'
 import { DEFAULT_CHAT_RULES } from '../src/gpuix/message-rules'
 import { accountsStore } from '../src/gpuix/state/accounts'
 import { watchedChannelsStore, watchedStatusesStore } from '../src/gpuix/state/app'

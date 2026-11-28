@@ -9,7 +9,7 @@ import { useEffect, type ReactNode } from 'react'
 
 import { emoteProvider } from '../../../services/provider-emotes'
 import { sanitizeDisplayText } from '../../../views/shared/utils/display-text'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useT } from '../../hooks/use-translation'
 import { PREFIX_MODIFIERS, SUFFIX_MODIFIERS, type EmoteModifier } from '../../message-tokens'

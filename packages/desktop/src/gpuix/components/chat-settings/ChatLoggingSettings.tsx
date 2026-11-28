@@ -1,8 +1,8 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useBackend } from '../../backend-context'
 import type { ChatLoggingSettings as LoggingSettings } from '../../backend/chat-logging-settings'
-import { useBackend } from '../../backend/context'
 import {
   HistoryButton as Button,
   HistoryChoices as Choices,

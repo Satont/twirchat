@@ -4,7 +4,7 @@ import type { Platform } from '@twirchat/shared/types'
 import type { Store } from '../../state/create-store'
 import { createStore } from '../../state/create-store'
 import { persistentResource } from '../../state/persistent-resources'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 import { applyChannelClear } from './app'
 
 export const channelRoomStore = persistentResource('channelRooms', () =>

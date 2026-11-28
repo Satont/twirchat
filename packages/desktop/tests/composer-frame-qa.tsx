@@ -14,12 +14,12 @@ import type {
 } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-import type { DesktopBackend } from '../src/gpuix/backend/server'
+import type { DesktopBackend } from '../src/gpuix/backend/contract'
 import type { ChatInputProps } from '../src/gpuix/components/ChatInput'
 
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import('@gpuix/react')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopApi } = await import('../src/gpuix/backend/api')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatInput } = await import('../src/gpuix/components/ChatInput')

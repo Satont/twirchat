@@ -49,7 +49,7 @@ in-process facade with exactly the same shape as the Wails gateway:
   ported back from the Go bridge (`internal/bridge/*.go`) to TS.
 - `src/gpuix/backend/events.ts` — `DesktopEventMap` typed emitter, same event
   names as Wails (`chat_message`, `platform_status`, `watched_channel_message`, …).
-- `src/gpuix/backend/context.ts` — React side: `useBackend()` +
+- `src/gpuix/backend-context.ts` — React side: `useBackend()` +
   `useBackendEvent(name, handler)`. Components never import stores/adapters
   directly — only the facade — so a real transport (WS/IPC) could replace the
   in-process one without touching UI code.

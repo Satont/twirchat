@@ -17,7 +17,7 @@ import {
   type RefObject,
 } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
 import { useT } from '../hooks/use-translation'
 import { nativeWindow } from '../native-window'

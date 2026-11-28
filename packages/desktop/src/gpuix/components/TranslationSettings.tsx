@@ -9,7 +9,7 @@ import type {
   OutgoingTranslationMode,
 } from '../../services/translation'
 import { TRANSLATION_PROVIDERS, validateTranslationSettings } from '../../services/translation'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { useT } from '../hooks/use-translation'
 import {
   applyTranslationSettings,

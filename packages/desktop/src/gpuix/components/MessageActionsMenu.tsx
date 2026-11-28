@@ -3,7 +3,7 @@ import { PLATFORM_COMMAND_NAMES } from '@twirchat/shared/channel-tools'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { useEffect, useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import {
   commandApplies,
   expandCustomCommand,

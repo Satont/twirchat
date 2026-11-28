@@ -13,7 +13,7 @@ const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await im
 )
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const base = new URL('../src/gpuix/', import.meta.url).pathname
-const { BackendContext } = await import(base + 'backend/context.ts')
+const { BackendContext } = await import(base + 'backend-context.ts')
 const { ChannelTabBar } = await import(base + 'components/ChannelTabBar.tsx')
 const { useStore } = await import(base + 'state/use-store.ts')
 const app = await import(base + 'state/app.ts')

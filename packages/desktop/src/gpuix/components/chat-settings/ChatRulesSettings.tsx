@@ -2,7 +2,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { sanitizeDisplayText, truncateGraphemes } from '../../../views/shared/utils/display-text'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import { compileFilterExpression } from '../../filter-expression'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useT } from '../../hooks/use-translation'

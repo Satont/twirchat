@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { type MessageKey } from '../../i18n'
 import type { StreamerMode, StreamerModeSettings as Settings } from '../../services/streamer-mode'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import {

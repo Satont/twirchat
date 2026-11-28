@@ -17,7 +17,7 @@ import type {
 import { z } from 'zod'
 
 import { focusNativeQaWindow, getNativeQaWindowGeometry } from '../scripts/qa-x11'
-import type { DesktopBackend } from '../src/gpuix/backend/server'
+import type { DesktopBackend } from '../src/gpuix/backend/contract'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 import { captureGuiQaDisplay } from '../src/services/gui-qa-screenshot'
 

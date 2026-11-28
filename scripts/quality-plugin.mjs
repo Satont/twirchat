@@ -97,6 +97,8 @@ const workspaceImportBoundaries = {
         'Only GPUIX code can import its application modules. Use the owning desktop contract or service instead.',
       bridgePresentation:
         'The desktop backend bridge cannot import GPUIX presentation. Use the owning desktop contract or service instead.',
+      bridgeFramework:
+        'Keep React and GPUIX packages in desktop presentation, not in the backend bridge.',
     },
   },
   create(context) {
@@ -141,8 +143,14 @@ const workspaceImportBoundaries = {
           context.report({ node: source, messageId: 'desktopGpuix' })
           return
         }
-        if (desktopFoundation && /^(?:react|react-dom|@gpuix\/[^/]+)(?:\/|$)/u.test(specifier)) {
-          context.report({ node: source, messageId: 'desktopFoundation' })
+        const uiPackage =
+          /^(?:react|react-dom)(?:\/|$)/u.test(specifier) ||
+          (!alias && externalGpuixPackages.has(specifier.split('/', 2).join('/')))
+        if (uiPackage && (desktopFoundation || desktopBridge)) {
+          context.report({
+            node: source,
+            messageId: desktopBridge ? 'bridgeFramework' : 'desktopFoundation',
+          })
           return
         }
         if (

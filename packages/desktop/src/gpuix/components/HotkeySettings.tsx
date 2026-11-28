@@ -2,7 +2,7 @@ import type { KeyEvent } from '@gpuix/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { type MessageKey } from '../../i18n'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import {

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import { initialsOf } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { avatarRevisionStore, avatarUrlForUser } from '../state/caches'
 import { mentionAppearanceKey, mentionAppearances } from '../state/mention-appearances'
 import { useStoreSelector } from '../state/use-store'

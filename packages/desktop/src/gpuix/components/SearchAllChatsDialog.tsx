@@ -2,7 +2,7 @@ import { useGpuixRequired, useWindowSize, type PublicInstance } from '@gpuix/rea
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { compileChatSearch } from '../chat-tools'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
 import { useT } from '../hooks/use-translation'

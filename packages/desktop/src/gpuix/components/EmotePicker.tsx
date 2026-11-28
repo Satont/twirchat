@@ -12,7 +12,7 @@ import {
   groupEmoteCatalog,
   applyLiveEmoteLocks,
 } from '../../views/main/utils/emote-catalog'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import {
   focusPopupSearch,

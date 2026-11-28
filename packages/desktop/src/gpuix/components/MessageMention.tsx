@@ -9,7 +9,7 @@ import {
 } from '../../services/paint-renderer'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { resolveMentionTarget } from '../../views/main/utils/mention-user-card'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
 import { inlineMentionAvatarSize } from '../mention-avatar'

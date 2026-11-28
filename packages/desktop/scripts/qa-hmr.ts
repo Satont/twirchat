@@ -19,7 +19,7 @@ import * as React from ${JSON.stringify(react)}
 import { useGpuixRequired } from ${JSON.stringify(gpuix)}
 import { appendFileSync } from 'node:fs'
 import { getDesktopBackend } from ${JSON.stringify(join(desktop, 'src/gpuix/backend/server.ts'))}
-import { useBackend } from ${JSON.stringify(join(desktop, 'src/gpuix/backend/context.ts'))}
+import { useBackend } from ${JSON.stringify(join(desktop, 'src/gpuix/backend-context.ts'))}
 import { useDesktopWindows } from ${JSON.stringify(join(desktop, 'src/gpuix/state/desktop-windows.ts'))}
 import { useWindowScope } from ${JSON.stringify(join(desktop, 'src/gpuix/state/window-scope.ts'))}
 import { useStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/use-store.ts'))}

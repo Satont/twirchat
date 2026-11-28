@@ -9,7 +9,7 @@ import type {
   PluginChannelMessage,
   PluginChannelSnapshot,
 } from '../../watched-channels/plugin-channels'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { parsePluginCommand } from '../commands'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'

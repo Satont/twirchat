@@ -7,7 +7,7 @@ import {
   sanitizeDisplayText,
   truncateGraphemes,
 } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { decideTwitchAutoModMessage, type TwitchAutoModRow } from '../state/twitch-automod'

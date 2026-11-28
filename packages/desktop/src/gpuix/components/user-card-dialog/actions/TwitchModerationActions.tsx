@@ -1,4 +1,4 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { useActionToast, type ActionClickEvent } from '@gpuix/components/action-toast'
 import { ActionButton } from '@gpuix/components/ui/Form'
 import { useT } from '@gpuix/hooks/use-translation'

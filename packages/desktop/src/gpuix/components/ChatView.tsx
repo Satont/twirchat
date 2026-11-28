@@ -36,8 +36,8 @@ import {
   type DesktopWatchedChannel,
   type PluginWatchedChannel,
 } from '../../watched-channels/plugin-channel-types'
+import { useBackend } from '../backend-context'
 import type { DesktopApi } from '../backend/api'
-import { useBackend } from '../backend/context'
 import { CHAT_HEADER_ACTION_META } from '../chat-header-actions'
 import {
   autoModSearchMessage,

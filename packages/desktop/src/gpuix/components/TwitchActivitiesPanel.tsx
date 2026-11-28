@@ -5,7 +5,7 @@ import type {
 import { useEffect, useRef, useState } from 'react'
 
 import { type MessageKey } from '../../i18n'
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { accountsStore } from '../state/accounts'

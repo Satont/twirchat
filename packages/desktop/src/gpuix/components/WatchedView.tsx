@@ -11,7 +11,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 
 import { layoutChannelNames, panelWatchedSources } from '../../views/main/utils/layout-tree'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
 import { useT } from '../hooks/use-translation'

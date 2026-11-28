@@ -2,7 +2,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import type { Account, PanelNode, WatchedChannel } from '@twirchat/shared/types'
 import { useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { resolveChatAccount } from '../chat-account'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'

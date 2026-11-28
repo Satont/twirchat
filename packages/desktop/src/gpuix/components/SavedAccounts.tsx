@@ -2,7 +2,7 @@ import type { StyleDesc } from '@gpuix/react'
 import type { Account, Platform } from '@twirchat/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { accountsStore } from '../state/accounts'

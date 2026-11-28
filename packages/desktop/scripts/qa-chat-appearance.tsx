@@ -10,7 +10,7 @@ assertGuiQaEnvironment()
 
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import('@gpuix/react')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { ChatAppearanceDialog } =
   await import('../src/gpuix/components/chat-settings/ChatAppearanceDialog')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')

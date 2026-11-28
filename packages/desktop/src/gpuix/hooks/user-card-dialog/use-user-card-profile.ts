@@ -1,5 +1,5 @@
 import type { UserCosmetics } from '@desktop/services/cosmetics'
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { errorText } from '@gpuix/components/user-card/format'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { emotePreferencesStore } from '@gpuix/state/emote-preferences'

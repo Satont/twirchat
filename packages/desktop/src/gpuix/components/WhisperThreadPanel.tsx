@@ -1,7 +1,7 @@
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useMemo, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { useT } from '../hooks/use-translation'
 import { accountsStore } from '../state/accounts'
 import { avatarRevisionStore, avatarUrlForUser, ensureAvatarForUser } from '../state/caches'

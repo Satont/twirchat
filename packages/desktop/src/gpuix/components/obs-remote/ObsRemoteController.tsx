@@ -6,7 +6,7 @@ import {
   type ObsRemoteCommand,
   type ObsRemoteSnapshot,
 } from '../../../services/obs-remote'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import type {
   ObsRemoteConnection,
   ObsRemoteProfile,

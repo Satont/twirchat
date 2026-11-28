@@ -9,7 +9,7 @@ import type { Store } from '../../state/create-store'
 import { createStore } from '../../state/create-store'
 import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 
 export const streamerModeStore = persistentResource('streamerMode', () =>
   createStore<StreamerModeStatus>({

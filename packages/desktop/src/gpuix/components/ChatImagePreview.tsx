@@ -1,7 +1,7 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { memo, useContext, useEffect, useMemo, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { claimMessageRowClick } from '../message-row-click'

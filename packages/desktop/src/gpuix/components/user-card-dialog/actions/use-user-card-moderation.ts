@@ -1,4 +1,4 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { resolveModeratorHotkey } from '@gpuix/components/user-card/moderation-hotkeys'
 import { useT } from '@gpuix/hooks/use-translation'
 import { usePaneAccountId } from '@gpuix/pane-account-context'

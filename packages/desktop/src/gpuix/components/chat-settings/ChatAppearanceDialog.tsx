@@ -9,7 +9,7 @@ import {
 import { useEffect } from 'react'
 
 import { type MessageKey } from '../../../i18n'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import { CHAT_HEADER_ACTION_META } from '../../chat-header-actions'
 import { useT } from '../../hooks/use-translation'
 import {

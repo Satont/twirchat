@@ -1,7 +1,7 @@
 import type { TwitchWebSessionStatus } from '@twirchat/shared/twitch-activities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { useWindowScope } from '../state/window-scope'

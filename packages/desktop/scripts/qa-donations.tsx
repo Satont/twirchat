@@ -13,7 +13,7 @@ import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 assertGuiQaEnvironment()
 await import('../src/gpuix/native-bootstrap')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import('@gpuix/react')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { SettingsPanel } = await import('../src/gpuix/components/SettingsPanel')

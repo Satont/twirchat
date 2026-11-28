@@ -1,4 +1,4 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { errorText } from '@gpuix/components/user-card/format'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'

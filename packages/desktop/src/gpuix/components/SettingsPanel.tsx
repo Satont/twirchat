@@ -19,7 +19,7 @@ import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from '
 import type { ComponentType } from 'react'
 
 import { setLanguage, type MessageKey } from '../../i18n'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { focusPopupSearch } from '../hooks/use-popup-hotkeys'
 import { useT } from '../hooks/use-translation'
 import { nativeWindow } from '../native-window'

@@ -10,7 +10,7 @@ import {
   isPluginWatchedChannel,
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import { registerBundledFonts } from '../fonts'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'

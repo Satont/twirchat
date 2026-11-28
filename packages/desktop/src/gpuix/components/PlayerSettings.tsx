@@ -5,7 +5,7 @@ import {
   validatePlayerSettings,
   type PlayerSettings as Settings,
 } from '../../services/channel-actions'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { useTheme } from '../theme-context'

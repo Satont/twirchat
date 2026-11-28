@@ -2,7 +2,7 @@ import { useGpuixRequired } from '@gpuix/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DesktopWindowDescriptor } from '../../services/window-session'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { registerBundledFonts } from '../fonts'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'

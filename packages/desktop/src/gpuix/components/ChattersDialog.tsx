@@ -5,7 +5,7 @@ import type { ChannelChatters, ChattersTarget, ChatterUser } from '../../service
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { filterChatterGroups } from '../../views/main/utils/chatters'
 import { initialsOf } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
 import { useT } from '../hooks/use-translation'

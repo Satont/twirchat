@@ -36,8 +36,7 @@ import {
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
-import type { DesktopEvents } from '../backend/events'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 import { accountsStore, savedAccountsStore } from './accounts'
 import { donationFeed, sharedDonationFeeds } from './donation-feed'
 import { mentionAppearances } from './mention-appearances'
@@ -618,7 +617,7 @@ const MESSAGE_FLUSH_INTERVAL_MS = 66
 // ── Backend event wiring ────────────────────────────────────────────────────
 
 export interface AppStoreBackend {
-  events: DesktopEvents
+  events: DesktopBackend['events']
   api: Pick<
     DesktopApi,
     | 'getAccounts'

@@ -1,7 +1,7 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useEffect, useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import type { CustomCommandDefinition } from '../commands'
 import { useT } from '../hooks/use-translation'
 import {

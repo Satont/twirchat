@@ -5,14 +5,14 @@ import assert from 'node:assert/strict'
 
 import { z } from 'zod'
 
-import type { DesktopBackend } from '../src/gpuix/backend/server'
+import type { DesktopBackend } from '../src/gpuix/backend/contract'
 import type { ChatPausePreferences } from '../src/services/chat-pause'
 await import('../src/gpuix/native-bootstrap')
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import('@gpuix/react')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { initializeManagedRenderer } = await import('../src/gpuix/managed-renderer')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatPauseSettings } =
   await import('../src/gpuix/components/chat-settings/ChatPauseSettings')

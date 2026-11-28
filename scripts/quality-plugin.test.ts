@@ -80,7 +80,18 @@ const gpuix = `${desktop}/gpuix`
 const directory = mkdtempSync(join(tmpdir(), 'twirchat-quality-'))
 fixtures.push(
   { directory: desktop, code: 'import type { Message } from "@twirchat/shared/types"' },
-  { directory: `${gpuix}/components`, code: 'import { useBackend } from "../backend/context"' },
+  { directory: `${gpuix}/components`, code: 'import { useBackend } from "../backend-context"' },
+  { directory: gpuix, code: 'import type { DesktopBackend } from "./backend/contract"' },
+  { directory: `${gpuix}/backend`, code: 'import "react"', workspaceImports: 1 },
+  { directory: `${gpuix}/backend`, code: 'import("react/jsx-runtime")', workspaceImports: 1 },
+  { directory: `${gpuix}/backend`, code: 'export * from "react-dom/client"', workspaceImports: 1 },
+  {
+    directory: `${gpuix}/backend`,
+    code: 'type T = import("@gpuix/react").NativeRenderer',
+    workspaceImports: 1,
+  },
+  { directory: `${gpuix}/backend`, code: 'import "@gpuix/native/host"', workspaceImports: 1 },
+  { directory: `${gpuix}/backend`, code: 'import "../backend-context"', workspaceImports: 1 },
   { directory: `${gpuix}/components`, code: 'import { useT } from "@gpuix/hooks/use-translation"' },
   { directory: `${gpuix}/backend`, code: 'import "@gpuix/backend/events"' },
   { directory: `${gpuix}/backend`, code: 'import "@desktop/services/chat-transcript"' },

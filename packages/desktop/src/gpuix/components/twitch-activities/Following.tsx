@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useT } from '../../hooks/use-translation'
 import { useStore } from '../../state/use-store'

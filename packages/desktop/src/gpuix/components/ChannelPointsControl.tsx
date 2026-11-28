@@ -2,7 +2,7 @@ import { useGpuixRequired, useWindowSize, type PublicInstance } from '@gpuix/rea
 import type { TwitchReward } from '@twirchat/shared/twitch-activities'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { useTextInputFocusTracking } from '../state/focus'

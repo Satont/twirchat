@@ -20,7 +20,8 @@ src/
 │   │   ├── server.ts       # Boot: DB, adapters, WS, auth, overlay (globalThis singleton)
 │   │   ├── api.ts          # DesktopApi — every request method (ex-Wails gateway)
 │   │   ├── events.ts       # DesktopEventMap typed emitter
-│   │   └── context.ts      # React: useBackend(), useBackendEvent()
+│   │   └── contract.ts     # Requests and subscriptions exposed to presentation
+│   ├── backend-context.ts  # React adapter: useBackend(), useBackendEvent()
 │   ├── state/              # Observable stores (useSyncExternalStore)
 │   │   ├── app.ts          # settings/accounts/messages/watched/emotes/notices…
 │   │   ├── layout.ts       # Per-tab watched-channel split layouts

@@ -9,7 +9,7 @@ import {
   type DesktopWatchedChannel,
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
 import { useT } from '../hooks/use-translation'
 import { watchedChannelsStore } from '../state/app'

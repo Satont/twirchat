@@ -8,7 +8,7 @@ import {
   type ImageUploaderSettings,
   type ImageUploadResult,
 } from '../../services/image-uploader'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { useT } from '../hooks/use-translation'
 import { nativeWindow, type NativeImagePaste } from '../native-window'
 import { showNotice } from '../state/app'

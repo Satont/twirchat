@@ -20,8 +20,8 @@ import {
   type DesktopWindowDescriptor,
   type WindowSession,
 } from '../services/window-session'
-import { BackendContext } from './backend/context'
-import type { DesktopBackend } from './backend/server'
+import { BackendContext } from './backend-context'
+import type { DesktopBackend } from './backend/contract'
 import { registerBundledFonts } from './fonts'
 import { initializeManagedRenderer } from './managed-renderer'
 import { nativeWindow, type NativeWindowOptions, type NativeWindowControls } from './native-window'

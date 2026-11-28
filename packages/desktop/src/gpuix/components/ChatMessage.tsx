@@ -32,7 +32,7 @@ import {
   sanitizeDisplayText,
   truncateGraphemes,
 } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { createMentionMatcher } from '../chat-tools'
 import { useLanguage } from '../hooks/use-translation'
 import { icons } from '../icons'

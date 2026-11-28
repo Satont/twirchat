@@ -7,7 +7,7 @@ import {
   type ChatPausePreferences,
   type PauseModifierKey,
 } from '../../../services/chat-pause'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useT } from '../../hooks/use-translation'
 import { chatPausePreferences, chatPauseStore } from '../../state/chat-pause'

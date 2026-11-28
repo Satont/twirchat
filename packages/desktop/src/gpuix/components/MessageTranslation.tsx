@@ -2,7 +2,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { useEffect, useEffectEvent } from 'react'
 
 import { translatedMessage } from '../../services/translation'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { chatMessageKey } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'

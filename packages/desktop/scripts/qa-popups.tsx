@@ -13,7 +13,7 @@ import type { UserCardTarget } from '../src/views/main/utils/chatCommands'
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider, useGpuixRequired } =
   await import('@gpuix/react')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { handleGlobalKeyDown } = await import('../src/gpuix/state/hotkeys')
 const { actionBindingsStore, registerHotkeyContext, setHotkeyRoute, observeNativeHotkeyPlan } =

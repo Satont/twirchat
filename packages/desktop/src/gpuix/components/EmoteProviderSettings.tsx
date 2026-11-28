@@ -6,7 +6,7 @@ import {
   type CommunityBadgeProvider,
 } from '../../services/community-badges'
 import type { EmotePreferences, EmoteProvider } from '../../services/provider-emotes'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { emoteStore, loadEmotes } from '../state/app'

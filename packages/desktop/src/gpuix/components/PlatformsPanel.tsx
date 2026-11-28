@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 import { type MessageKey } from '../../i18n'
 import { initialsOf } from '../../views/shared/utils/display-text'
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { accountsStore } from '../state/accounts'

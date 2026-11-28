@@ -9,7 +9,7 @@ import {
 } from '../../services/message-similarity'
 import { createStore, type Store } from '../../state/create-store'
 import { persistentResource } from '../../state/persistent-resources'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 import { accountsStore } from './accounts'
 import { createPreferenceStore, type PreferenceStore } from './preferences'
 

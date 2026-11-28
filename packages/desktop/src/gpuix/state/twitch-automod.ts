@@ -8,7 +8,7 @@ import type {
 import { createStore, type Store } from '../../state/create-store'
 import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
-import type { DesktopEvents } from '../backend/events'
+import type { DesktopBackend } from '../backend/contract'
 
 type Decision = 'approve' | 'deny'
 
@@ -121,7 +121,7 @@ export function applyTwitchAutoModEvent(event: TwitchAutoModEvent): void {
   })
 }
 
-export function wireTwitchAutoMod(events: DesktopEvents): () => void {
+export function wireTwitchAutoMod(events: DesktopBackend['events']): () => void {
   return events.on('twitch_automod', applyTwitchAutoModEvent)
 }
 

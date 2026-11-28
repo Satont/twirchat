@@ -4,7 +4,7 @@ import { memo, useEffect, useMemo, useState } from 'react'
 
 import { resolveTwirTargets, type TwirChannelTarget } from '../../services/twir-channels'
 import type { TwirNowPlaying } from '../../services/twir-now-playing'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { useDesktopWindows } from '../state/desktop-windows'

@@ -10,7 +10,7 @@ const React = await import(require.resolve('react'))
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import(
   require.resolve('@gpuix/react')
 )
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatInput } = await import('../src/gpuix/components/ChatInput')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')

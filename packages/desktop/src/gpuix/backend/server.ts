@@ -96,6 +96,7 @@ import {
   type DesktopApi,
 } from './api'
 import { recordChatMessage } from './chat-history'
+import type { DesktopBackend } from './contract'
 import { createDesktopEvents, type DesktopEvents } from './events'
 import { readUiState } from './layout-api'
 import { browserCommand } from './open-url'
@@ -111,22 +112,10 @@ function accountWithTwitchToken(account: Account | null): Account | null {
   return account && AccountStore.getTokens(account.id) ? account : null
 }
 
-export interface DesktopBackend {
-  api: DesktopApi
+interface DesktopRuntime extends DesktopBackend {
   events: DesktopEvents
-  plugins?: Pick<
-    ReturnType<typeof createPluginManager>,
-    | 'list'
-    | 'install'
-    | 'checkForUpdate'
-    | 'setEnabled'
-    | 'remove'
-    | 'hasCommand'
-    | 'runCommand'
-    | 'commandNames'
-  >
-  dispose?: () => void
-  shutdownPlugins?: () => Promise<void>
+  dispose(): void
+  shutdownPlugins(): Promise<void>
 }
 
 /** Open a URL in the system default browser (replaces Electrobun Utils.openExternal). */
@@ -139,7 +128,7 @@ function openBrowser(url: string): void {
   }
 }
 
-function boot(): DesktopBackend {
+function boot(): DesktopRuntime {
   log.info('Starting GPUIX backend...')
 
   // Runtime config: baked in at release build (--define), env overridable in dev.
@@ -868,10 +857,10 @@ function subscribeSevenTvFor(
 // ── Singleton (survives `bun --hot` reloads) ────────────────────────────────
 
 declare global {
-  var __twirchatGpuixBackend: DesktopBackend | undefined
+  var __twirchatGpuixBackend: DesktopRuntime | undefined
   var __twirchatDevHook: ((action: string, payload?: unknown) => Promise<unknown>) | undefined
 }
 
-export function getDesktopBackend(): DesktopBackend {
+export function getDesktopBackend(): DesktopRuntime {
   return (globalThis.__twirchatGpuixBackend ??= boot())
 }
