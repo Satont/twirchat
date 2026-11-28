@@ -176,6 +176,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** A live channel owns its viewers and one emote snapshot. The set and user indexes point to live channel records; only the first/last channel changes an upstream subscription. The reverse client index serves disconnect cleanup; dispatch no longer scans all clients. A cached snapshot retains the 7TV user identity for a later rejoin.
 - **Safeguard:** A set switch keeps the old subscription until a successful, current lookup commits. Lookup completion cannot overwrite a newer switch or a replaced channel. A new viewer still triggers refresh after expiry; an intervening update prevents an expired lookup from overwriting the live snapshot. Loopback and deferred provider fixtures cover partial detach, shared sets, cache rejoin, and overlapping switches.
 
+### Hosted 7TV transport — Bound the wait for Hello
+
+- **Decision:** An upgraded EventAPI socket must receive a valid Hello within ten seconds. Hello clears that socket's deadline and hands liveness over to the existing heartbeat watchdog. Malformed Hello and early heartbeat frames do not satisfy the deadline. A missed Hello uses the same jittered retry as a remote close; new subscriptions cannot bypass a scheduled retry.
+- **Safeguard:** A loopback regression verifies that a malformed first session is retired without sending subscriptions, the next valid session restores the desired subscription exactly once, and an explicit connect does not skip the retry delay. Socket readiness reporting, the upstream and desktop message shapes, and reconnection without RESUME are unchanged. Backfill of missed events remains separate.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

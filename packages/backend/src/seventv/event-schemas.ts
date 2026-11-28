@@ -6,7 +6,7 @@ export const sevenTVEventMessageSchema = z.object({
   d: z.unknown().optional(),
 })
 export const sevenTVHelloSchema = z.object({
-  heartbeat_interval: z.number(),
+  heartbeat_interval: z.number().positive(),
   session_id: z.string(),
   subscription_limit: z.number(),
 })

@@ -27,6 +27,7 @@ export type SevenTVEventHandler = (event: SevenTVEvent) => void
 
 export class SevenTVEventClient {
   private ws: WebSocket | null = null
+  private helloTimer: Timer | null = null
   private heartbeatTimer: Timer | null = null
   private reconnectTimer: Timer | null = null
   private receivedHello = false
@@ -44,10 +45,13 @@ export class SevenTVEventClient {
   onConnected: (() => void) | null = null
   onDisconnected: (() => void) | null = null
 
-  constructor(private readonly url = SEVENTV_EVENT_API_URL) {}
+  constructor(
+    private readonly url = SEVENTV_EVENT_API_URL,
+    private readonly helloTimeoutMs = 10_000,
+  ) {}
 
   async connect(): Promise<void> {
-    if (this.isConnecting || this.ws) {
+    if (this.isConnecting || this.ws || this.reconnectTimer) {
       return
     }
 
@@ -61,6 +65,11 @@ export class SevenTVEventClient {
       ws.onopen = () => {
         if (this.ws !== ws) return
         this.isConnecting = false
+        this.helloTimer = setTimeout(() => {
+          if (this.ws !== ws || this.receivedHello) return
+          log.warn('Timed out waiting for 7TV Hello')
+          this.retryAfterClose()
+        }, this.helloTimeoutMs)
         log.info('WebSocket connected')
       }
 
@@ -71,11 +80,7 @@ export class SevenTVEventClient {
       ws.onclose = (event) => {
         if (this.ws !== ws) return
         log.info('WebSocket closed', { code: event.code, reason: event.reason })
-        this.cleanup()
-
-        if (this.shouldReconnect) {
-          this.scheduleReconnect(event.code)
-        }
+        this.retryAfterClose(event.code)
       }
 
       ws.onerror = (error) => {
@@ -93,11 +98,25 @@ export class SevenTVEventClient {
     log.info('Disconnecting from 7TV EventAPI...')
     this.shouldReconnect = false
     this.cleanup()
+    this.onDisconnected?.()
+  }
+
+  private retryAfterClose(closeCode?: number): void {
+    this.cleanup()
+    this.scheduleReconnect(closeCode)
+    this.onDisconnected?.()
+  }
+
+  private clearHelloTimer(): void {
+    if (!this.helloTimer) return
+    clearTimeout(this.helloTimer)
+    this.helloTimer = null
   }
 
   private cleanup(): void {
     this.isConnecting = false
     this.receivedHello = false
+    this.clearHelloTimer()
 
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
@@ -119,8 +138,6 @@ export class SevenTVEventClient {
         // Ignore
       }
     }
-
-    this.onDisconnected?.()
   }
 
   private handleMessage(data: string): void {
@@ -200,6 +217,7 @@ export class SevenTVEventClient {
       subscriptionLimit: hello.subscription_limit,
     })
 
+    this.clearHelloTimer()
     this.receivedHello = true
     this.heartbeatInterval = hello.heartbeat_interval
     this.lastHeartbeat = Date.now()
@@ -273,6 +291,8 @@ export class SevenTVEventClient {
 
   private reconnect(): void {
     this.cleanup()
+    this.onDisconnected?.()
+    if (!this.shouldReconnect) return
     this.connect().catch((error: unknown) =>
       log.error('Connection failed', { error: String(error) }),
     )

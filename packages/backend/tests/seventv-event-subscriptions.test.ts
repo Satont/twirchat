@@ -23,6 +23,72 @@ function hello(socket: EventSocket, sessionId: string): void {
   )
 }
 
+test('7TV retries a session without a valid Hello through the normal backoff', async () => {
+  const firstOpened = Promise.withResolvers<EventSocket>()
+  const secondOpened = Promise.withResolvers<EventSocket>()
+  const sessions = [firstOpened, secondOpened]
+  const subscribed = Promise.withResolvers<SevenTVEventMessage>()
+  let opened = 0
+  const server = Bun.serve<SevenTVEventMessage[]>({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch(request, listener) {
+      return listener.upgrade(request, { data: [] })
+        ? undefined
+        : new Response('WebSocket upgrade required', { status: 400 })
+    },
+    websocket: {
+      open(ws) {
+        opened++
+        sessions.shift()?.resolve(ws)
+      },
+      message(ws, raw) {
+        const message = sevenTVEventMessageSchema.parse(JSON.parse(raw.toString()))
+        ws.data.push(message)
+        subscribed.resolve(message)
+      },
+    },
+  })
+  const client = new SevenTVEventClient(`ws://127.0.0.1:${server.port}`, 50)
+  const disconnected = Promise.withResolvers<void>()
+  client.onDisconnected = disconnected.resolve
+  const type = 'emote_set.update'
+  const condition = { object_id: 'retained-set' }
+  try {
+    client.subscribe(type, condition)
+    await client.connect()
+    const first = await firstOpened.promise
+    first.send(
+      JSON.stringify({
+        op: 1,
+        d: { heartbeat_interval: 0, session_id: 'invalid-session', subscription_limit: 500 },
+      }),
+    )
+    first.send(JSON.stringify({ op: 2 }))
+    await until(() => first.readyState !== WebSocket.OPEN)
+    await disconnected.promise
+    expect(first.data).toEqual([])
+
+    const retryRequestedAt = performance.now()
+    await client.connect()
+    await until(() => opened >= 2)
+    expect(performance.now() - retryRequestedAt).toBeGreaterThan(250)
+    const second = await secondOpened.promise
+    hello(second, 'working-session')
+    expect(await subscribed.promise).toEqual({ op: 35, d: { type, condition } })
+    await Bun.sleep(100)
+    client.unsubscribe(type, condition)
+    await until(() => second.data.length >= 2)
+    expect(second.data).toEqual([
+      { op: 35, d: { type, condition } },
+      { op: 36, d: { type, condition } },
+    ])
+  } finally {
+    client.disconnect()
+    await server.stop(true)
+  }
+})
+
 test('7TV reconnect restores desired subscriptions on each new session', async () => {
   const firstOpened = Promise.withResolvers<EventSocket>()
   const secondOpened = Promise.withResolvers<EventSocket>()
