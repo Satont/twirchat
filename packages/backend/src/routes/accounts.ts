@@ -1,14 +1,13 @@
-import type { AccountsResponse, Platform, SavedAccountsResponse } from '@twirchat/shared'
+import type { AccountsResponse, SavedAccountsResponse } from '@twirchat/shared'
 
 import { AccountStore, AccountSelectionError } from '../db/index.ts'
+import { platformSchema } from '../platform-schema'
 import { requireClient, json } from './utils.ts'
 
 type Accounts = Pick<
   typeof AccountStore,
   'findAllByClient' | 'findAllSavedByClient' | 'delete' | 'setActive' | 'forget'
 >
-const isPlatform = (value: string): value is Platform =>
-  ['twitch', 'kick', 'youtube', 'vkplay'].includes(value)
 export function createAccountRoutes(
   accounts: Accounts = AccountStore,
   authenticate = requireClient,
@@ -54,8 +53,8 @@ export function createAccountRoutes(
       async DELETE(req: Request & { params: { platform: string } }) {
         const auth = await authenticate(req)
         if (auth instanceof Response) return auth
-        const { platform } = req.params
-        if (!isPlatform(platform)) return json({ error: 'Invalid platform.' }, 400)
+        const { data: platform } = platformSchema.safeParse(req.params.platform)
+        if (platform === undefined) return json({ error: 'Invalid platform.' }, 400)
         await accounts.delete(auth.clientSecret, platform)
         return json({ ok: true })
       },
@@ -64,8 +63,8 @@ export function createAccountRoutes(
       async PATCH(req: Request & { params: { platform: string } }) {
         const auth = await authenticate(req)
         if (auth instanceof Response) return auth
-        const { platform } = req.params
-        if (!isPlatform(platform)) return json({ error: 'Invalid platform.' }, 400)
+        const { data: platform } = platformSchema.safeParse(req.params.platform)
+        if (platform === undefined) return json({ error: 'Invalid platform.' }, 400)
         if (Number(req.headers.get('content-length')) > 4096)
           return json({ error: 'Account selection request is too large.' }, 413)
         let body: unknown

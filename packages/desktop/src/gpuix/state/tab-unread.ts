@@ -1,24 +1,24 @@
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import { filterHomeChatMessages } from '../../views/main/utils/chat-send-targets'
 import { panelWatchedSources } from '../../views/main/utils/layout-tree'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 import { chatMessageKey } from '../chat-tools'
 import { compileMessageRules } from '../message-rules'
+import { accountsStore } from './accounts'
 import {
-  accountsStore,
   activeTabStore,
   activeWatchedTabStore,
   tabChannelIdsStore,
   watchedChannelsStore,
 } from './app'
 import { chatRulesStore } from './chat-rules'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { allPanels, layoutStore } from './layout'
+import { allPanels, layoutStore } from './layout-state'
 import { getMessageSimilarity, messageSimilarityStore } from './message-similarity'
-import { persistentResource } from './persistent-resources'
 import { streamerModeStore } from './streamer-mode'
 
 export interface TabUnread {
@@ -189,7 +189,7 @@ export function wireTabUnread(backend: Pick<DesktopBackend, 'events'>): () => vo
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     tabUnread: Store<Map<string, TabUnread>>
   }

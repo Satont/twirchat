@@ -42,5 +42,4 @@ export const VKPLAY_SCOPES: readonly string[] = ['chat:message:send']
 
 // 7TV
 export const SEVENTV_GQL_ENDPOINT = 'https://7tv.io/v4/gql'
-export const SEVENTV_EVENT_API_URL = 'https://events.7tv.io/v3'
 export const SEVENTV_CDN_BASE = 'https://cdn.7tv.app/emote'

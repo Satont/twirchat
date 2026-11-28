@@ -22,6 +22,8 @@ await import('../src/gpuix/native-bootstrap')
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 
+import { GPUIX_NATIVE_API_VERSION } from '../src/services/native-runtime'
+
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop } = await import('@gpuix/react')
 const { initializeManagedRenderer } = await import('../src/gpuix/managed-renderer')
@@ -61,7 +63,8 @@ async function until(check: () => boolean, label: string): Promise<void> {
   }
 }
 try {
-  assert.equal(renderer.getTwirNativeApiVersion(), 3)
+  const apiVersion = renderer.getTwirNativeApiVersion()
+  assert.equal(apiVersion, GPUIX_NATIVE_API_VERSION)
   await until(
     () => renderer.getPaintedText().includes('TwirChat native Wayland visibility smoke'),
     'Wayland native text paints',
@@ -139,7 +142,7 @@ try {
     JSON.stringify(
       {
         passed: true,
-        apiVersion: 3,
+        apiVersion,
         backend: 'wayland',
         negotiatedXdgShellVersion: version,
         visibility: renderer.getWindowVisibility(),

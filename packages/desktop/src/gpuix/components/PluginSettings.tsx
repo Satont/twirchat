@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import type { PluginInfo } from '../../plugins/api'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
-import { useT, type MessageKey } from '../i18n'
+import { useBackend } from '../backend-context'
+import { useT } from '../hooks/use-translation'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'

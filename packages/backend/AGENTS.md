@@ -13,13 +13,10 @@ src/
 ├── index.ts                  # Bun.serve entry point
 ├── config.ts                 # Environment config loader
 ├── db/
-│   ├── index.ts             # Bun.sql connection
+│   ├── index.ts             # Database exports
 │   ├── store.ts             # Data access layer (ClientStore, AccountStore)
 │   └── migrations.ts        # Schema migrations
 ├── auth/
-│   ├── pkce.ts              # PKCE helpers
-│   ├── twitch.ts            # Twitch OAuth
-│   ├── youtube.ts           # YouTube OAuth
 │   ├── kick.ts              # Kick OAuth + callback
 │   ├── kick-webhook.ts      # Kick webhook handler
 │   └── kick-subscriptions.ts # Kick EventSub management
@@ -125,12 +122,13 @@ log.error('Auth failed', { platform, error: String(err) })
 **Client Authentication**
 
 - Desktop generates random secret on first launch
-- All requests (except OAuth callbacks/webhooks) require `X-Client-Secret` header
+- WebSocket upgrades require `X-Client-Secret`; for HTTP, inspect each route’s authentication
 - Secret stored in `desktop_clients` table, auto-registered on first use
 
 **OAuth Flows**
 
-- PKCE for all platforms (Twitch, YouTube, Kick)
+- Hosted Kick and MemeAlerts use PKCE primitives from `@twirchat/shared/pkce`.
+- Twitch and YouTube user authorization runs in the desktop application.
 - Tokens stored encrypted (desktop) or in DB (backend)
 - Refresh tokens used for long-lived access
 
@@ -149,74 +147,27 @@ bun run typecheck
 # Build single binary
 bun run build:prod
 
-# Generate 7TV GraphQL types
-bun run generate:7tv
-
-# Run tests
-bun test tests/
+# Run tests with file isolation for provider mocks and caches
+bun run test
 ```
 
 ## ENVIRONMENT VARIABLES
 
-Required:
-
-- `DATABASE_URL` — PostgreSQL connection string
-- `KICK_CLIENT_ID` — From Kick developer settings
-- `KICK_CLIENT_SECRET` — From Kick developer settings
-
-Optional:
-
-- `PORT` — Server port (default: 3000)
-- `KICK_REDIRECT_URI` — OAuth callback URL
-- `KICK_WEBHOOK_URL` — Public HTTPS URL for webhooks
-- `KICK_WEBHOOK_SECRET` — HMAC secret for webhook verification
-- `YOUTUBE_CLIENT_ID` — Google Cloud OAuth
-- `YOUTUBE_CLIENT_SECRET` — Google Cloud OAuth
-
-See `src/config.ts` for all options.
-
-## LOCAL DEVELOPMENT
-
-**Database**
-
-```bash
-docker compose up -d  # PostgreSQL on port 5432
-```
-
-**Webhooks (ngrok)**
-
-```bash
-ngrok http 3000
-# Set KICK_WEBHOOK_URL=https://xxx.ngrok.io/webhook/kick
-```
-
-**Migrations**
-Run automatically on startup. Manual run not needed.
-
-## HTTP ENDPOINTS
-
-| Method | Path                      | Auth            | Description             |
-| ------ | ------------------------- | --------------- | ----------------------- |
-| GET    | `/ws`                     | X-Client-Secret | WebSocket upgrade       |
-| GET    | `/health`                 | —               | Health check            |
-| GET    | `/api/accounts`           | X-Client-Secret | List connected accounts |
-| DELETE | `/api/accounts/:platform` | X-Client-Secret | Disconnect account      |
-| POST   | `/api/auth/kick/start`    | body secret     | Start Kick OAuth        |
-| GET    | `/auth/kick/callback`     | —               | Kick OAuth callback     |
-| POST   | `/webhook/kick`           | HMAC            | Kick event webhooks     |
+[`src/config.ts`](src/config.ts) owns startup validation and defaults. See the
+[backend README](README.md#local-development) for local setup and production deployment links.
+The [server entry point](src/index.ts) registers HTTP and WebSocket routes.
 
 ## NOTES
 
 **Kick EventSub**
 
 - Subscriptions managed in `kick-subscriptions.ts`
-- Webhook events normalized and broadcast to all connected desktop clients
+- Webhook events are normalized and routed to the channel owner's connected desktop clients
 
 **7TV Integration**
 
-- GraphQL API client in `src/seventv/`
-- Generated types in `src/seventv/gql/`
-- Bundle warning: documents map not tree-shakeable (production: use babel/swc plugin)
+- `src/seventv/client.ts` owns the GraphQL operations and validates responses at runtime.
+- Both catalog lookups use the same emote-set selection and decoder; no code generation is required.
 
 **Twitch Badges**
 

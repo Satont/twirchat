@@ -4,10 +4,14 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { parseNativeSourceManifest } from '../scripts/build-gpuix-native'
 import { nativeArtifactName } from '../scripts/build-gpuix-native'
+import { parseNativeSourceManifest } from '../scripts/native-source'
 import { assertNativeBinaryTarget, stageNativeRuntime } from '../scripts/package-runtime-assets'
-import { GPUI_SOURCE_REVISION, GPUIX_SOURCE_REVISION } from '../src/services/native-runtime'
+import {
+  GPUIX_NATIVE_API_VERSION,
+  GPUI_SOURCE_REVISION,
+  GPUIX_SOURCE_REVISION,
+} from '../src/services/native-runtime'
 import { literal } from './fixture-values'
 
 const directories: string[] = []
@@ -68,7 +72,7 @@ async function fixture() {
     .slice(0, 16)
   const bytes = binary()
   const manifest = {
-    apiVersion: 3,
+    apiVersion: GPUIX_NATIVE_API_VERSION,
     version: source.version,
     rustToolchain: source.rustToolchain,
     target: `${process.platform}-${process.arch}`,
@@ -113,6 +117,16 @@ test('rejects another target and stale patch identity', async () => {
   await Bun.write(`${f.path}.json`, JSON.stringify({ ...f.manifest, patchDigest: '0'.repeat(16) }))
   await expect(stageNativeRuntime(f)).rejects.toThrow('patch digest')
 })
+test('rejects a source override whose revisions differ from the application pins', async () => {
+  const f = await fixture()
+  const sourcePath = join(f.sourceRoot, 'source.json')
+  const source = parseNativeSourceManifest(await Bun.file(sourcePath).json())
+  await Bun.write(sourcePath, JSON.stringify({ ...source, gpuiRevision: '0'.repeat(40) }))
+  await Bun.write(join(f.sourceRoot, 'patches/test.patch'), 'tampered')
+  await expect(stageNativeRuntime(f)).rejects.toThrow('source pins do not match')
+  expect(await Bun.file(join(f.output, 'native', nativeArtifactName())).exists()).toBe(false)
+})
+
 test('refuses changed patch bytes before staging any addon', async () => {
   const f = await fixture()
   await Bun.write(join(f.sourceRoot, 'patches/test.patch'), 'tampered')

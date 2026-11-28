@@ -22,10 +22,12 @@ const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { UserCardDialog } = await import('../src/gpuix/components/UserCardDialog')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { initCosmeticCaches } = await import('../src/gpuix/state/cosmetics')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
@@ -168,7 +170,7 @@ backend.api.getUserCardMetadata = async ({ platform, platformUserId }) => ({
   subAge: { status: 'unavailable', months: null },
 })
 app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false })
-app.accountsStore.set([
+accountState.accountsStore.set([
   {
     id: 'qa-kick',
     platform: 'kick',
@@ -565,6 +567,6 @@ try {
   if (timer) clearInterval(timer)
   stopMessages()
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

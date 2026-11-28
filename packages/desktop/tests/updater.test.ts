@@ -85,12 +85,13 @@ function createHarness() {
     setSkippedHash: (value) => {
       skipped = value
     },
-    scheduleExit: () => {
-      exitCount++
-    },
+  }
+  const scheduleExit = () => {
+    expect(applies).toHaveLength(1)
+    exitCount++
   }
   return {
-    updater: createUpdater(events, runtime),
+    updater: createUpdater(events, scheduleExit, runtime),
     statuses,
     hashes,
     progresses,

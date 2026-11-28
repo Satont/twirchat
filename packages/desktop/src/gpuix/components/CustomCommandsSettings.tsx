@@ -1,16 +1,16 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useEffect, useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import type { CustomCommandDefinition } from '../commands'
-import { useT } from '../i18n'
-import { useStore } from '../state/create-store'
+import { useT } from '../hooks/use-translation'
 import {
   customCommandsStore,
   loadCustomCommands,
   saveCustomCommands,
 } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { Switch } from './ui/Switch'

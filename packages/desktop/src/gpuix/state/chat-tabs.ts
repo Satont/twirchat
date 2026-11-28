@@ -7,7 +7,10 @@ import type {
 } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t } from '../../i18n'
 import { panelNodeSchema, watchedChannelsLayoutSchema } from '../../services/persisted-schemas'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import {
   getAllPanels,
   layoutChannelNames,
@@ -20,7 +23,6 @@ import type {
   WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
-import { t } from '../i18n'
 import {
   activeWatchedTabStore,
   tabChannelIdsStore,
@@ -28,9 +30,7 @@ import {
   watchedChannelsStore,
 } from './app'
 import { chatRulesPreferences, chatRulesStore } from './chat-rules'
-import { createStore, type Store } from './create-store'
-import { layoutStore, saveLayoutNow, type LayoutState } from './layout'
-import { persistentResource } from './persistent-resources'
+import { layoutStore, type LayoutState } from './layout-state'
 import { setMainTab } from './settings-session'
 import { clearTabUnread } from './tab-unread'
 
@@ -568,14 +568,9 @@ function controller(api: ChatTabApi) {
 }
 export const initializeChatTabs = (backend: { api: ChatTabApi }) =>
   controller(backend.api).initialize()
-export const closeChatTab = async (
-  backend: { api: ChatTabApi },
-  id: string,
-  layoutAlreadyFlushed = false,
-) => {
-  if (!layoutAlreadyFlushed) await saveLayoutNow(backend, id)
-  return controller(backend.api).close(id)
-}
+// The caller must flush layout changes before closing the tab.
+export const closeTabWithSavedLayout = (backend: { api: ChatTabApi }, id: string) =>
+  controller(backend.api).close(id)
 export const restoreClosedChatTab = (backend: { api: ChatTabApi }, id?: string) =>
   controller(backend.api).restore(id)
 export const createEmptyChatTab = (backend: { api: ChatTabApi }) =>
@@ -663,7 +658,7 @@ export function tabsForChannels(
   })
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     chatTabs: Store<ChatTabsState>
   }

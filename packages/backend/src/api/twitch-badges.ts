@@ -10,8 +10,8 @@ import type { TwitchBadgesResponse } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import type { z } from 'zod'
 
+import { fetchTwitchHelixWithAppToken } from './app-credentials.ts'
 import { createStaleCache } from './stale-cache.ts'
-import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 import { helixBadgesSchema, mergeHelixBadges } from './twitch-badge-data'
 import { normalizeTwitchLogin, resolveTwitchUserIdsByLogin } from './twitch-users.ts'
 

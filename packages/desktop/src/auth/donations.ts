@@ -4,10 +4,10 @@ import {
   type DonationOAuthTokens,
   type OAuthDonationProvider,
 } from '@twirchat/shared/donations'
+import { generateCodeChallenge, generateCodeVerifier } from '@twirchat/shared/pkce'
 import { z } from 'zod'
 
 import { backendFetch, getBackendUrl } from '../runtime-config'
-import { generateCodeChallenge, generateCodeVerifier } from './pkce'
 
 const MEMEALERTS_ORIGIN = 'https://memealerts.com'
 const CALLBACK_PATH = '/auth/donations/callback'

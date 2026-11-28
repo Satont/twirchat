@@ -10,6 +10,7 @@ const { App } = await import('../src/gpuix/components/App')
 const { ChatWindow } = await import('../src/gpuix/components/ChatWindow')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { DEFAULT_STREAMER_MODE_SETTINGS } = await import('../src/services/streamer-mode')
@@ -85,7 +86,7 @@ const backend = {
   },
 }
 app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false })
-app.accountsStore.set([])
+accountState.accountsStore.set([])
 app.activeTabStore.set('chat')
 app.activeWatchedTabStore.set('home')
 app.tabChannelIdsStore.set(channels.map((channel) => channel.id))

@@ -20,6 +20,7 @@ import {
   type LiveChatMessageListRequest,
   LiveChatMessageListResponse,
   LiveChatMessage,
+  LiveChatMessageSnippet_TypeWrapper_Type,
   V3DataLiveChatMessageServiceClient,
   V3DataLiveChatMessageServiceService,
 } from '@twirchat/shared/youtube/gen/stream_list'
@@ -235,6 +236,104 @@ describe('official YouTube streaming', () => {
     expect(batches).toHaveLength(1)
     expect(client.closed).toBe(3)
   })
+
+  for (const restart of [false, true]) {
+    test(`retry notification can ${restart ? 'replace' : 'stop'} the session without an orphan retry`, async () => {
+      const client = fakeClient()
+      const retryDelayMs = 1
+      let credentialReads = 0
+      let openNotifications = 0
+      const batches: unknown[] = []
+      const replacement: Promise<void>[] = []
+      const session = createYouTubeGrpcSession({
+        liveChatId: 'chat',
+        clientFactory: client.factory,
+        retryDelayMs,
+        getCredentials: () => {
+          credentialReads++
+          return { apiKey: 'fixture' }
+        },
+        onBatch: (batch) => batches.push(batch),
+        onStatus(state, message) {
+          if (state !== 'connecting') return
+          if (!message) {
+            openNotifications++
+            return
+          }
+          session.stop()
+          if (restart) replacement.push(session.start())
+        },
+      })
+      try {
+        await session.start()
+        const old = required(client.calls[0])
+        old.stream.emit('error', { code: status.UNAVAILABLE, message: 'offline' })
+        await Promise.all(replacement)
+        // Any retry queued before or during the notification has had a chance to run.
+        await new Promise<void>((resolve) => setTimeout(resolve, retryDelayMs))
+        const expected = restart ? 2 : 1
+        expect(credentialReads).toBe(expected)
+        expect(openNotifications).toBe(expected)
+        expect(client.calls).toHaveLength(expected)
+        expect(client.closed).toBe(1)
+        old.stream.emit('data', response())
+        if (restart) required(client.calls[1]).stream.emit('data', response([], 'replacement'))
+        expect(batches).toHaveLength(restart ? 1 : 0)
+        expect(session.getResumeToken()).toBe(restart ? 'replacement' : undefined)
+      } finally {
+        session.stop()
+      }
+    })
+  }
+
+  for (const replaceFrom of ['status', 'batch']) {
+    test(`a ${replaceFrom} callback can replace the stream during its final batch`, async () => {
+      const client = fakeClient()
+      const batches: Array<string | undefined> = []
+      const states: string[] = []
+      const replacement: Promise<void>[] = []
+      const session = createYouTubeGrpcSession({
+        liveChatId: 'chat',
+        clientFactory: client.factory,
+        getCredentials: () => ({ apiKey: 'fixture' }),
+        onBatch(batch) {
+          batches.push(batch.nextPageToken)
+          if (replaceFrom === 'batch' && batch.nextPageToken === 'ending') restart()
+        },
+        onStatus(state) {
+          states.push(state)
+          if (replaceFrom === 'status' && state === 'connected' && replacement.length === 0)
+            restart()
+        },
+      })
+      function restart() {
+        session.stop()
+        replacement.push(session.start())
+      }
+      try {
+        await session.start()
+        const first = required(client.calls[0])
+        first.stream.emit(
+          'data',
+          response(
+            [item('end', { type: LiveChatMessageSnippet_TypeWrapper_Type.CHAT_ENDED_EVENT })],
+            'ending',
+          ),
+        )
+        await Promise.all(replacement)
+        expect(client.calls).toHaveLength(2)
+        expect(client.calls[1]?.request).toMatchObject({ pageToken: 'ending' })
+        first.stream.emit('data', response([], 'stale'))
+        required(client.calls[1]).stream.emit('data', response([], 'live'))
+        expect(batches).toEqual(replaceFrom === 'status' ? ['live'] : ['ending', 'live'])
+        expect(states).toEqual(['connecting', 'connected', 'connecting', 'connected'])
+        expect(session.getResumeToken()).toBe('live')
+        expect(client.closed).toBe(1)
+      } finally {
+        session.stop()
+      }
+    })
+  }
 
   for (const code of [3, 5, 7, 8, 9])
     test(`status ${code} terminates without a retry`, async () => {

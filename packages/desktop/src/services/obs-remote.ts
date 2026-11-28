@@ -2,7 +2,7 @@ import { EventSubscription, OBSWebSocket, OBSWebSocketError } from 'obs-websocke
 import type { OBSRequestTypes, OBSResponseTypes } from 'obs-websocket-js/json'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 
 export interface ObsSceneItem {
   id: number

@@ -1,4 +1,7 @@
+import { t } from '../../i18n'
 import type { PluginTransportStatus } from '../../plugins/api'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import {
   HOME_PLUGIN_CHANNELS_KEY,
   homePluginChannelIdsSchema,
@@ -14,9 +17,6 @@ import type {
   PluginChannelSnapshot,
 } from '../../watched-channels/plugin-channels'
 import type { DesktopApi } from '../backend/api'
-import { t } from '../i18n'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
 import { createPreferenceStore, type PreferenceApi, type PreferenceStore } from './preferences'
 
 const MAX_ROWS = 500
@@ -297,7 +297,7 @@ export function observeHomePluginFeed(observe: DesktopApi['observePluginChannel'
   )
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     homePluginChannels: HomePluginPreferences
     homePluginFeed: Store<HomePluginFeed>

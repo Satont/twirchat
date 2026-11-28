@@ -5,15 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Platform } from '@twirchat/shared/types'
-import { createYouTubeGrpcSession } from '@twirchat/shared/youtube'
+import { createYouTubeChatNormalizer, createYouTubeGrpcSession } from '@twirchat/shared/youtube'
+import type { YouTubeChatRelayEvent } from '@twirchat/shared/youtube-chat'
+import { LiveChatMessageSnippet_TypeWrapper_Type } from '@twirchat/shared/youtube/gen/stream_list'
 import { z } from 'zod'
 
 import { refreshKickToken } from '../src/auth/kick'
 import { checkTwitchSession, refreshTwitchToken } from '../src/auth/twitch'
-import {
-  requestTwitchActivitiesSnapshot,
-  subscribeTwitchActivities,
-} from '../src/gpuix/backend/api'
+import { createTwitchActivitySnapshots, subscribeTwitchActivities } from '../src/gpuix/backend/api'
 import { KickAdapter, type KickSocket } from '../src/platforms/kick/adapter'
 import { kickRetryClock } from '../src/platforms/kick/retry'
 import { YouTubeAdapter } from '../src/platforms/youtube/adapter'
@@ -540,6 +539,58 @@ describe('account-scoped Twitch web sessions', () => {
     expect(await old).toBeNull()
     expect(await store.status()).toEqual({ configured: false })
   })
+  test('snapshot stop before credential preparation resumes prevents token validation', async () => {
+    save('twitch', 'snapshot-same-turn')
+    let calls = 0
+    globalThis.fetch = Object.assign(
+      async () => {
+        calls++
+        throw new Error('Unexpected provider request')
+      },
+      { preconnect: fetch.preconnect },
+    )
+    const snapshots = createTwitchActivitySnapshots()
+    const pending = snapshots.request({ channelSlug: 'channel', sections: [] })
+    snapshots.stop()
+    await expect(pending).rejects.toThrow('stopped')
+    expect(calls).toBe(0)
+  })
+
+  test('snapshot stop prevents pending credential preparation from starting a provider read', async () => {
+    save('twitch', 'snapshot-stop')
+    const validationStarted = gate<void>()
+    const validation = gate<Response>()
+    const calls: string[] = []
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        const url = new URL(input instanceof Request ? input.url : input)
+        calls.push(url.pathname)
+        if (url.pathname !== '/oauth2/validate') throw new Error('Unexpected snapshot read')
+        validationStarted.resolve()
+        return validation.promise
+      },
+      { preconnect: fetch.preconnect },
+    )
+    const snapshots = createTwitchActivitySnapshots()
+    const pending = snapshots.request({ channelSlug: 'channel', sections: [] })
+    await validationStarted.promise
+    snapshots.stop()
+    validation.resolve(
+      Response.json({
+        client_id: 'public-client',
+        user_id: '1',
+        login: 'user1',
+        expires_in: 3600,
+        scopes: [],
+      }),
+    )
+    await expect(pending).rejects.toThrow('stopped')
+    await expect(snapshots.request({ channelSlug: 'late', sections: [] })).rejects.toThrow(
+      'stopped',
+    )
+    expect(calls).toEqual(['/oauth2/validate'])
+  })
+
   test('an old account activity response is rejected after the active identity changes', async () => {
     save('twitch', '1')
     const second = save('twitch', '2', false)
@@ -562,7 +613,10 @@ describe('account-scoped Twitch web sessions', () => {
       },
       { preconnect: fetch.preconnect },
     )
-    const pending = requestTwitchActivitiesSnapshot({ channelSlug: 'channel', sections: [] })
+    const pending = createTwitchActivitySnapshots().request({
+      channelSlug: 'channel',
+      sections: [],
+    })
     await lookupStarted.promise
     AccountStore.setActive('twitch', second.id)
     delayed.resolve(Response.json({ data: [{ id: '100' }] }))
@@ -781,6 +835,96 @@ describe('adapter identity changes', () => {
   })
 })
 
+test('YouTube disconnect in the same turn retires startup before discovery', async () => {
+  save('youtube', 'first')
+  const discovered: string[] = []
+  const adapter = new YouTubeAdapter({
+    resolveLiveChat: async ({ channelId }) => {
+      discovered.push(channelId)
+      return { channelId, videoId: 'video', liveChatId: 'chat' }
+    },
+    createSession: () => ({
+      start: async () => {},
+      stop: () => {},
+      getResumeToken: () => undefined,
+    }),
+  })
+  const starting = adapter.connect('first')
+  await adapter.disconnect()
+  await starting
+  expect(discovered).toEqual([])
+})
+
+test('retired YouTube startup cannot refresh the replacement account', async () => {
+  save('youtube', 'first', true, 1)
+  const replacement = save('youtube', 'second', false)
+  const requests: string[] = []
+  globalThis.fetch = Object.assign(
+    async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.body instanceof URLSearchParams) requests.push(init.body.toString())
+      return Response.json({ access_token: 'unexpected', expires_in: 3600 })
+    },
+    { preconnect: originalFetch.preconnect },
+  )
+  const discovered: string[] = []
+  const adapter = new YouTubeAdapter({
+    resolveLiveChat: async ({ channelId, credentials }) => {
+      if ('accessToken' in credentials) discovered.push(credentials.accessToken)
+      return { channelId, videoId: 'video', liveChatId: 'chat' }
+    },
+    createSession: () => ({
+      start: async () => {},
+      stop: () => {},
+      getResumeToken: () => undefined,
+    }),
+  })
+  const startingReplacement = Promise.withResolvers<PromiseSettledResult<void>[]>()
+  adapter.on('status', ({ status, channelLogin }) => {
+    if (status !== 'connecting' || channelLogin !== 'first') return
+    queueMicrotask(() => {
+      AccountStore.setActive('youtube', replacement.id)
+      startingReplacement.resolve(Promise.allSettled([adapter.connect('second')]))
+    })
+  })
+  try {
+    await adapter.connect('first')
+    expect(await startingReplacement.promise).toEqual([{ status: 'fulfilled', value: undefined }])
+    expect(discovered).toEqual(['token-second'])
+    expect(requests).toEqual([])
+  } finally {
+    await adapter.disconnect()
+  }
+})
+
+test('YouTube retires a relay subscription if its initial status disconnects the adapter', async () => {
+  const outcome: string[] = []
+  const adapter = new YouTubeAdapter({
+    relay: {
+      subscribe(_options, handler) {
+        outcome.push('subscribe')
+        handler({
+          type: 'status',
+          subscriptionId: 'fixture',
+          status: 'connecting',
+          error: 'offline',
+        })
+        return () => outcome.push('unsubscribe')
+      },
+    },
+  })
+  const stops: Promise<void>[] = []
+  adapter.on('status', ({ error }) => {
+    if (error === 'offline') stops.push(adapter.disconnect())
+  })
+  try {
+    await adapter.connect('first')
+    await Promise.all(stops)
+    expect(outcome).toEqual(['subscribe', 'unsubscribe'])
+  } finally {
+    await adapter.disconnect()
+  }
+})
+
 test('YouTube OAuth streams after discovery and rejects stale callbacks on switch', async () => {
   save('youtube', 'first')
   const streams: Parameters<typeof createYouTubeGrpcSession>[0][] = []
@@ -821,6 +965,86 @@ test('YouTube OAuth streams after discovery and rejects stale callbacks on switc
   expect(statuses.filter((value) => value === 'connected')).toHaveLength(1)
   await adapter.disconnect()
 })
+
+for (const source of ['relay', 'oauth']) {
+  test(`YouTube ${source} stops delivering a batch when a listener reconnects`, async () => {
+    if (source === 'oauth') save('youtube', 'account')
+    const streams: Parameters<typeof createYouTubeGrpcSession>[0][] = []
+    const relayHandlers: Array<(event: YouTubeChatRelayEvent) => void> = []
+    const adapter = new YouTubeAdapter({
+      relay: {
+        subscribe(_options, handler) {
+          relayHandlers.push(handler)
+          return () => {}
+        },
+      },
+      resolveLiveChat: async ({ channelId }) => ({
+        channelId,
+        videoId: 'video',
+        liveChatId: 'chat',
+      }),
+      createSession(options) {
+        streams.push(options)
+        return { start: async () => {}, stop() {}, getResumeToken: () => undefined }
+      },
+    })
+    const { TEXT_MESSAGE_EVENT, SUPER_CHAT_EVENT, MESSAGE_DELETED_EVENT } =
+      LiveChatMessageSnippet_TypeWrapper_Type
+    const raw = {
+      items: [
+        {
+          id: 'first',
+          snippet: { type: TEXT_MESSAGE_EVENT, textMessageDetails: { messageText: 'first' } },
+        },
+        {
+          id: 'next',
+          snippet: { type: TEXT_MESSAGE_EVENT, textMessageDetails: { messageText: 'next' } },
+        },
+        { id: 'paid', snippet: { type: SUPER_CHAT_EVENT, superChatDetails: { amountMicros: 1 } } },
+        {
+          id: 'delete',
+          snippet: {
+            type: MESSAGE_DELETED_EVENT,
+            messageDeletedDetails: { deletedMessageId: 'first' },
+          },
+        },
+      ],
+    }
+    function deliver(index: number, channelId: string) {
+      if (source === 'oauth') required(streams[index]).onBatch(raw)
+      else
+        required(relayHandlers[index])({
+          type: 'batch',
+          subscriptionId: 'fixture',
+          batch: createYouTubeChatNormalizer({ channelId }).normalize(raw),
+        })
+    }
+    const replacements: Promise<void>[] = []
+    const received: string[] = []
+    adapter.on('message', ({ channelId, text }) => {
+      received.push(`${channelId}:${text}`)
+      if (channelId === 'old' && text === 'first') replacements.push(adapter.connect('new'))
+    })
+    adapter.on('event', ({ type }) => received.push(type))
+    adapter.on('moderation', ({ channelId, action }) => received.push(`${channelId}:${action}`))
+    try {
+      await adapter.connect('old')
+      deliver(0, 'old')
+      await Promise.all(replacements)
+      deliver(0, 'old')
+      deliver(1, 'new')
+      expect(received).toEqual([
+        'old:first',
+        'new:first',
+        'new:next',
+        'superchat',
+        'new:delete_message',
+      ])
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+}
 
 test('watched YouTube channel ids preserve exact case through persistence and removal', () => {
   const id = 'UCAbCdEfGhIjKlMnOpQrStUv'

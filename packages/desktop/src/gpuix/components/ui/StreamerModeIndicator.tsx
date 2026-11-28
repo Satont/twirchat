@@ -1,9 +1,10 @@
 import { Tooltip, TooltipContent, TooltipTrigger, type StyleDesc } from '@gpuix/react'
 
+import { t } from '../../../i18n'
 import type { StreamerModeStatus } from '../../../services/streamer-mode'
-import { t, useT } from '../../i18n'
-import { useStoreSelector } from '../../state/create-store'
+import { useT } from '../../hooks/use-translation'
 import { streamerModeStore } from '../../state/streamer-mode'
+import { useStoreSelector } from '../../state/use-store'
 import { semantic } from '../../theme'
 import { useTheme } from '../../theme-context'
 import { Text } from './Text'

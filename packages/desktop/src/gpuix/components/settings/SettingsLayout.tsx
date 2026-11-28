@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from 'react'
 
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import type { SettingsSectionId } from '../../settings-search'
 import { useTheme } from '../../theme-context'
 import { ActionButton } from '../ui/Form'

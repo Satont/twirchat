@@ -49,7 +49,7 @@ in-process facade with exactly the same shape as the Wails gateway:
   ported back from the Go bridge (`internal/bridge/*.go`) to TS.
 - `src/gpuix/backend/events.ts` — `DesktopEventMap` typed emitter, same event
   names as Wails (`chat_message`, `platform_status`, `watched_channel_message`, …).
-- `src/gpuix/backend/context.ts` — React side: `useBackend()` +
+- `src/gpuix/backend-context.ts` — React side: `useBackend()` +
   `useBackendEvent(name, handler)`. Components never import stores/adapters
   directly — only the facade — so a real transport (WS/IPC) could replace the
   in-process one without touching UI code.
@@ -59,13 +59,14 @@ in-process facade with exactly the same shape as the Wails gateway:
 
 ### State
 
-`src/gpuix/state/` — observable stores on `useSyncExternalStore`
-(`create-store.ts`), replacing Pinia:
+`src/gpuix/state/` — view state built on `src/state/create-store.ts` and
+subscribed to through `use-store.ts`. Desktop translations and active language
+live in `src/i18n`; `hooks/use-translation.ts` subscribes React to that state.
 
-- `app.ts` — settings/accounts/statuses/messages/watched/tabs/emotes/
-  stream-status polling/moderation outcomes/notices + `wireBackendToStores()`
-  - `loadInitialData()` (ports `App.vue`'s boot sequence).
-- `layout.ts` — per-tab watched-channel split layouts (ports `stores/layout.ts`).
+- `app.ts` — backend event projection, chat buffers, stream status polling, and shared UI state.
+- `accounts.ts` — persistent active and saved account snapshots used by views and classifiers.
+- `initial-data.ts` — startup orchestration and retries above the state modules.
+- `layout-state.ts` — per-tab layout snapshots and pane traversal; `layout.ts` owns layout writes and commands.
 - `caches.ts` — avatar + mention-color session caches.
 - `focus.ts` / `hotkeys.ts` — global hotkeys (Ctrl+K, Ctrl+Tab…) with the
   "skip when a text editor is focused" rule.
@@ -77,7 +78,7 @@ in-process facade with exactly the same shape as the Wails gateway:
 > store `.set()` expecting synchronous repaint from an event handler.
 >
 > **Hot reload persistence**: desktop `bun --hot` re-evaluates the whole module
-> graph on save. `persistent-resources.ts` retains each named store or controller
+> graph on save. `src/state/persistent-resources.ts` retains each named store or controller
 > on `globalThis`; owners declare the exact key and type at module scope. Remounts
 > keep messages, settings, tabs, caches and pending preference writes. Store
 > `.set(value)` assigns a value and `.modify(update)` applies an updater; function

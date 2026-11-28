@@ -20,8 +20,10 @@ const { ChatMessage } = await import('../src/gpuix/components/ChatMessage')
 const { PlatformsPanel } = await import('../src/gpuix/components/PlatformsPanel')
 const { RemoteImage } = await import('../src/gpuix/components/ui/RemoteImage')
 const { Text } = await import('../src/gpuix/components/ui/Text')
-const { accountsStore, channelStatusStore } = await import('../src/gpuix/state/app')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { channelStatusStore } = await import('../src/gpuix/state/app')
+const { accountsStore } = await import('../src/gpuix/state/accounts')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
 const { imageThumbnailer } = await import('../src/services/image-thumbnail')
 const { setRuntimeConfig } = await import('../src/runtime-config')
@@ -280,7 +282,7 @@ try {
   throw error
 } finally {
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
   await server.stop(true)
 }
 process.exit(0)

@@ -1,7 +1,44 @@
+import { SEVENTV_GQL_ENDPOINT } from '@twirchat/shared/constants'
 import { z } from 'zod'
-const SEVENTV_GQL_ENDPOINT = 'https://7tv.io/v4/gql'
 
-// GraphQL query strings
+const SEVENTV_REQUEST_TIMEOUT_MS = 10_000
+
+interface SevenTVUserCatalog {
+  id: string
+  activeEmoteSet: SevenTVGraphQLEmoteSet | null | undefined
+}
+
+const EMOTE_SET_FIELDS = `
+id
+name
+emotes(perPage: 1000) {
+  items {
+    id
+    alias
+    flags {
+      zeroWidth
+    }
+    emote {
+      id
+      defaultName
+      flags {
+        animated
+      }
+      aspectRatio
+      images {
+        url
+        mime
+        size
+        scale
+        width
+        height
+        frameCount
+      }
+    }
+  }
+}
+`
+
 const GET_USER_BY_CONNECTION_QUERY = `
 query GetUserByConnection($platform: Platform!, $platformId: String!) {
   users {
@@ -16,34 +53,7 @@ query GetUserByConnection($platform: Platform!, $platformId: String!) {
       style {
         activeEmoteSetId
         activeEmoteSet {
-          id
-          name
-          emotes(perPage: 1000) {
-            items {
-              id
-              alias
-              flags {
-                zeroWidth
-              }
-              emote {
-                id
-                defaultName
-                flags {
-                  animated
-                }
-                aspectRatio
-                images {
-                  url
-                  mime
-                  size
-                  scale
-                  width
-                  height
-                  frameCount
-                }
-              }
-            }
-          }
+${EMOTE_SET_FIELDS}
         }
       }
     }
@@ -51,11 +61,15 @@ query GetUserByConnection($platform: Platform!, $platformId: String!) {
 }
 `
 
-export async function executeGraphQL<T = unknown>(
+async function executeGraphQL<T>(
   query: string,
   variables: Record<string, unknown>,
   resultSchema: z.ZodType<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
+  const timeout = AbortSignal.timeout(SEVENTV_REQUEST_TIMEOUT_MS)
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
+  requestSignal.throwIfAborted()
   const response = await fetch(SEVENTV_GQL_ENDPOINT, {
     body: JSON.stringify({
       query,
@@ -65,6 +79,7 @@ export async function executeGraphQL<T = unknown>(
       'Content-Type': 'application/json',
     },
     method: 'POST',
+    signal: requestSignal,
   })
 
   if (!response.ok) {
@@ -93,57 +108,77 @@ export async function executeGraphQL<T = unknown>(
 export async function getUserByConnection(
   platform: 'TWITCH' | 'KICK',
   platformId: string,
-): Promise<z.infer<typeof getUserByConnectionSchema>> {
-  return executeGraphQL(
+  signal?: AbortSignal,
+): Promise<SevenTVUserCatalog | null | undefined> {
+  const result = await executeGraphQL(
     GET_USER_BY_CONNECTION_QUERY,
     {
       platform,
       platformId,
     },
     getUserByConnectionSchema,
+    signal,
   )
+  const user = result.users.userByConnection
+  if (user === null || user === undefined) return user
+  return { id: user.id, activeEmoteSet: user.style.activeEmoteSet }
 }
 
 const GET_EMOTE_SET_BY_ID_QUERY = `
 query GetEmoteSetById($id: Id!) {
   emoteSets {
     emoteSet(id: $id) {
-      id
-      name
-      emotes(perPage: 1000) {
-        items {
-          id
-          alias
-          flags {
-            zeroWidth
-          }
-          emote {
-            id
-            defaultName
-            flags {
-              animated
-            }
-            aspectRatio
-            images {
-              url
-              mime
-              size
-              scale
-              width
-              height
-              frameCount
-            }
-          }
-        }
-      }
+${EMOTE_SET_FIELDS}
     }
   }
 }
 `
 
-export async function getEmoteSetById(id: string): Promise<z.infer<typeof getEmoteSetByIdSchema>> {
-  return executeGraphQL(GET_EMOTE_SET_BY_ID_QUERY, { id }, getEmoteSetByIdSchema)
+export async function getEmoteSetById(
+  id: string,
+  signal?: AbortSignal,
+): Promise<SevenTVGraphQLEmoteSet | null | undefined> {
+  const result = await executeGraphQL(
+    GET_EMOTE_SET_BY_ID_QUERY,
+    { id },
+    getEmoteSetByIdSchema,
+    signal,
+  )
+  return result.emoteSets.emoteSet
 }
+
+const emoteSetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  emotes: z.object({
+    items: z.array(
+      z.object({
+        id: z.string(),
+        alias: z.string(),
+        flags: z.object({ zeroWidth: z.boolean() }),
+        emote: z.object({
+          id: z.string(),
+          defaultName: z.string(),
+          aspectRatio: z.number(),
+          flags: z.object({ animated: z.boolean() }),
+          images: z.array(
+            z.object({
+              url: z.string(),
+              mime: z.string(),
+              size: z.number(),
+              scale: z.number(),
+              width: z.number(),
+              height: z.number(),
+              frameCount: z.number(),
+            }),
+          ),
+        }),
+      }),
+    ),
+  }),
+})
+
+export type SevenTVGraphQLEmoteSet = z.infer<typeof emoteSetSchema>
 
 const getUserByConnectionSchema = z.object({
   users: z.object({
@@ -160,38 +195,7 @@ const getUserByConnectionSchema = z.object({
           .nullish(),
         style: z.object({
           activeEmoteSetId: z.string().nullish(),
-          activeEmoteSet: z
-            .object({
-              id: z.string(),
-              name: z.string(),
-              emotes: z.object({
-                items: z.array(
-                  z.object({
-                    id: z.string(),
-                    alias: z.string(),
-                    flags: z.object({ zeroWidth: z.boolean() }),
-                    emote: z.object({
-                      id: z.string(),
-                      defaultName: z.string(),
-                      aspectRatio: z.number(),
-                      flags: z.object({ animated: z.boolean() }),
-                      images: z.array(
-                        z.object({
-                          url: z.string(),
-                          mime: z.string(),
-                          size: z.number(),
-                          scale: z.number(),
-                          width: z.number(),
-                          height: z.number(),
-                          frameCount: z.number(),
-                        }),
-                      ),
-                    }),
-                  }),
-                ),
-              }),
-            })
-            .nullish(),
+          activeEmoteSet: emoteSetSchema.nullish(),
         }),
       })
       .nullish(),
@@ -200,37 +204,6 @@ const getUserByConnectionSchema = z.object({
 
 const getEmoteSetByIdSchema = z.object({
   emoteSets: z.object({
-    emoteSet: z
-      .object({
-        id: z.string(),
-        name: z.string(),
-        emotes: z.object({
-          items: z.array(
-            z.object({
-              id: z.string(),
-              alias: z.string(),
-              flags: z.object({ zeroWidth: z.boolean() }),
-              emote: z.object({
-                id: z.string(),
-                defaultName: z.string(),
-                aspectRatio: z.number(),
-                flags: z.object({ animated: z.boolean() }),
-                images: z.array(
-                  z.object({
-                    url: z.string(),
-                    mime: z.string(),
-                    size: z.number(),
-                    scale: z.number(),
-                    width: z.number(),
-                    height: z.number(),
-                    frameCount: z.number(),
-                  }),
-                ),
-              }),
-            }),
-          ),
-        }),
-      })
-      .nullish(),
+    emoteSet: emoteSetSchema.nullish(),
   }),
 })

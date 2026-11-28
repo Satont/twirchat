@@ -1,12 +1,12 @@
 import type { KickBuildUrlResponse, KickExchangeResponse } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
+import { generateCodeChallenge, generateCodeVerifier, generateState } from '@twirchat/shared/pkce'
 import { z } from 'zod'
 
 import { config } from '../config.ts'
 import { AccountStore, KickOAuthSessionStore } from '../db/index.ts'
 import { connectionManager } from '../ws/connection-manager.ts'
 import { subscribeKickEvents } from './kick-subscriptions.ts'
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce.ts'
 
 const log = logger('kick-auth')
 

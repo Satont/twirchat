@@ -4,9 +4,9 @@ import type { EventPayload, KeyEvent } from '@gpuix/react'
  * Driven from the window-level renderer onKeyDown in main.tsx.
  */
 
+import { t } from '../../i18n'
 import { runInBackground } from '../../services/background-task'
 import { normalizeKeyChord, eventKeyChord } from '../hotkey-bindings'
-import { t } from '../i18n'
 import {
   dispatchCustomHotkey,
   actionBindingsStore,

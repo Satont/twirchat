@@ -301,6 +301,79 @@ test('7TV presence is opt-in, uses resolved identity, and respects the heartbeat
   expect(state.presence).toHaveLength(2)
 })
 
+test('retiring presence before the warmup resumes skips the 7TV identity lookup', async () => {
+  let lookups = 0
+  const state = fixture({
+    sevenTvUser: async () => {
+      lookups++
+      return 'seven-tv-owner'
+    },
+  })
+  await state.runtime.warm('twitch', 'viewer')
+  state.runtime.setActiveChannel({ platform: 'twitch', channelId: 'viewer' })
+  state.preferences({ sendPresence: true })
+  const pending = state.runtime.pulsePresence()
+  state.runtime.stop()
+  state.runtime.start()
+  await pending
+  expect(lookups).toBe(0)
+  expect(state.presence).toEqual([])
+})
+
+test('late provider refreshes do not publish or restore stopped channel state', async () => {
+  let liveReads = 0
+  let resolutions = 0
+  const state = fixture({
+    resolve: async () => {
+      resolutions++
+      return { platformUserId: '42', login: 'viewer' }
+    },
+    sevenTv: () => {
+      liveReads++
+      return undefined
+    },
+  })
+  await state.runtime.warm('twitch', 'viewer')
+  state.runtime.stop()
+  const before = { publications: state.published.length, liveReads, resolutions }
+  state.preferences({ badges: false, sendPresence: true })
+  state.runtime.refreshChannel('twitch', 'viewer')
+  state.runtime.setJoined('watched:late', 'twitch', 'viewer')
+  state.runtime.setActiveChannel({ platform: 'twitch', channelId: 'viewer' })
+  state.runtime.refreshAccounts()
+  expect({ publications: state.published.length, liveReads, resolutions }).toEqual(before)
+
+  state.runtime.start()
+  await state.runtime.pulsePresence()
+  expect(state.presence).toEqual([])
+  expect(resolutions).toBe(before.resolutions)
+})
+
+test('restart applies preferences saved while stopped before serving cached emotes', async () => {
+  const state = fixture({
+    catalog: async () => [{ ...emote('Private', 'seventv'), source: 'personal' }],
+  })
+  const warm = () => state.runtime.warm('twitch', 'viewer')
+  expect((await warm()).map(({ alias }) => alias)).toEqual(['Private'])
+  state.runtime.stop()
+  state.preferences({ personal: false })
+  state.runtime.start()
+  expect(await warm()).toEqual([])
+})
+
+test('account changes while stopped invalidate private emotes before restart', async () => {
+  const state = fixture({
+    catalog: async (_platform, _channel, options) =>
+      options.personalUserId ? [{ ...emote('Private', 'seventv'), source: 'personal' }] : [],
+  })
+  const warm = () => state.runtime.warm('twitch', 'viewer')
+  expect((await warm()).map(({ alias }) => alias)).toEqual(['Private'])
+  state.runtime.stop()
+  state.logout()
+  state.runtime.start()
+  expect(await warm()).toEqual([])
+})
+
 test('opting out while the user identity loads prevents a pending presence write', async () => {
   let lookupStarted = false
   const { promise: user, resolve: resolveUser } = Promise.withResolvers<string>()
@@ -404,6 +477,48 @@ test('personal emotes load only on visible author requests and cannot leak the c
   expect(state.runtime.enrich(other).emotes).toEqual([])
 })
 
+test('a reentrant author subscriber joins the pending personal set request', async () => {
+  const requested: string[] = []
+  let joined: Promise<void> | undefined
+  const { runtime } = fixture({
+    personalSet: async (setId) => {
+      requested.push(setId)
+      return [emote(setId, 'seventv')]
+    },
+    publishAuthor: (_platform, _author, catalog) => {
+      if (!catalog.length) joined = warm()
+    },
+  })
+  function warm(): Promise<void> {
+    return runtime.warmAuthorPersonal('twitch', 'author', 'selected')
+  }
+  await warm()
+  expect(joined).toBeDefined()
+  await joined
+  expect(requested).toEqual(['selected'])
+})
+
+test('a replaced queued author set never starts a provider request', async () => {
+  const { promise: gate, resolve: release } = Promise.withResolvers<void>()
+  const requested: string[] = []
+  const { runtime } = fixture({
+    resolve: async (_platform, channel) => {
+      await gate
+      return { platformUserId: channel, login: channel }
+    },
+    personalSet: async (setId) => {
+      requested.push(setId)
+      return [emote(setId, 'seventv')]
+    },
+  })
+  const busy = ['one', 'two', 'three'].map((channel) => runtime.warm('twitch', channel))
+  const retired = runtime.warmAuthorPersonal('twitch', 'author', 'old')
+  const current = runtime.warmAuthorPersonal('twitch', 'author', 'new')
+  release()
+  await Promise.all([...busy, retired, current])
+  expect(requested).toEqual(['new'])
+})
+
 test('an old personal set response cannot replace a newer author set or publish after stop', async () => {
   const { promise: gate, resolve: release } = Promise.withResolvers<void>()
   const updates: string[][] = []
@@ -501,6 +616,42 @@ test('an explicitly empty live 7TV set does not resurrect removed emotes from a 
   expect(urls.at(-1)).toBe('https://7tv.io/v3/users/twitch/42')
 })
 
+for (const blockedStage of ['identity', 'native']) {
+  test(`retiring a warmup during ${blockedStage} skips the remaining stages`, async () => {
+    const started = Promise.withResolvers<void>()
+    const blocked = Promise.withResolvers<void>()
+    const stages: string[] = []
+    const step = async (name: string) => {
+      stages.push(name)
+      if (name !== blockedStage) return
+      started.resolve()
+      await blocked.promise
+    }
+    const { runtime, published } = fixture({
+      resolve: async () => {
+        await step('identity')
+        return { platformUserId: '42', login: 'viewer' }
+      },
+      native: async () => {
+        await step('native')
+        return []
+      },
+      catalog: async () => {
+        await step('catalog')
+        return []
+      },
+    })
+    const pending = runtime.warm('twitch', 'viewer')
+    await started.promise
+    runtime.stop()
+    runtime.start()
+    blocked.resolve()
+    expect(await pending).toEqual([])
+    expect(stages).toEqual(blockedStage === 'identity' ? ['identity'] : ['identity', 'native'])
+    expect(published).toEqual([])
+  })
+}
+
 test('stopping invalidates in-flight catalog and author publications even if the runtime restarts', async () => {
   const { promise: gate, resolve: release } = Promise.withResolvers<void>()
   const authorUpdates: string[][] = []
@@ -553,6 +704,29 @@ test('logout discards an old account catalog response before it can be published
     ),
   ).toBe(true)
   expect(state.published.at(-1)?.catalog[0]?.alias).toBe('PublicAlias')
+})
+
+test('a manual reload cannot resume in a new provider lifetime after invalidation', async () => {
+  const started = Promise.withResolvers<void>()
+  const blocked = Promise.withResolvers<void>()
+  let catalogReads = 0
+  const { runtime } = fixture({
+    invalidate: () => {
+      started.resolve()
+      return blocked.promise
+    },
+    catalog: async () => {
+      catalogReads++
+      return []
+    },
+  })
+  const pending = runtime.reload('twitch', 'viewer')
+  await started.promise
+  runtime.stop()
+  runtime.start()
+  blocked.resolve()
+  await expect(pending).rejects.toThrow('Emote providers are stopped.')
+  expect(catalogReads).toBe(0)
 })
 
 test('manual reload bypasses provider TTL and native cache and publishes all aliases', async () => {

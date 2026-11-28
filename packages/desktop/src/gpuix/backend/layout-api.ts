@@ -1,25 +1,40 @@
-import type { LayoutNode, PanelNode } from '@twirchat/shared/types'
+import type {
+  LayoutNode,
+  PanelNode,
+  SplitDirection,
+  WatchedChannelsLayout,
+} from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { getDb } from '../../store/db'
 import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
-import type { DesktopApi } from './api'
 
-export type LayoutApi = Pick<
-  DesktopApi,
-  | 'getUiState'
-  | 'setUiState'
-  | 'getLastSeenVersion'
-  | 'setLastSeenVersion'
-  | 'getTabChannelIds'
-  | 'setTabChannelIds'
-  | 'getWatchedChannelsLayout'
-  | 'setWatchedChannelsLayout'
-  | 'removeWatchedChannelsLayout'
-  | 'splitPanel'
-  | 'removePanel'
-  | 'assignChannelToPanel'
->
+export interface LayoutApi {
+  /** GPUIX-only: generic UI preference stored in the settings KV table. */
+  getUiState(params: { key: string }): Promise<string | null>
+  setUiState(this: void, params: { key: string; value: string }): Promise<void>
+  /** Get the last seen app version (for update changelog). */
+  getLastSeenVersion(): Promise<string | null>
+  /** Set the last seen app version. */
+  setLastSeenVersion(params: { version: string }): Promise<void>
+  getTabChannelIds(): Promise<string[] | null>
+  setTabChannelIds(params: { ids: string[] }): Promise<void>
+  getWatchedChannelsLayout(params: { tabId: string }): Promise<WatchedChannelsLayout | null>
+  setWatchedChannelsLayout(params: { tabId: string; layout: WatchedChannelsLayout }): Promise<void>
+  removeWatchedChannelsLayout(params: { tabId: string }): Promise<void>
+  removePanel(params: { tabId: string; panelId: string }): Promise<void>
+  assignChannelToPanel(params: {
+    tabId: string
+    panelId: string
+    channelId: string | null
+  }): Promise<void>
+  splitPanel(params: {
+    tabId: string
+    panelId: string
+    direction: SplitDirection
+  }): Promise<{ original: LayoutNode; newPanel: LayoutNode }>
+}
+
 const MAX_PANELS = 64
 
 // ── Layout tree surgery (ported from src/bun/index.ts) ─────────────────────

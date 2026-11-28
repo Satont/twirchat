@@ -1,7 +1,8 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 
-import type { CosmeticPaint, UserCosmeticPreferences } from '../../services/cosmetics'
+import type { CosmeticPaint } from '../../services/cosmetic-paint'
+import type { UserCosmeticPreferences } from '../../services/cosmetics'
 import { namePaintCache, userCosmeticsCache } from '../state/cosmetics'
 import { runUiTask } from './run-ui-task'
 

@@ -3,14 +3,6 @@ import {
   type PlatformCommandResult,
   type RoomState,
 } from '@twirchat/shared/channel-tools'
-import type {
-  ConnectDonationProvider,
-  DonationConnections,
-  DonationOAuthAvailability,
-  DonationProvider,
-  DonationSharing,
-  ShareableDonationProvider,
-} from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type {
@@ -42,13 +34,11 @@ import type {
   Badge,
   ChatSendReceipt,
   AppSettings,
-  LayoutNode,
+  ModerationAction,
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
-  SplitDirection,
   WatchedChannel,
-  WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 import type {
   ModerationSettings,
@@ -66,8 +56,6 @@ import {
   prepareKickAuth,
   requestTwitchDeviceCode,
 } from '../../auth'
-import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
-import { getDonationOAuthAvailability } from '../../auth/donations'
 import {
   currentTwitchAccessToken,
   twitchAccessTokenIfAvailable,
@@ -78,6 +66,7 @@ import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
 import type { DonationService } from '../../donations/service'
+import { t } from '../../i18n'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import type { PluginTransportInfo } from '../../plugins/api'
@@ -90,12 +79,20 @@ import {
   type ChatImagePreview,
 } from '../../services/chat-image-preview-cache'
 import { ChatToolsError, createChatToolsService } from '../../services/chat-tools'
+import type {
+  ChannelChatters,
+  ChatterGroup,
+  ChatterRole,
+  ChattersTarget,
+  ChatterUser,
+  TwitchViewerRole,
+} from '../../services/chatters-types'
+import type { CosmeticPaint } from '../../services/cosmetic-paint'
 import {
   getUserCosmetics,
   getPaintNameImage,
   type UserCosmetics,
   type UserCosmeticPreferences,
-  type CosmeticPaint,
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
 import {
@@ -121,17 +118,13 @@ import {
   type MentionUserRequest,
 } from '../../services/mention-user'
 import { createModerationService } from '../../services/moderation/service'
+import type { ModerationPlatform } from '../../services/moderation/types'
 import { createNightbotCommandsClient } from '../../services/nightbot-commands'
 import { createPotatCommandsClient } from '../../services/potat-commands'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
 import type { PrefixedBotCommand, PublicBotCommand } from '../../services/public-bot-commands'
 import { createSnapshotRequests } from '../../services/snapshot-requests'
-import type {
-  StreamerMode,
-  StreamerModeService,
-  StreamerModeSettings,
-  StreamerModeStatus,
-} from '../../services/streamer-mode'
+import type { StreamerModeService } from '../../services/streamer-mode'
 import {
   createSupibotCommandsClient,
   type SupibotCommandTarget,
@@ -161,7 +154,7 @@ import {
 import { loadTwitchUserCardDetails } from '../../services/twitch-user-card'
 import { enrichTwitchUserProfile, getTwitchUserBanner } from '../../services/twitch-user-profile'
 import type { TwitchUserCredentials } from '../../services/twitch-users'
-import { getTwitchViewerList, type TwitchViewerRole } from '../../services/twitch-viewer-list'
+import { getTwitchViewerList } from '../../services/twitch-viewer-list'
 import { updateTwitchStream } from '../../services/update-stream'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
@@ -180,7 +173,6 @@ import {
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { PluginChannels } from '../../watched-channels/plugin-channels'
-import { t } from '../i18n'
 import {
   platformCommandResultSchema,
   streamStatusResponseSchema,
@@ -200,14 +192,15 @@ import {
   getChatLoggingStatus as readChatLoggingStatus,
   flushChatLogs as flushRecordedChatLogs,
   type ChatHistoryQuery,
-  type ChatLoggingSettings,
 } from './chat-history'
+import type { ChatLoggingSettings } from './chat-logging-settings'
+import { createDonationsApi, type DonationsApi } from './donations-api'
 import type { DesktopEvents } from './events'
 import * as imageUploader from './image-uploader'
-import { createLayoutApi } from './layout-api'
+import { createLayoutApi, type LayoutApi } from './layout-api'
 import { obsRemoteApi } from './obs-remote'
 import { readCachedReleaseNotes, writeCachedReleaseNotes } from './release-notes-cache'
-import { createStreamerModeApi } from './streamer-mode-api'
+import { createStreamerModeApi, type StreamerModeApi } from './streamer-mode-api'
 import * as translation from './translation'
 import type {
   TranslationSettings,
@@ -218,7 +211,7 @@ import type {
   TranslationLanguage,
 } from './translation'
 import type { TwitchHistoryRuntime } from './twitch-history'
-import { createUpdater, type Updater } from './updater'
+import type { Updater } from './updater'
 import {
   getUserNotes,
   setUserNotes,
@@ -248,62 +241,13 @@ type UpdateStreamInput = Omit<UpdateStreamRequest, 'platform' | 'userAccessToken
   platform: 'twitch' | 'kick'
 }
 
-export type ModerationPlatform = 'twitch' | 'kick'
-export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
-export type ChatterRole = TwitchViewerRole | 'ogs'
-
-export interface ChatterUser {
-  userId?: string
-  username: string
-  displayName: string
-  avatarUrl?: string
-}
-
-export interface ChatterGroup {
-  role: ChatterRole
-  users: ChatterUser[]
-}
-
-export interface ChattersTarget {
-  platform: 'twitch' | 'kick'
-  channelSlug: string
-  accountId?: string
-}
-
-interface ChannelChattersBase {
-  platform: 'twitch' | 'kick'
-  channelSlug: string
-  total: number
-  groups: ChatterGroup[]
-}
-
-export type ChannelChatters = ChannelChattersBase &
-  (
-    | { channelId: string; source?: 'community'; error?: never }
-    | { channelId?: never; source?: never; error: string }
-  )
-
 interface AuthRequest {
   platform: Platform
   windowScope: string
 }
 
-export interface DesktopApi {
+export interface DesktopApi extends DonationsApi, LayoutApi, StreamerModeApi {
   obsRemote: typeof obsRemoteApi
-  donationAlertsOAuthAvailable: boolean
-  getDonationConnections(): Promise<DonationConnections>
-  getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
-  connectDonationProvider(params: ConnectDonationProvider): Promise<void>
-  disconnectDonationProvider(params: { provider: DonationProvider }): Promise<void>
-  getDonationSharing(): Promise<DonationSharing>
-  setDonationSharing(params: {
-    provider: ShareableDonationProvider
-    enabled: boolean
-  }): Promise<DonationSharing>
-  getStreamerMode(): Promise<StreamerModeStatus>
-  setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
-  getStreamerModeSettings(): Promise<StreamerModeSettings>
-  setStreamerModeSettings(params: { settings: StreamerModeSettings }): Promise<StreamerModeStatus>
   reconnectChat(params: { watchedChannelId?: string; platform?: Platform }): Promise<void>
   reloadChatEmotes(params: {
     platform: Platform
@@ -538,13 +482,6 @@ export interface DesktopApi {
   getChatters(params: { targets: ChattersTarget[] }): Promise<{ results: ChannelChatters[] }>
   openExternalUrl(params: { url: string }): Promise<void>
   getChatImagePreview(url: string, signal: AbortSignal): Promise<ChatImagePreview | undefined>
-  /** GPUIX-only: generic UI preference stored in the settings KV table. */
-  getUiState(params: { key: string }): Promise<string | null>
-  setUiState(params: { key: string; value: string }): Promise<void>
-  /** Get the last seen app version (for update changelog). */
-  getLastSeenVersion(): Promise<string | null>
-  /** Set the last seen app version. */
-  setLastSeenVersion(params: { version: string }): Promise<void>
   /** Fetch release notes for a specific version from GitHub. */
   getReleaseNotes(params: { version: string }): Promise<{
     version: string
@@ -563,22 +500,6 @@ export interface DesktopApi {
     silent?: boolean
     icon?: string
   }): Promise<void>
-  getTabChannelIds(): Promise<string[] | null>
-  setTabChannelIds(params: { ids: string[] }): Promise<void>
-  getWatchedChannelsLayout(params: { tabId: string }): Promise<WatchedChannelsLayout | null>
-  setWatchedChannelsLayout(params: { tabId: string; layout: WatchedChannelsLayout }): Promise<void>
-  removeWatchedChannelsLayout(params: { tabId: string }): Promise<void>
-  removePanel(params: { tabId: string; panelId: string }): Promise<void>
-  assignChannelToPanel(params: {
-    tabId: string
-    panelId: string
-    channelId: string | null
-  }): Promise<void>
-  splitPanel(params: {
-    tabId: string
-    panelId: string
-    direction: SplitDirection
-  }): Promise<{ original: LayoutNode; newPanel: LayoutNode }>
 }
 
 export interface DesktopApiContext {
@@ -589,6 +510,7 @@ export interface DesktopApiContext {
   channelActions?: ChannelActions
   accountSessions?: AccountSessions
   providerRuntime?: ProviderRuntime
+  twitchActivitySnapshots?: ReturnType<typeof createTwitchActivitySnapshots>
   twitchActivityRefresh?: TwitchActivityRefreshClient
   twitchEventSub?: TwitchEventSubAccounts
   aggregator: ChatAggregator
@@ -601,7 +523,6 @@ export interface DesktopApiContext {
   openBrowser: (url: string) => void
 }
 
-const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
 let webSessionRevision = 0
 
 const twitchActivities = createTwitchActivitiesService()
@@ -626,7 +547,11 @@ async function twitchRequest<T>(action: string, run: () => Promise<T>): Promise<
   }
 }
 
-async function prepareTwitchActivitiesRequest(eventSubAccountId?: string, usePoints = false) {
+async function prepareTwitchActivitiesRequest({
+  eventSubAccountId,
+  usePoints = false,
+  checkRunning,
+}: { eventSubAccountId?: string; usePoints?: boolean; checkRunning?: () => void } = {}) {
   const getAccount = () =>
     eventSubAccountId
       ? AccountStore.findById(eventSubAccountId)
@@ -635,6 +560,7 @@ async function prepareTwitchActivitiesRequest(eventSubAccountId?: string, usePoi
   if (account?.platform !== 'twitch' || !AccountStore.getTokens(account.id)?.accessToken)
     throw new Error(t('runtime.api.connectTwitchFirst'))
   const accessToken = await currentTwitchAccessToken(account.id)
+  checkRunning?.()
   const [token, webSession, pointsSession] = await Promise.all([
     twitchUserCredentials(accessToken),
     eventSubAccountId ? undefined : TwitchWebSessionStore.get(),
@@ -672,7 +598,7 @@ async function twitchActivity<T>(
   eventSubAccountId?: string,
   usePoints = false,
 ): Promise<T> {
-  const request = await prepareTwitchActivitiesRequest(eventSubAccountId, usePoints)
+  const request = await prepareTwitchActivitiesRequest({ eventSubAccountId, usePoints })
   return request.run(operation)
 }
 
@@ -691,19 +617,27 @@ export function unsubscribeTwitchActivities(accountId: string, ids: string[]) {
   return twitchActivity((credentials) => twitchActivities.unsubscribe(credentials, ids), accountId)
 }
 
-export async function requestTwitchActivitiesSnapshot(params: {
-  channelSlug: string
-  sections?: TwitchActivitySnapshotPart[]
-}): Promise<TwitchActivitiesSnapshot> {
-  const sessionRevision = webSessionRevision
-  const usesPoints =
-    !params.sections ||
-    params.sections.some((part) => part === 'rewards' || part === 'pointsBalance')
-  const { credentials, run } = await prepareTwitchActivitiesRequest(undefined, usesPoints)
-  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${sessionRevision}`
-  return activitySnapshots.request(key, params.sections, () =>
-    run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
-  )
+export function createTwitchActivitySnapshots() {
+  const broker = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+  async function request(params: {
+    channelSlug: string
+    sections?: TwitchActivitySnapshotPart[]
+  }): Promise<TwitchActivitiesSnapshot> {
+    broker.checkRunning()
+    const sessionRevision = webSessionRevision
+    const usesPoints =
+      !params.sections ||
+      params.sections.some((part) => part === 'rewards' || part === 'pointsBalance')
+    const { credentials, run } = await prepareTwitchActivitiesRequest({
+      usePoints: usesPoints,
+      checkRunning: broker.checkRunning,
+    })
+    const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${sessionRevision}`
+    return broker.request(key, params.sections, () =>
+      run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
+    )
+  }
+  return { request, stop: broker.stop }
 }
 
 export async function planTwitchActivitySnapshot(
@@ -827,11 +761,16 @@ async function resolveAvatarRemote(params: {
 
 // ── Moderation (port of internal/bridge/moderation_handlers.go) ────────────
 
-/**
- * Turns a failed backend response into a user-facing error: the route's
- * `{ error }` body when present, with expired platform OAuth called out.
- */
-async function backendFailure(action: string, res: Response): Promise<Error> {
+async function backendFailure(
+  action: string,
+  res: Response,
+  credentials: 'hosted' | 'platform-user',
+): Promise<Error> {
+  if (credentials === 'hosted') {
+    await res.body?.cancel().catch(() => {})
+    return new Error(t('runtime.api.httpStatus', { action, status: res.status }))
+  }
+
   let detail = ''
   try {
     const body = z.object({ error: z.string().optional() }).parse(await res.json())
@@ -970,13 +909,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 // ── API factory ─────────────────────────────────────────────────────────────
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
-  const { aggregator, watchedChannelManager, currentStatuses } = ctx
-  const updater = ctx.updater ?? createUpdater(ctx.events)
-  function donations(): DonationService {
-    if (!ctx.donations) throw new Error('Donation integrations are unavailable.')
-    return ctx.donations
-  }
-
+  const { aggregator, watchedChannelManager, currentStatuses, updater } = ctx
   let twitchAuth:
     | {
         controller: AbortController
@@ -1108,7 +1041,9 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getPotatCommands: createPotatCommandsClient(),
     getSupibotCommands: createSupibotCommandsClient(),
     getTwitchActivities: async (params) => {
-      const snapshot = await requestTwitchActivitiesSnapshot(params)
+      if (!ctx.twitchActivitySnapshots)
+        throw new Error('Twitch activity snapshots are not configured.')
+      const snapshot = await ctx.twitchActivitySnapshots.request(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)
       return snapshot
     },
@@ -1261,23 +1196,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setActiveChannel(params)
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
-    donationAlertsOAuthAvailable: getDonationAlertsDesktopClientId() !== null,
-    getDonationConnections: async () => donations().getConnections(),
-    getDonationOAuthAvailability,
-    connectDonationProvider: async (params) => {
-      await Bun.sleep(0)
-      donations().connect(params)
-    },
-    disconnectDonationProvider: async ({ provider }) => {
-      await Bun.sleep(0)
-      donations().disconnect(provider)
-    },
-    getDonationSharing: async () => donations().getSharing(),
-    setDonationSharing: async ({ provider, enabled }) => {
-      await Bun.sleep(0)
-      donations().setSharing(provider, enabled)
-      return donations().getSharing()
-    },
+    ...createDonationsApi(ctx.donations),
     saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
     connectTwirImageUploader: imageUploader.connectTwirImageUploader,
     disconnectTwirImageUploader: imageUploader.disconnectTwirImageUploader,
@@ -1336,6 +1255,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     joinChannel: async ({ platform, channelSlug }) => {
+      if (ctx.accountSessions?.isDisposed) return
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) {
         log.warn('No adapter registered for platform', { platform })
@@ -1345,13 +1265,18 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setJoined(`own:${platform}`, platform, channelSlug)
       adapter
         .connect(channelSlug)
-        .then(() => subscribeSevenTv(platform, channelSlug, adapter))
+        .then(() =>
+          ctx.accountSessions?.isDisposed
+            ? undefined
+            : subscribeSevenTv(platform, channelSlug, adapter),
+        )
         .catch((err) => {
           log.error('Failed to connect', { platform, channelSlug, error: String(err) })
         })
     },
 
     leaveChannel: async ({ platform, channelSlug }) => {
+      if (ctx.accountSessions?.isDisposed) return
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) return
       ChannelStore.remove(platform, channelSlug)
@@ -1403,7 +1328,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, platform, text }),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.platformCommandFailed'), res)
+      if (!res.ok)
+        throw await backendFailure(
+          t('runtime.api.action.platformCommandFailed'),
+          res,
+          'platform-user',
+        )
       return platformCommandResultSchema.parse(await res.json())
     },
 
@@ -1439,7 +1369,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify({ ...body, platform }),
       })
       if (!res.ok)
-        throw await backendFailure(t('runtime.api.action.checkModerationPermissions'), res)
+        throw await backendFailure(
+          t('runtime.api.action.checkModerationPermissions'),
+          res,
+          'platform-user',
+        )
       return z.object({ canModerate: z.boolean() }).parse(await res.json())
     },
 
@@ -1468,7 +1402,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           durationSeconds: params.durationSeconds,
         }),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.moderationFailed'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.moderationFailed'), res, 'platform-user')
       const result = z
         .object({
           success: z.boolean(),
@@ -1485,7 +1420,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
       )
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadStreamInfo'), res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadStreamInfo'), res, 'hosted')
       return streamStatusResponseSchema.parse(await res.json())
     },
 
@@ -1515,7 +1450,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.updateStream'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.updateStream'), res, 'platform-user')
       return updateStreamResponseSchema.parse(await res.json())
     },
 
@@ -1523,7 +1459,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
       )
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.categorySearchFailed'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.categorySearchFailed'), res, 'hosted')
       return searchCategoriesResponseSchema.parse(await res.json())
     },
 
@@ -1539,7 +1476,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           })),
         }),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadChannelStatus'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.loadChannelStatus'), res, 'hosted')
       return channelsStatusResponseSchema.parse(await res.json())
     },
 
@@ -1575,7 +1513,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify(request),
       })
       if (!response.ok)
-        throw await backendFailure(t('runtime.api.action.loadUserProfile'), response)
+        throw await backendFailure(t('runtime.api.action.loadUserProfile'), response, 'hosted')
       const profile = userProfileSnapshotSchema.parse(await response.json())
       const [enriched, bannerUrl] = await Promise.all([
         accessToken
@@ -1605,7 +1543,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadAccountDetails'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.loadAccountDetails'), res, 'hosted')
       const metadata = userCardMetadataResponseSchema.parse(await res.json())
       return { ...metadata, ...(await details) }
     },
@@ -1632,10 +1571,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       getPaintNameImage(name, paint, fontSize, fontFamily),
 
     getAppVersion: async () => APP_VERSION,
-    checkForUpdate: () => updater.check(),
-    downloadUpdate: () => updater.download(),
-    applyUpdate: () => updater.apply(),
-    skipUpdate: ({ hash }) => updater.skip(hash),
+    checkForUpdate: async () =>
+      updater?.check() ?? { updateAvailable: false, currentVersion: APP_VERSION },
+    downloadUpdate: async () =>
+      updater?.download() ?? { success: false, error: t('runtime.updater.noUpdateToDownload') },
+    applyUpdate: async () => updater?.apply(),
+    skipUpdate: async ({ hash }) => updater?.skip(hash),
     getReleaseNotes: async ({ version }) => {
       const cached = readCachedReleaseNotes(version)
       // Preview remounts must not burn the unauthenticated GitHub API limit.
@@ -1677,6 +1618,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     setActiveWatchedChannels: async ({ ids, paneAccounts }) => {
+      if (watchedChannelManager.isDisposed) return
       watchedChannelManager.setPaneAccounts(paneAccounts ?? {})
       const active = new Set(ids)
       for (const channel of watchedChannelManager.getAll())

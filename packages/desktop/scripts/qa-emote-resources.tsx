@@ -36,7 +36,8 @@ const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { initializeManagedRenderer } = await import('../src/gpuix/managed-renderer')
 const app = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const accountState = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { getDbPath, getBackendUrl } = await import('../src/runtime-config')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
 const { composerStore } = await import('../src/gpuix/state/composer')
@@ -142,7 +143,7 @@ app.settingsStore.set({
       }
     : {}),
 })
-app.accountsStore.set([])
+accountState.accountsStore.set([])
 app.watchedChannelsStore.set(channels)
 app.watchedStatusesStore.set(
   new Map(
@@ -1972,6 +1973,6 @@ try {
     await until(() => !nativeWindow(sink).isWindowOpen(), 'private focus sink closed')
   }
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

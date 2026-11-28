@@ -11,7 +11,7 @@ import type {
 import { z } from 'zod'
 
 import { refreshKickToken } from '../../auth/kick'
-import { t } from '../../gpuix/i18n'
+import { t } from '../../i18n'
 import { backendFetch } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
 import { BasePlatformAdapter } from '../base-adapter'

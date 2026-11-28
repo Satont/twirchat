@@ -1,11 +1,11 @@
 import type { UserProfileRequest, UserProfileSnapshot } from '@twirchat/shared/user-profile'
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken } from './stream-status'
+import { fetchTwitchHelixWithAppToken } from './app-credentials'
 
 export interface UserProfileDependencies {
   fetch(url: string, init?: RequestInit): Promise<Response>
-  helix(url: string, init?: RequestInit): Promise<Response>
+  helix(url: string, init?: Parameters<typeof fetchTwitchHelixWithAppToken>[1]): Promise<Response>
 }
 
 export function createUserProfileService(
@@ -15,10 +15,11 @@ export function createUserProfileService(
   },
 ) {
   async function json(url: string, missingAllowed = false): Promise<unknown> {
-    const init: RequestInit = { signal: AbortSignal.timeout(12000) }
+    const timeoutMs = 12_000
+    const signal = AbortSignal.timeout(timeoutMs)
     const response = await (url.startsWith('https://api.twitch.tv/')
-      ? deps.helix(url, init)
-      : deps.fetch(url, init))
+      ? deps.helix(url, { signal, timeoutMs })
+      : deps.fetch(url, { signal }))
     if (response.status === 404 && missingAllowed) return null
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}.`)
     return response.json()

@@ -1,13 +1,14 @@
 import { runInBackground } from '../../services/background-task'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import { panelWatchedSources } from '../../views/main/utils/layout-tree'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
-import type { DesktopBackend } from '../backend/server'
-import { accountsStore, activeTabStore, activeWatchedTabStore, watchedChannelsStore } from './app'
+import type { DesktopBackend } from '../backend/contract'
+import { accountsStore } from './accounts'
+import { activeTabStore, activeWatchedTabStore, watchedChannelsStore } from './app'
 import { chatWindowsStore } from './chat-windows'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { allPanels, layoutStore } from './layout'
-import { persistentResource } from './persistent-resources'
+import { allPanels, layoutStore } from './layout-state'
 import { windowActivityStore } from './window-activity'
 
 export interface ActivePane {
@@ -119,7 +120,7 @@ export function wireProviderChannelFocus(backend: DesktopBackend): () => void {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     activePane: Store<ActivePane | null>
     windowActivePanes: Store<Map<string, ActivePane>>

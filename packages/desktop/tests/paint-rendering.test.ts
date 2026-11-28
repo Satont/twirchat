@@ -5,7 +5,8 @@ import { join } from 'node:path'
 
 import sharp from 'sharp'
 
-import { paintNameSvg, type CosmeticPaint } from '../src/services/cosmetics'
+import type { CosmeticPaint } from '../src/services/cosmetic-paint'
+import { paintNameSvg } from '../src/services/cosmetics'
 import {
   createPaintRenderer,
   PAINT_GLYPH_HORIZONTAL_PADDING,

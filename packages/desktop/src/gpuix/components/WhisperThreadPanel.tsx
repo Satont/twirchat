@@ -1,17 +1,17 @@
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useMemo, useState } from 'react'
 
-import { useBackend } from '../backend/context'
-import { useT } from '../i18n'
-import { accountsStore } from '../state/app'
+import { useBackend } from '../backend-context'
+import { useT } from '../hooks/use-translation'
+import { accountsStore } from '../state/accounts'
 import { avatarRevisionStore, avatarUrlForUser, ensureAvatarForUser } from '../state/caches'
-import { useStore, useStoreSelector } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
 import {
   rememberSentWhisper,
   rememberWhisperContact,
   whispersStore,
 } from '../state/twitch-activities'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { ActionButton, FormInput } from './ui/Form'
 import { Icon } from './ui/Icon'

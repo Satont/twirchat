@@ -6,7 +6,10 @@ import { join, resolve } from 'node:path'
 import { z } from 'zod'
 
 import { backendWebSocketUrl } from '../src/build-info'
-import { validateNativeRuntimeManifest } from '../src/services/native-runtime'
+import {
+  GPUIX_NATIVE_API_VERSION,
+  validateNativeRuntimeManifest,
+} from '../src/services/native-runtime'
 import { buildNative, nativeArtifactName } from './build-gpuix-native'
 import { packageRuntimeAssets } from './package-runtime-assets'
 
@@ -30,7 +33,7 @@ const smokeReportSchema = z.object({
   environment: z.literal('production'),
   bunVersion: z.string(),
   target: z.string(),
-  nativeApiVersion: z.literal(3),
+  nativeApiVersion: z.literal(GPUIX_NATIVE_API_VERSION),
   reactVersion: z.string(),
   reactMode: z.literal('production'),
   jsxRuntime: z.literal('production'),

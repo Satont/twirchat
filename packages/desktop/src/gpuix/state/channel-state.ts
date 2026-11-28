@@ -1,11 +1,11 @@
 import type { RoomState } from '@twirchat/shared/channel-tools'
 import type { Platform } from '@twirchat/shared/types'
 
-import type { DesktopBackend } from '../backend/server'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
+import type { DesktopBackend } from '../backend/contract'
 import { applyChannelClear } from './app'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export const channelRoomStore = persistentResource('channelRooms', () =>
   createStore<Map<string, RoomState>>(new Map()),
@@ -44,7 +44,7 @@ export function wireChannelState(backend: DesktopBackend): () => void {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     channelRooms: Store<Map<string, RoomState>>
   }

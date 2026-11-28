@@ -9,9 +9,9 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import {
   defaultChatLoggingSettings,
   validateChatLoggingSettings,
-  type ChatLoggingSettings,
 } from '../src/gpuix/backend/chat-history'
 import { createChatFileLogger } from '../src/gpuix/backend/chat-logging'
+import type { ChatLoggingSettings } from '../src/gpuix/backend/chat-logging-settings'
 import { required } from './fixture-values'
 
 let directory = ''

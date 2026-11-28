@@ -9,12 +9,12 @@ import {
   type DesktopWatchedChannel,
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { watchedChannelsStore } from '../state/app'
-import { useStore } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { AddChannelForm } from './AddChannelForm'
 import { ActionButton, FormError } from './ui/Form'

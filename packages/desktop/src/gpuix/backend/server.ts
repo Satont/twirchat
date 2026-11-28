@@ -1,6 +1,5 @@
 import { dirname, join } from 'node:path'
 
-import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
 import {
   donationChannelKey,
   SHAREABLE_DONATION_PROVIDERS,
@@ -27,7 +26,6 @@ import type {
  * The result is cached on `globalThis` so `bun --hot` reloads re-mount the
  * React tree without re-booting (and re-connecting) the whole backend.
  */
-import { z } from 'zod'
 
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
 import { checkTwitchSession } from '../../auth/twitch'
@@ -36,6 +34,7 @@ import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
 import { createDonationService } from '../../donations/service'
 import { createDonationShareClient } from '../../donations/share-client'
+import { setLanguage, t } from '../../i18n'
 import {
   pushOverlayEvent,
   pushOverlayMessage,
@@ -60,7 +59,6 @@ import {
   spawnChannelPlayer,
 } from '../../services/channel-actions'
 import { channelAccount } from '../../services/chat-accounts'
-import { normalizedChatMessageSchema } from '../../services/persisted-schemas'
 import { createDesktopProviderRuntime } from '../../services/provider-runtime'
 import { buildSevenTvSystemMessage } from '../../services/seventv-system-message'
 import { createStreamerModeService } from '../../services/streamer-mode'
@@ -86,16 +84,17 @@ import {
 } from '../../watched-channels/home-plugin-preference'
 import { WatchedChannelManager } from '../../watched-channels/manager'
 import { createPluginChannels } from '../../watched-channels/plugin-channels'
-import { setLanguage, t } from '../i18n'
 import {
   createDesktopApi,
   planTwitchActivitySnapshot,
   subscribeTwitchActivities,
   unsubscribeTwitchActivities,
-  requestTwitchActivitiesSnapshot,
+  createTwitchActivitySnapshots,
   type DesktopApi,
 } from './api'
-import { recordChatMessage } from './chat-history'
+import { flushChatLogs, recordChatMessage } from './chat-history'
+import type { DesktopBackend } from './contract'
+import { startDesktopDevServer } from './dev-server'
 import { createDesktopEvents, type DesktopEvents } from './events'
 import { readUiState } from './layout-api'
 import { browserCommand } from './open-url'
@@ -111,22 +110,10 @@ function accountWithTwitchToken(account: Account | null): Account | null {
   return account && AccountStore.getTokens(account.id) ? account : null
 }
 
-export interface DesktopBackend {
-  api: DesktopApi
+interface DesktopRuntime extends DesktopBackend {
   events: DesktopEvents
-  plugins?: Pick<
-    ReturnType<typeof createPluginManager>,
-    | 'list'
-    | 'install'
-    | 'checkForUpdate'
-    | 'setEnabled'
-    | 'remove'
-    | 'hasCommand'
-    | 'runCommand'
-    | 'commandNames'
-  >
-  dispose?: () => void
-  shutdownPlugins?: () => Promise<void>
+  dispose(): Promise<void>
+  shutdownPlugins(): Promise<void>
 }
 
 /** Open a URL in the system default browser (replaces Electrobun Utils.openExternal). */
@@ -139,7 +126,7 @@ function openBrowser(url: string): void {
   }
 }
 
-function boot(): DesktopBackend {
+function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
   log.info('Starting GPUIX backend...')
 
   // Runtime config: baked in at release build (--define), env overridable in dev.
@@ -202,12 +189,10 @@ function boot(): DesktopBackend {
   const kickAdapter = new KickAdapter()
   const youtubeAdapter = new YouTubeAdapter()
   const vkPlayAdapter = new VkPlayAdapter()
-  aggregator.registerAdapter(twitchAdapter)
-  aggregator.registerAdapter(kickAdapter)
-  aggregator.registerAdapter(youtubeAdapter)
-  aggregator.registerAdapter(vkPlayAdapter)
+  const ownAdapters = [twitchAdapter, kickAdapter, youtubeAdapter, vkPlayAdapter]
+  for (const adapter of ownAdapters) aggregator.registerAdapter(adapter)
 
-  startOverlayServer()
+  const overlayServer = startOverlayServer()
 
   const watchedChannelManager = new WatchedChannelManager(
     (message) => providerRuntime.enrich(message),
@@ -319,9 +304,10 @@ function boot(): DesktopBackend {
       })
     },
   })
+  const twitchActivitySnapshots = createTwitchActivitySnapshots()
   const twitchActivityRefresh = new TwitchActivityRefreshClient({
     plan: (channelSlug) => planTwitchActivitySnapshot(channelSlug, twitchEventSubConnected),
-    snapshot: (channelSlug, sections) => requestTwitchActivitiesSnapshot({ channelSlug, sections }),
+    snapshot: (channelSlug, sections) => twitchActivitySnapshots.request({ channelSlug, sections }),
     publish: (update) => events.emit('twitch_activity_snapshot', update),
     capability: (capability) => events.emit('twitch_activity_capability', capability),
   })
@@ -345,27 +331,32 @@ function boot(): DesktopBackend {
         ])
     },
     disconnect: async (platform) => {
-      const channel = currentStatuses.get(platform)?.channelLogin
-      await aggregator.getAdapter(platform)?.disconnect()
-      providerRuntime.setJoined(`own:${platform}`, platform, null)
-      if (channel) await sevenTVService.unsubscribeFromChannel(platform, channel, `own:${platform}`)
+      const owner = `own:${platform}`
+      try {
+        await aggregator.getAdapter(platform)?.disconnect()
+      } finally {
+        providerRuntime.setJoined(owner, platform, null)
+        await sevenTVService.unsubscribeOwner(owner)
+      }
     },
     refreshIdentity: async (platform) => {
       providerRuntime.refreshAccounts()
       if (platform === 'twitch') refreshTwitchEvents()
     },
-    connectOwn: async (platform, account) => {
+    connectOwn: async (platform, account, signal) => {
       if (!account) return
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) return
       ChannelStore.save(platform, account.username)
       await adapter.connect(account.username)
+      signal?.throwIfAborted()
       const status = currentStatuses.get(platform)
       if (status?.status === 'error')
         throw new Error(status.error ?? t('runtime.server.accountChatConnectFailed'))
       subscribeSevenTvFor(platform, account.username, aggregator)
     },
-    reconnectWatched: (platform) => watchedChannelManager.reconnectByPlatform(platform),
+    reconnectWatched: (platform, signal) =>
+      watchedChannelManager.reconnectByPlatform(platform, signal),
     changed: (platform, identityChanged) =>
       events.emit('accounts_changed', { platform, identityChanged }),
   })
@@ -418,11 +409,12 @@ function boot(): DesktopBackend {
   const twitchValidationTimer = setInterval(checkTwitchSessions, 60 * 60 * 1000)
 
   // OAuth saves and selects atomically, then rejoins through the manual-switch queue.
-  setOnAuthSuccessCallback(async (platform, _channelSlug, accountId) => {
+  setOnAuthSuccessCallback(async (platform, _channelSlug, accountId, signal) => {
     if (!accountId) return
     try {
-      await accountSessions.select(platform, accountId, true)
+      await accountSessions.select(platform, accountId, true, signal)
     } catch (error) {
+      if (signal?.aborted) return
       log.error('Account saved but reconnection failed', { platform, error: String(error) })
       events.emit('auth_error', { platform, error: String(error) })
     }
@@ -450,7 +442,7 @@ function boot(): DesktopBackend {
     channel_emote_updated: forward('channel_emote_updated'),
   })
 
-  startAuthServer()
+  const authServer = startAuthServer()
 
   const channelActions = createChannelActions({
     activeAccounts: () => AccountStore.findAllActive(),
@@ -546,7 +538,7 @@ function boot(): DesktopBackend {
     },
     onStatus: (channel, status) => events.emit('plugin_channel_status', { channel, status }),
   })
-  const updater = createUpdater(events)
+  const updater = createUpdater(events, scheduleUpdateExit)
   const api: DesktopApi = createDesktopApi({
     donations,
     updater,
@@ -555,6 +547,7 @@ function boot(): DesktopBackend {
     channelActions,
     accountSessions,
     providerRuntime,
+    twitchActivitySnapshots,
     twitchActivityRefresh,
     twitchEventSub,
     aggregator,
@@ -747,9 +740,6 @@ function boot(): DesktopBackend {
   })
 
   backendConn.connect()
-  setInterval(() => {
-    backendConn.send({ type: 'ping' })
-  }, 30_000)
 
   // ── Connect authenticated own channels; watched chats follow open layouts ──
 
@@ -760,9 +750,11 @@ function boot(): DesktopBackend {
     const channelSlug = account.username
     providerRuntime.setJoined(`own:${account.platform}`, account.platform, channelSlug)
     ChannelStore.save(account.platform, channelSlug)
-    adapter
-      .connect(channelSlug)
-      .then(() => subscribeSevenTvFor(account.platform, channelSlug, aggregator))
+    accountSessions
+      .connectAtStartup(account, {
+        connect: () => adapter.connect(channelSlug),
+        onConnected: () => subscribeSevenTvFor(account.platform, channelSlug, aggregator),
+      })
       .catch((error) => {
         log.error("Auto-connect to account's channel failed", {
           platform: account.platform,
@@ -772,37 +764,11 @@ function boot(): DesktopBackend {
       })
   }
 
-  // Dev-only chat injection endpoint.
-  if (nodeEnv !== 'production') {
-    Bun.serve({
-      port: DEV_SERVER_PORT,
-      async fetch(req) {
-        const url = new URL(req.url)
-        if (url.pathname === '/dev/inject-chat' && req.method === 'POST') {
-          const parsed = normalizedChatMessageSchema.safeParse(await req.json().catch(() => null))
-          if (!parsed.success) return new Response('Invalid chat message', { status: 400 })
-          events.emit('chat_message', parsed.data)
-          return new Response('ok')
-        }
-        if (url.pathname === '/dev/hook' && req.method === 'POST') {
-          // Dev-only: let the UI layer register debug actions (see main.tsx).
-          const parsed = z
-            .object({ action: z.string(), payload: z.unknown().optional() })
-            .safeParse(await req.json().catch(() => null))
-          if (!parsed.success) return new Response('Invalid debug action', { status: 400 })
-          const body = parsed.data
-          const hook = globalThis.__twirchatDevHook
-          if (!hook) return new Response('no hook', { status: 404 })
-          const result = await hook(body.action, body.payload)
-          return new Response(JSON.stringify(result ?? null), {
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        return new Response('not found', { status: 404 })
-      },
-    })
-    log.info(`[Dev] Test injection endpoint listening on port ${DEV_SERVER_PORT}`)
-  }
+  const devServer =
+    nodeEnv !== 'production'
+      ? startDesktopDevServer({ events, getDebugHook: () => globalThis.__twirchatDevHook })
+      : undefined
+  if (devServer) log.info(`[Dev] Test injection endpoint listening on port ${devServer.port}`)
 
   void plugins.initialize().catch((error) => {
     log.error('Could not load installed plugins', { error: String(error) })
@@ -814,21 +780,44 @@ function boot(): DesktopBackend {
     events,
     plugins,
     shutdownPlugins,
-    dispose: () => {
-      disposed = true
-      clearInterval(twitchValidationTimer)
-      donations.dispose()
-      stopAutoChecks()
-      void shutdownPlugins().catch((error) => {
-        log.warn('Plugin shutdown failed', { error: String(error) })
-      })
-      twitchHistory.dispose()
-      twitchBadges.dispose()
-      twitchSenders.dispose()
-      streamerMode.stop()
-      providerRuntime.stop()
-      twitchEventSub.stop()
-      twitchActivityRefresh.stop()
+    dispose: async () => {
+      try {
+        providerRuntime.stop()
+        twitchActivityRefresh.stop()
+        twitchActivitySnapshots.stop()
+        twitchEventSub.stop()
+        accountSessions.stopStartupConnections()
+        await authServer.stop().catch((error: unknown) => {
+          log.warn('OAuth server shutdown failed', { error: String(error) })
+        })
+        disposed = true
+        const stopOverlay = overlayServer.stop().catch((error: unknown) => {
+          log.warn('OBS overlay server shutdown failed', { error: String(error) })
+        })
+        void devServer?.stop().catch((error) => {
+          log.warn('Desktop dev server shutdown failed', { error: String(error) })
+        })
+        clearInterval(twitchValidationTimer)
+        donations.dispose()
+        stopAutoChecks()
+        void shutdownPlugins().catch((error) => {
+          log.warn('Plugin shutdown failed', { error: String(error) })
+        })
+        await Promise.all([
+          accountSessions.dispose(ownAdapters.map(({ platform }) => platform)),
+          watchedChannelManager.dispose(),
+        ])
+        twitchHistory.dispose()
+        twitchBadges.dispose()
+        twitchSenders.dispose()
+        streamerMode.stop()
+        backendConn.disconnect()
+        await stopOverlay
+      } finally {
+        await flushChatLogs().catch((error: unknown) => {
+          log.warn('Chat log flush failed during shutdown', { error: String(error) })
+        })
+      }
     },
   }
 }
@@ -868,10 +857,10 @@ function subscribeSevenTvFor(
 // ── Singleton (survives `bun --hot` reloads) ────────────────────────────────
 
 declare global {
-  var __twirchatGpuixBackend: DesktopBackend | undefined
+  var __twirchatGpuixBackend: DesktopRuntime | undefined
   var __twirchatDevHook: ((action: string, payload?: unknown) => Promise<unknown>) | undefined
 }
 
-export function getDesktopBackend(): DesktopBackend {
-  return (globalThis.__twirchatGpuixBackend ??= boot())
+export function getDesktopBackend(scheduleUpdateExit?: () => void): DesktopRuntime {
+  return (globalThis.__twirchatGpuixBackend ??= boot(scheduleUpdateExit))
 }

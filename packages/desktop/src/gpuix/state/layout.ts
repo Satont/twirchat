@@ -1,6 +1,5 @@
 import type {
   LayoutNode,
-  PanelNode,
   SplitDirection,
   WatchedChannelsLayout,
   WatchedPaneSource,
@@ -15,14 +14,12 @@ import { cleanupWindowComposerFocus } from './composer-focus'
  * Per-tab watched-channel layout state (port of stores/layout.ts).
  * Layouts persist through the backend bridge; flex edits save debounced.
  */
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 type LayoutIOBackend = {
   api: Pick<DesktopApi, 'getWatchedChannelsLayout' | 'setWatchedChannelsLayout'>
 }
 type LayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removePanel'> }
 type CloneLayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removeWatchedChannelsLayout'> }
+import { t } from '../../i18n'
 import {
   findNodeById,
   findParentOfNode,
@@ -30,7 +27,6 @@ import {
   panelWatchedSources,
   retainAvailableFeedSources,
 } from '../../views/main/utils/layout-tree'
-import { t } from '../i18n'
 import {
   dockPanel,
   directionalFocusTarget,
@@ -43,7 +39,7 @@ import { chatRulesPreferences, chatRulesStore } from './chat-rules'
 import {
   initializeChatTabs,
   chatTabsStore,
-  closeChatTab,
+  closeTabWithSavedLayout,
   restoreClosedChatTab,
   createEmptyChatTab,
   rememberClosedSplit,
@@ -51,28 +47,10 @@ import {
   type ClosedSplit,
   type ChatTabApi,
 } from './chat-tabs'
+import { layoutRevisionStore, layoutStore } from './layout-state'
 import { setMainTab } from './settings-session'
 
 const SAVE_DEBOUNCE_MS = 500
-
-export interface LayoutState {
-  layout: WatchedChannelsLayout | null
-  isLoading: boolean
-  error: string | null
-}
-
-/** tabId → layout state */
-export const layoutStore = persistentResource('layouts', () =>
-  createStore<Map<string, LayoutState>>(new Map()),
-)
-/**
- * Bumped after every layout MUTATION (split/remove/assign). GPUI sometimes
- * fails to paint a freshly mounted pane subtree inside an already painted
- * tree; keying the pane tree by this revision forces a clean remount.
- */
-export const layoutRevisionStore = persistentResource('layoutRevision', () =>
-  createStore<number>(0),
-)
 
 interface ResizePatch {
   childIds: string[]
@@ -250,6 +228,11 @@ export function saveLayoutNow(backend: LayoutIOBackend, tabId: string): Promise<
   return serialize(tabId, (current) => flushDirty(backend, tabId, current))
 }
 
+export async function closeChatTab(backend: { api: ChatTabApi }, tabId: string): Promise<void> {
+  await saveLayoutNow(backend, tabId)
+  await closeTabWithSavedLayout(backend, tabId)
+}
+
 function debouncedSave(backend: LayoutIOBackend, tabId: string): void {
   cancelSaveTimer(tabId)
   saveTimers.set(
@@ -353,7 +336,7 @@ export function removePanel(backend: LayoutBackend, tabId: string, panelId: stri
         // Persist recovery data before changing the tree; a failed write must leave the pane open.
         await rememberClosedSplit(backend, entry)
         try {
-          if (!parent) await closeChatTab(backend, tabId, true)
+          if (!parent) await closeTabWithSavedLayout(backend, tabId)
           else {
             state.needsRefresh = true
             await backend.api.removePanel({ tabId, panelId })
@@ -604,17 +587,6 @@ export function updateSplitFlexes(
   debouncedSave(backend, tabId)
 }
 
-export function allPanels(layout: WatchedChannelsLayout | null): PanelNode[] {
-  if (!layout) return []
-  const panels: PanelNode[] = []
-  const traverse = (node: LayoutNode) => {
-    if (node.type === 'panel') panels.push(node)
-    else if (node.type === 'split') node.children.forEach(traverse)
-  }
-  traverse(layout.root)
-  return panels
-}
-
 export async function dockLayoutPanel(
   backend: LayoutIOBackend,
   tabId: string,
@@ -772,13 +744,6 @@ export async function cloneLayoutForWindow(
   })
   if (!result) throw new Error(t('notices.layout.clonedLayoutFailed'))
   return result
-}
-
-declare module './persistent-resources' {
-  interface PersistentResources {
-    layouts: Store<Map<string, LayoutState>>
-    layoutRevision: Store<number>
-  }
 }
 
 declare global {

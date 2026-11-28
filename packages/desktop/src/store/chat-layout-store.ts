@@ -1,4 +1,5 @@
-import type { ChatLayout } from '../../../shared/types.ts'
+import type { ChatLayout } from '@twirchat/shared/types'
+
 import { chatLayoutSchema } from '../services/persisted-schemas'
 import { getDb } from './db'
 import { deepMerge } from './utils'

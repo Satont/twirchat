@@ -1,9 +1,9 @@
 import type { NormalizedChatMessage, TimestampFormat } from '@twirchat/shared/types'
 import type { ReactNode } from 'react'
 
-import { useT } from '../i18n'
-import { useStoreSelector } from '../state/create-store'
+import { useT } from '../hooks/use-translation'
 import { twitchActivitiesStore } from '../state/twitch-activities'
+import { useStoreSelector } from '../state/use-store'
 import { TwitchChatNotice } from './TwitchChatNotice'
 
 interface TwitchRewardNoticeProps {

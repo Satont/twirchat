@@ -1,13 +1,13 @@
 import { useState } from 'react'
 
-import { useT } from '../../i18n'
-import { useStore } from '../../state/create-store'
+import { useT } from '../../hooks/use-translation'
 import {
   discardSettingsAndLeave,
   saveSettingsAndLeave,
   settingsSessionStore,
   stayInSettings,
 } from '../../state/settings-session'
+import { useStore } from '../../state/use-store'
 import { useTheme } from '../../theme-context'
 import { ActionButton } from '../ui/Form'
 import { Modal } from '../ui/Modal'

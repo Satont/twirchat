@@ -14,7 +14,7 @@ import {
   setHomePluginChannel,
   type HomePluginFeed,
 } from '../src/gpuix/state/home-plugin-channels'
-import { layoutStore } from '../src/gpuix/state/layout'
+import { layoutStore } from '../src/gpuix/state/layout-state'
 import {
   createWatchedSubscriptionController,
   liveLayoutTabIds,

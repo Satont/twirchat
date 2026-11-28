@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { logger } from '@twirchat/shared/logger'
 
 import { APP_VERSION } from '../build-info'
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import {
   PLUGIN_API_VERSION,
   type PluginChannel,

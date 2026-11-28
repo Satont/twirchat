@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { assertGuiQaEnvironment } from ${JSON.stringify(resolve(import.meta.dir, '../src/services/gui-qa.ts'))}
-import { configureNativeRuntime } from ${JSON.stringify(resolve(import.meta.dir, '../src/services/native-runtime.ts'))}
+import { configureNativeRuntime, GPUIX_NATIVE_API_VERSION } from ${JSON.stringify(resolve(import.meta.dir, '../src/services/native-runtime.ts'))}
 import { initDb } from ${JSON.stringify(resolve(import.meta.dir, '../src/store/db.ts'))}
 assertGuiQaEnvironment()
 assert.equal(Bun.version, ${JSON.stringify(expectedBun)}, 'Compile the executable with the pinned Bun version.')
@@ -31,15 +31,16 @@ const binding = configureNativeRuntime()
 assert.equal(binding, join(dirname(process.execPath), 'native', 'gpuix.' + process.platform + '-' + process.arch + '.node'))
 assert.notEqual(process.cwd(), dirname(process.execPath))
 const addon = createRequire(import.meta.url)(binding)
-assert.equal(addon.getTwirNativeApiVersion(), 3)
+const apiVersion = addon.getTwirNativeApiVersion()
+assert.equal(apiVersion, GPUIX_NATIVE_API_VERSION)
 const renderer = new addon.GpuixRenderer()
-assert.equal(renderer.getTwirNativeApiVersion(), 3)
+assert.equal(renderer.getTwirNativeApiVersion(), GPUIX_NATIVE_API_VERSION)
 const db = initDb(process.env.DB_PATH)
 assert.equal(db.query('SELECT twir_casefold(?) AS value').get('ПРИВЕТ').value, 'привет')
 assert.equal(db.query('SELECT count(*) AS count FROM accounts').get().count, 0)
 for (const table of ['accounts', 'active_accounts', 'settings', 'chat_messages', 'watched_channels']) assert.ok(db.query('SELECT name FROM sqlite_master WHERE type = ? AND name = ?').get('table', table))
 db.close()
-console.log(JSON.stringify({ passed: true, apiVersion: 3, bunVersion: Bun.version, databaseInitialized: true, unicodeSql: true, emptyAccounts: true, binding, executable: process.execPath, cwd: process.cwd() }))
+console.log(JSON.stringify({ passed: true, apiVersion, bunVersion: Bun.version, databaseInitialized: true, unicodeSql: true, emptyAccounts: true, binding, executable: process.execPath, cwd: process.cwd() }))
 `,
 )
 const result = await Bun.build({

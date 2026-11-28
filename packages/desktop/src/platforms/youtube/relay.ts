@@ -1,7 +1,7 @@
 import type { YouTubeChatBatch } from '@twirchat/shared/youtube-chat'
 
 import type { BackendConnection } from '../../backend-connection'
-import { t } from '../../gpuix/i18n'
+import { t } from '../../i18n'
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import type { YouTubeChatRelay } from './adapter'
 

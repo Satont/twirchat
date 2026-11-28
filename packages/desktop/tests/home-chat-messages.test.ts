@@ -66,13 +66,13 @@ test('keeps My channels scoped to the connected account channels', () => {
 
 test('history replaces saved Twitch echoes while preserving queued live messages', async () => {
   const {
-    accountsStore,
     homeMessagesStore,
     watchedChannelsStore,
     watchedMessagesStore,
     chatActivityStore,
     wireBackendToStores,
   } = await import('../src/gpuix/state/app')
+  const { accountsStore } = await import('../src/gpuix/state/accounts')
   const { createDesktopEvents } = await import('../src/gpuix/backend/events')
   const events = createDesktopEvents()
   const previous = {
@@ -165,7 +165,6 @@ test('keeps real Kick broadcaster IDs while excluding watched channels, even for
 
 test('coalesces live bursts per channel without overwriting an in-flight history snapshot', async () => {
   const {
-    accountsStore,
     appendHomeMessages,
     chatActivityStore,
     chatMessageRate,
@@ -173,6 +172,7 @@ test('coalesces live bursts per channel without overwriting an in-flight history
     watchedMessagesStore,
     wireBackendToStores,
   } = await import('../src/gpuix/state/app')
+  const { accountsStore } = await import('../src/gpuix/state/accounts')
   const { createDesktopEvents } = await import('../src/gpuix/backend/events')
   const events = createDesktopEvents()
   const previousAccounts = accountsStore.get()

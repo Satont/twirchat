@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { runInBackground } from '../../services/background-task'
 import { imageThumbnailer } from '../../services/image-thumbnail'
 import type { ThumbnailFit } from '../../services/paint-worker-client'
-import { persistentResource } from './persistent-resources'
+import { persistentResource } from '../../state/persistent-resources'
 import { createResourceCache } from './resource-cache'
 
 interface ThumbnailRequest {
@@ -47,7 +47,7 @@ export function useImageThumbnail(
   return image?.status === 'error' ? input.path : undefined
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     imageThumbnails: ReturnType<typeof createImageThumbnails>
   }

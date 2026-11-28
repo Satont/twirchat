@@ -5,39 +5,21 @@ import { join, resolve } from 'node:path'
 
 import { z } from 'zod'
 
-const sourceManifestSchema = z.strictObject({
-  schema: z.literal(1),
-  version: z.string().min(1),
-  repository: z.url(),
-  revision: z.string().regex(/^[a-f\d]{40}$/u),
-  gpuiRevision: z.string().regex(/^[a-f\d]{40}$/u),
-  rustToolchain: z.string().regex(/^\d+\.\d+\.\d+$/u),
-  patches: z
-    .array(
-      z.strictObject({
-        path: z.string().regex(/^patches\/[a-z\d-]+\.patch$/u),
-        root: z.enum(['gpuix', 'gpui', 'cosmic-text']),
-        sha256: z.string().regex(/^[a-f\d]{64}$/u),
-      }),
-    )
-    .min(1),
-  cosmicText: z.strictObject({
-    version: z.string().regex(/^\d+\.\d+\.\d+$/u),
-    sha256: z.string().regex(/^[a-f\d]{64}$/u),
-  }),
-})
+import { GPUIX_NATIVE_API_VERSION } from '../src/services/native-runtime'
+import {
+  readNativeSourceManifest,
+  verifyNativeSource,
+  type NativeSourceManifest,
+} from './native-source'
+
 const cachedArtifactSchema = z.object({
-  apiVersion: z.literal(3),
+  apiVersion: z.literal(GPUIX_NATIVE_API_VERSION),
   patchDigest: z.string(),
   upstreamSHA: z.string(),
   gpuiSHA: z.string(),
   target: z.string(),
   sha256: z.string().regex(/^[a-f\d]{64}$/u),
 })
-
-export function parseNativeSourceManifest(value: unknown): z.infer<typeof sourceManifestSchema> {
-  return sourceManifestSchema.parse(value)
-}
 
 const nativeRoot = resolve(import.meta.dir, '../native/gpuix')
 
@@ -75,7 +57,7 @@ async function command(args: string[], cwd: string, env?: Record<string, string>
 
 async function unpackCosmicText(
   vendorRoot: string,
-  pin: z.infer<typeof sourceManifestSchema>['cosmicText'],
+  pin: NativeSourceManifest['cosmicText'],
 ): Promise<void> {
   const name = `cosmic-text-${pin.version}`
   const response = await fetch(`https://static.crates.io/crates/cosmic-text/${name}.crate`, {
@@ -92,21 +74,8 @@ export async function buildNative(args: string[] = process.argv.slice(2)): Promi
   const mode = args[0] ?? 'build'
   if (!['build', 'check', 'test', 'prepare'].includes(mode) || args.length > 1)
     throw new Error('Usage: bun scripts/build-gpuix-native.ts [build|check|test|prepare]')
-  const manifest = parseNativeSourceManifest(await Bun.file(join(nativeRoot, 'source.json')).json())
-  const patchBytes = await Promise.all(
-    manifest.patches.map(async (patch) => {
-      if (!/^patches\/[a-z\d-]+\.patch$/u.test(patch.path)) throw new Error('Invalid patch path.')
-      const bytes = new Uint8Array(await Bun.file(join(nativeRoot, patch.path)).arrayBuffer())
-      if (createHash('sha256').update(bytes).digest('hex') !== patch.sha256)
-        throw new Error(`Patch checksum mismatch: ${patch.path}`)
-      return bytes
-    }),
-  )
-  const identity = createHash('sha256')
-    .update(JSON.stringify({ manifest, platform: process.platform, arch: process.arch }))
-    .update(Buffer.concat(patchBytes))
-    .digest('hex')
-    .slice(0, 16)
+  const manifest = await readNativeSourceManifest(nativeRoot)
+  const identity = await verifyNativeSource(nativeRoot, manifest)
   const artifactRoot = resolve(import.meta.dir, '../dist/native')
   const destination = join(artifactRoot, nativeArtifactName())
   if (
@@ -118,7 +87,6 @@ export async function buildNative(args: string[] = process.argv.slice(2)): Promi
     const previous = cached.success ? cached.data : null
     if (
       previous !== null &&
-      previous.apiVersion === 3 &&
       previous.patchDigest === identity &&
       previous.upstreamSHA === manifest.revision &&
       previous.gpuiSHA === manifest.gpuiRevision &&
@@ -215,7 +183,7 @@ export async function buildNative(args: string[] = process.argv.slice(2)): Promi
     .digest('hex')
   await Bun.write(
     `${destination}.json`,
-    `${JSON.stringify({ apiVersion: 3, version: manifest.version, upstreamSHA: manifest.revision, gpuiSHA: manifest.gpuiRevision, patchDigest: identity, rustToolchain: manifest.rustToolchain, target: `${process.platform}-${process.arch}`, size: Bun.file(destination).size, sha256 }, null, 2)}\n`,
+    `${JSON.stringify({ apiVersion: GPUIX_NATIVE_API_VERSION, version: manifest.version, upstreamSHA: manifest.revision, gpuiSHA: manifest.gpuiRevision, patchDigest: identity, rustToolchain: manifest.rustToolchain, target: `${process.platform}-${process.arch}`, size: Bun.file(destination).size, sha256 }, null, 2)}\n`,
   )
   console.log(destination)
 }

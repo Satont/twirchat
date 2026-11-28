@@ -6,11 +6,11 @@ export const sevenTVEventMessageSchema = z.object({
   d: z.unknown().optional(),
 })
 export const sevenTVHelloSchema = z.object({
-  heartbeat_interval: z.number(),
+  heartbeat_interval: z.number().positive(),
   session_id: z.string(),
   subscription_limit: z.number(),
 })
-export const eventImageFileSchema = z.object({
+const eventImageFileSchema = z.object({
   url: z.string().nullish(),
   name: z.string().nullish(),
   mime: z.string().nullish(),
@@ -34,62 +34,89 @@ const actorSchema = z
   .optional()
   .catch(undefined)
 const emoteChangeTypeSchema = z.enum(['object', 'emote'])
-export const emoteInsertSchema = z.object({
+const emoteInsertSchema = z.object({
   key: z.literal('emotes'),
   index: z.number(),
   type: emoteChangeTypeSchema,
   value: sevenTVEventEmoteValueSchema,
 })
-export const emoteRemoveSchema = z.object({
+const emoteRemoveSchema = z.object({
   key: z.literal('emotes'),
   index: z.number(),
   type: emoteChangeTypeSchema,
   old_value: sevenTVEventEmoteValueSchema,
 })
-export const emoteUpdateSchema = z.object({
-  key: z.literal('emotes'),
-  index: z.number().optional(),
-  type: emoteChangeTypeSchema.optional(),
-  old_value: sevenTVEventEmoteValueSchema,
-  value: sevenTVEventEmoteValueSchema,
-})
-export const fieldUpdateSchema = z.object({
-  key: z.string().refine((key) => key !== 'emotes'),
-  index: z.number().optional(),
-  type: z.string().optional(),
-  old_value: z.unknown(),
-  value: z.unknown(),
-})
-export const emoteSetUpdateSchema = z.object({
+export const emoteUpdateSchema = z
+  .object({
+    key: z.literal('emotes'),
+    index: z.number().optional(),
+    type: emoteChangeTypeSchema.optional(),
+    old_value: sevenTVEventEmoteValueSchema,
+    value: sevenTVEventEmoteValueSchema,
+  })
+  .transform((update): typeof update & { kind: 'emote' } => ({ ...update, kind: 'emote' }))
+const fieldUpdateSchema = z
+  .object({
+    key: z.string().refine((key) => key !== 'emotes'),
+    index: z.number().optional(),
+    type: z.string().optional(),
+    old_value: z.unknown(),
+    value: z.unknown(),
+  })
+  .transform((update): typeof update & { kind: 'field' } => ({ ...update, kind: 'field' }))
+const emoteSetUpdateSchema = z.object({
   id: z.string(),
   actor: actorSchema,
   pushed: z.array(emoteInsertSchema).optional(),
   pulled: z.array(emoteRemoveSchema).optional(),
   updated: z.array(z.union([emoteUpdateSchema, fieldUpdateSchema])).optional(),
 })
-export const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema })
-export const userUpdateNestedFieldSchema = z.object({
-  key: z.string(),
-  value: z.unknown(),
-  old_value: z.unknown().optional(),
-})
-export const userUpdateSchema = z.object({
-  id: z.string(),
-  updated: z
-    .array(
-      z.object({
-        key: z.string(),
-        index: z.number().nullish(),
-        nested: z.boolean().optional(),
-        type: z.string().optional(),
-        value: z.unknown().optional(),
-        old_value: z.unknown().optional(),
-      }),
-    )
-    .optional(),
-})
+const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema })
+const connectionFieldsSchema = z.array(z.object({ key: z.string(), value: z.unknown() }))
+const userUpdateSchema = z
+  .object({
+    id: z.string(),
+    updated: z
+      .array(
+        z.object({
+          key: z.string(),
+          index: z.number().nullish(),
+          nested: z.boolean().optional(),
+          type: z.string().optional(),
+          value: z.unknown().optional(),
+          old_value: z.unknown().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .transform(({ id, updated }, context): { id: string; activeSetId?: string } => {
+    for (const [index, update] of (updated ?? []).entries()) {
+      if (update.key !== 'connections' || !Array.isArray(update.value)) continue
+      const fields = connectionFieldsSchema.safeParse(update.value)
+      if (!fields.success) {
+        for (const issue of fields.error.issues) {
+          context.addIssue({ ...issue, path: ['updated', index, 'value', ...issue.path] })
+        }
+        return z.NEVER
+      }
+      for (const { key, value } of fields.data) {
+        if (key === 'emote_set_id' && typeof value === 'string' && value) {
+          return { id, activeSetId: value }
+        }
+      }
+    }
+    return { id }
+  })
 export const sevenTVEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('emote_set.update'), body: emoteSetUpdateSchema }),
   z.object({ type: z.literal('emote_set.delete'), body: emoteSetDeleteSchema }),
   z.object({ type: z.literal('user.update'), body: userUpdateSchema }),
 ])
+
+export type SevenTVEventMessage = z.infer<typeof sevenTVEventMessageSchema>
+export type SevenTVHello = z.infer<typeof sevenTVHelloSchema>
+export type SevenTVEvent = z.infer<typeof sevenTVEventSchema>
+export type SevenTVEventImageFile = z.infer<typeof eventImageFileSchema>
+export type SevenTVEventEmoteValue = z.infer<typeof sevenTVEventEmoteValueSchema>
+export type EmoteSetDeleteEvent = z.infer<typeof emoteSetDeleteSchema>
+export type UserUpdateEvent = z.infer<typeof userUpdateSchema>

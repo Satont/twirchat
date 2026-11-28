@@ -1,6 +1,6 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { resolveModeratorHotkey } from '@gpuix/components/user-card/moderation-hotkeys'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { usePaneAccountId } from '@gpuix/pane-account-context'
 import { applyModerationOutcome } from '@gpuix/state/app'
 import { DEFAULT_MODERATION_SETTINGS, type ModerationSettings } from '@twirchat/shared/user-profile'

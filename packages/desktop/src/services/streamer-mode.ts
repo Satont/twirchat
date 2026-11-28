@@ -2,7 +2,7 @@ import { basename } from 'node:path'
 
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { runInBackground } from './background-task'
 
 export type StreamerMode = 'auto' | 'on' | 'off'

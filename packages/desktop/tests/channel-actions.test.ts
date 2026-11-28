@@ -167,6 +167,205 @@ test('invalid player templates fail before save and startup failures give config
     f.actions.openChannelPlayer({ platform: 'kick', channelSlug: 'fixture', mode: 'streamlink' }),
   ).rejects.toThrow('Install it or check Player settings')
 })
+test('cancelled OAuth follow-up cannot select or reconnect after an awaited disconnect', async () => {
+  const selected = account('twitch')
+  const begun = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const cancellation = new AbortController()
+  const calls: string[] = []
+  const sessions = createAccountSessions({
+    find: () => selected,
+    active: () => selected,
+    select: () => {
+      calls.push('select')
+      return selected
+    },
+    remove: () => {},
+    disconnect: async () => {
+      begun.resolve()
+      await release.promise
+    },
+    refreshIdentity: () => {
+      calls.push('refresh')
+    },
+    connectOwn: async () => {
+      calls.push('connect')
+    },
+    reconnectWatched: async () => {
+      calls.push('watched')
+    },
+    changed: () => calls.push('changed'),
+  })
+  const result = Promise.allSettled([
+    sessions.select('twitch', selected.id, true, cancellation.signal),
+  ])
+  await begun.promise
+  const reason = new Error('OAuth listener stopped')
+  cancellation.abort(reason)
+  release.resolve()
+  expect(await result).toEqual([{ status: 'rejected', reason }])
+  expect(calls).toEqual([])
+})
+
+test('an account transition retires only its own platform startup continuation', async () => {
+  const twitch = account('twitch')
+  const kick = account('kick')
+  const startup = Promise.withResolvers<void>()
+  const disconnecting = Promise.withResolvers<void>()
+  const finishDisconnect = Promise.withResolvers<void>()
+  const completed: string[] = []
+  const sessions = createAccountSessions({
+    find: () => twitch,
+    active: (platform) => (platform === 'twitch' ? twitch : kick),
+    select: () => twitch,
+    remove: () => {},
+    disconnect: async () => {
+      disconnecting.resolve()
+      await finishDisconnect.promise
+    },
+    refreshIdentity: () => {},
+    connectOwn: async () => {},
+    reconnectWatched: async () => {},
+    changed: () => {},
+  })
+  const starting = sessions.connectAtStartup(twitch, {
+    connect: () => startup.promise,
+    onConnected: () => completed.push('twitch'),
+  })
+  const otherStartup = sessions.connectAtStartup(kick, {
+    connect: () => startup.promise,
+    onConnected: () => completed.push('kick'),
+  })
+  const switching = sessions.select('twitch', twitch.id, true)
+  try {
+    await disconnecting.promise
+    startup.resolve()
+    await Promise.all([starting, otherStartup])
+    expect(completed).toEqual(['kick'])
+  } finally {
+    startup.resolve()
+    finishDisconnect.resolve()
+    await Promise.all([starting, switching])
+  }
+})
+
+test('runtime disposal retires pending startup completions and prevents new startup work', async () => {
+  const selected = account('twitch')
+  const pending = Promise.withResolvers<void>()
+  const calls: string[] = []
+  const sessions = createAccountSessions({
+    find: () => selected,
+    active: () => selected,
+    select: () => selected,
+    remove: () => {},
+    disconnect: async () => {},
+    refreshIdentity: () => {},
+    connectOwn: async () => {},
+    reconnectWatched: async () => {},
+    changed: () => {},
+  })
+  const starting = sessions.connectAtStartup(selected, {
+    connect: () => pending.promise,
+    onConnected: () => calls.push('complete'),
+  })
+  sessions.stopStartupConnections()
+  pending.resolve()
+  await starting
+  await sessions.connectAtStartup(selected, {
+    connect: async () => {
+      calls.push('connect')
+    },
+    onConnected: () => calls.push('complete'),
+  })
+  expect(calls).toEqual([])
+})
+
+test('own disposal joins an in-flight disconnect and skips queued account changes', async () => {
+  const selected = account('twitch')
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const calls: string[] = []
+  const sessions = createAccountSessions({
+    find: () => selected,
+    active: () => selected,
+    select: () => {
+      calls.push('select')
+      return selected
+    },
+    remove: () => calls.push('remove'),
+    disconnect: async (platform) => {
+      calls.push(`disconnect:${platform}`)
+      if (platform === 'twitch') {
+        entered.resolve()
+        await release.promise
+      }
+    },
+    refreshIdentity: () => {
+      calls.push('refresh')
+    },
+    connectOwn: async () => {
+      calls.push('connect')
+    },
+    reconnectWatched: async () => {
+      calls.push('watched')
+    },
+    changed: () => calls.push('changed'),
+  })
+  const switching = sessions.select('twitch', selected.id, true)
+  const forgetting = sessions.forget(selected.id)
+  try {
+    await entered.promise
+    const stopped = sessions.dispose(['twitch', 'kick'])
+    expect(sessions.dispose(['twitch', 'kick'])).toBe(stopped)
+    expect(await Promise.race([stopped.then(() => true), Bun.sleep(0).then(() => false)])).toBe(
+      false,
+    )
+    release.resolve()
+    await stopped
+    await Promise.all([switching, forgetting, sessions.reconnectOwn('kick')])
+    expect(calls).toEqual(['disconnect:twitch', 'disconnect:kick'])
+  } finally {
+    release.resolve()
+    await Promise.allSettled([switching, forgetting, sessions.dispose(['twitch', 'kick'])])
+  }
+})
+
+test('own disposal aborts connection follow-up without waiting for a pending connect', async () => {
+  const selected = account('twitch')
+  const entered = Promise.withResolvers<AbortSignal | undefined>()
+  const release = Promise.withResolvers<void>()
+  const calls: string[] = []
+  const sessions = createAccountSessions({
+    find: () => selected,
+    active: () => selected,
+    select: () => selected,
+    remove: () => {},
+    disconnect: async () => {
+      calls.push('disconnect')
+    },
+    refreshIdentity: () => {},
+    connectOwn: async (_platform, _account, signal) => {
+      entered.resolve(signal)
+      await release.promise
+      if (!signal?.aborted) calls.push('connection-follow-up')
+    },
+    reconnectWatched: async () => {},
+    changed: () => calls.push('changed'),
+  })
+  const switching = sessions.select('twitch', selected.id, true)
+  try {
+    const signal = await entered.promise
+    await sessions.dispose(['twitch'])
+    expect(signal?.aborted).toBe(true)
+    release.resolve()
+    await switching
+    expect(calls).toEqual(['disconnect', 'disconnect'])
+  } finally {
+    release.resolve()
+    await Promise.allSettled([switching, sessions.dispose(['twitch'])])
+  }
+})
+
 test('own reconnect shares account switch serialization and does not reconnect watched adapters', async () => {
   let selected = account('twitch')
   const other = { ...selected, id: 'other', username: 'second' }

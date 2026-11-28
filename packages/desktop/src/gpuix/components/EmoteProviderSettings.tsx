@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import {
   COMMUNITY_BADGE_PROVIDERS,
   type CommunityBadgeProvider,
 } from '../../services/community-badges'
 import type { EmotePreferences, EmoteProvider } from '../../services/provider-emotes'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT, type MessageKey } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { emoteStore, loadEmotes } from '../state/app'
-import { useStore } from '../state/create-store'
 import {
   emotePreferencesStore,
   loadEmotePreferences,
   saveEmotePreferences,
 } from '../state/emote-preferences'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton } from './ui/Form'

@@ -1,7 +1,7 @@
 import type { Account, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-import { t, type MessageKey } from '../gpuix/i18n'
+import { t, type MessageKey } from '../i18n'
 
 type PlayerMode = 'custom' | 'streamlink'
 const PLAYER_NAME_KEYS: Record<PlayerMode, MessageKey> = {

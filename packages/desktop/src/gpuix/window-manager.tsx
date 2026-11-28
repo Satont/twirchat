@@ -10,6 +10,7 @@ import {
 } from '@gpuix/react'
 import type { ReactNode } from 'react'
 
+import { t } from '../i18n'
 import { registerWindowsNotificationHandler } from '../services/system-integration'
 import {
   createWindowSessionController,
@@ -19,10 +20,9 @@ import {
   type DesktopWindowDescriptor,
   type WindowSession,
 } from '../services/window-session'
-import { BackendContext } from './backend/context'
-import type { DesktopBackend } from './backend/server'
+import { BackendContext } from './backend-context'
+import type { DesktopBackend } from './backend/contract'
 import { registerBundledFonts } from './fonts'
-import { t } from './i18n'
 import { initializeManagedRenderer } from './managed-renderer'
 import { nativeWindow, type NativeWindowOptions, type NativeWindowControls } from './native-window'
 import { observeNativeHotkeyPlan } from './state/action-bindings'
@@ -33,12 +33,8 @@ import { registerChatWindow, registerChatWindowManager } from './state/chat-wind
 import { DesktopWindowsContext, type DesktopWindows } from './state/desktop-windows'
 import { notificationPreferences } from './state/highlight-notifications'
 import { handleGlobalKeyDown } from './state/hotkeys'
-import {
-  cloneLayoutForWindow,
-  saveLayoutNow,
-  layoutStore,
-  cleanupWindowLayoutFocus,
-} from './state/layout'
+import { cloneLayoutForWindow, saveLayoutNow, cleanupWindowLayoutFocus } from './state/layout'
+import { layoutStore } from './state/layout-state'
 import { createSystemTray } from './state/system-tray'
 import { updateWindowActivity, clearWindowActivity } from './state/window-activity'
 import { WindowScaleProvider } from './state/window-scale'

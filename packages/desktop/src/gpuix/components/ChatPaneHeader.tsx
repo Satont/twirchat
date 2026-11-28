@@ -1,7 +1,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import { useState, type ReactNode } from 'react'
 
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'

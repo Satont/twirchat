@@ -6,10 +6,10 @@ import type {
   TwitchRewardQueueSummary,
 } from '@twirchat/shared/twitch-activities'
 
+import { t, tPlural } from '../../../i18n'
+import { createStore } from '../../../state/create-store'
 import type { DesktopApi } from '../../backend/api'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { t, tPlural } from '../../i18n'
-import { createStore } from '../../state/create-store'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 export const MAX_QUEUE_ITEMS = 10000

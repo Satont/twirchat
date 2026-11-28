@@ -1,8 +1,8 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { SettingsFooter } from '@gpuix/components/settings/SettingsLayout'
 import { FormField, FormInput } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useTheme } from '@gpuix/theme-context'
 import {
   DEFAULT_MODERATION_SETTINGS,

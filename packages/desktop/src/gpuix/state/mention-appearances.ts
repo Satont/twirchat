@@ -1,7 +1,7 @@
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
 type Appearance = Readonly<Pick<NormalizedChatMessage['author'], 'id' | 'username' | 'color'>>
 
@@ -80,7 +80,7 @@ export function createMentionAppearances(capacity = 5000) {
 
 export const mentionAppearances = persistentResource('mentionAppearances', createMentionAppearances)
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     mentionAppearances: ReturnType<typeof createMentionAppearances>
   }

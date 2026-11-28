@@ -1,6 +1,6 @@
 import type { ModerationSettings } from '@twirchat/shared/user-profile'
 
-import { t } from '../../i18n'
+import { t } from '../../../i18n'
 
 export function resolveModeratorHotkey(
   argument: string,

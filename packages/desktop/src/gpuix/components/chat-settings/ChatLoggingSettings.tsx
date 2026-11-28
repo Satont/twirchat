@@ -1,8 +1,8 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { ChatLoggingSettings as LoggingSettings } from '../../backend/chat-history'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
+import type { ChatLoggingSettings as LoggingSettings } from '../../backend/chat-logging-settings'
 import {
   HistoryButton as Button,
   HistoryChoices as Choices,
@@ -11,7 +11,7 @@ import {
   HistoryToggle as Toggle,
 } from '../../components/ChatHistoryFields'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { useTheme } from '../../theme-context'
 import { SettingsFooter } from '../settings/SettingsLayout'
 import { Text } from '../ui/Text'

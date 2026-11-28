@@ -21,12 +21,8 @@ import {
   validateEmotePreferences,
 } from '../src/gpuix/state/emote-preferences'
 import { getDbPath, setRuntimeConfig } from '../src/runtime-config'
-import {
-  createCosmeticsService,
-  paintNameSvg,
-  parseCosmetics,
-  type CosmeticPaint,
-} from '../src/services/cosmetics'
+import type { CosmeticPaint } from '../src/services/cosmetic-paint'
+import { createCosmeticsService, paintNameSvg, parseCosmetics } from '../src/services/cosmetics'
 import { emojiShortcodeSuggestions } from '../src/services/emoji-shortcodes'
 import { modifiedEmoteImage } from '../src/services/emote-image'
 import {

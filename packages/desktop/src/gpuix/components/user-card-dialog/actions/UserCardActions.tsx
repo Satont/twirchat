@@ -1,7 +1,7 @@
 import { useTheme } from '@desktop/gpuix/theme-context'
 import { useUserCardPermissions } from '@gpuix/hooks/user-card-dialog/use-user-card-permissions'
-import { accountsStore } from '@gpuix/state/app'
-import { useStoreSelector } from '@gpuix/state/create-store'
+import { accountsStore } from '@gpuix/state/accounts'
+import { useStoreSelector } from '@gpuix/state/use-store'
 
 import { userCardPanelColor } from '../utils'
 import { ActiveActionsSection } from './ActiveActionsSection'

@@ -26,7 +26,8 @@ const { ChatLoggingSettings } =
   await import('../src/gpuix/components/chat-settings/ChatLoggingSettings')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
 const { getDbPath } = await import('../src/runtime-config')
@@ -430,7 +431,7 @@ try {
   initial.resolve(page([]))
   pendingRefresh?.resolve(page([]))
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
   for (const request of pendingImages) request.resolve(new Response(null, { status: 204 }))
   await imageServer.stop(true)
 }

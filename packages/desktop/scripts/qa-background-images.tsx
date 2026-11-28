@@ -773,7 +773,7 @@ try {
     otherLoop.stop()
   }
   if (!managerClosed) await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
   await server.stop(true)
 }
 process.exit(0)

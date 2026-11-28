@@ -4,7 +4,7 @@ import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
 import { refreshTwitchToken } from '../../auth/twitch'
 import { createTwitchChatAuthProvider } from '../../auth/twitch-access-token'
-import { t } from '../../gpuix/i18n'
+import { t } from '../../i18n'
 import { runInBackground } from '../../services/background-task'
 import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
 import {

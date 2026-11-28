@@ -30,6 +30,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     private readonly transport: {
       resolveLiveChat?: typeof resolveYouTubeLiveChat
       createSession?: typeof createYouTubeGrpcSession
+      relay?: YouTubeChatRelay
     } = {},
   ) {
     super()
@@ -56,21 +57,26 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       ...(error ? { error } : {}),
     })
   }
-  private deliver(batch: YouTubeChatBatch): void {
-    for (const message of batch.messages)
-      this.emit('message', {
-        ...message,
-        channelId: this.channelId,
-        timestamp: new Date(message.timestamp),
-      })
-    for (const event of batch.events)
+  private deliver(batch: YouTubeChatBatch, revision: number): void {
+    const { channelId } = this
+    // Listeners can synchronously retire this connection between items.
+    for (const message of batch.messages) {
+      if (revision !== this.identityRevision) return
+      this.emit('message', { ...message, channelId, timestamp: new Date(message.timestamp) })
+    }
+    for (const event of batch.events) {
+      if (revision !== this.identityRevision) return
       this.emit('event', { ...event, timestamp: new Date(event.timestamp) })
-    for (const moderation of batch.moderation)
-      this.emit('moderation', { ...moderation, channelId: this.channelId })
+    }
+    for (const moderation of batch.moderation) {
+      if (revision !== this.identityRevision) return
+      this.emit('moderation', { ...moderation, channelId })
+    }
   }
   async connect(channelId: string): Promise<void> {
-    await this.disconnect()
     const revision = ++this.identityRevision
+    await this.resetConnection(revision)
+    if (revision !== this.identityRevision) return
     const current = () =>
       revision === this.identityRevision &&
       (AccountStore.findByPlatform('youtube')?.id ?? null) === this.accountId
@@ -79,15 +85,19 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     this.accountId = account?.id ?? null
     this.accessToken = account ? (AccountStore.getTokens(account.id)?.accessToken ?? null) : null
     this.emitStatus('connecting')
+    if (!current()) return
     try {
       if (!this.accountId) {
-        if (!relay) throw new Error('YouTube anonymous chat requires a backend connection.')
-        this.unsubscribe = relay.subscribe({ channelId }, (event) => {
+        const chatRelay = this.transport.relay ?? relay
+        if (!chatRelay) throw new Error('YouTube anonymous chat requires a backend connection.')
+        const unsubscribe = chatRelay.subscribe({ channelId }, (event) => {
           if (!current()) return
           if (event.type === 'ready') this.liveChatId = event.liveChatId
-          else if (event.type === 'batch') this.deliver(event.batch)
+          else if (event.type === 'batch') this.deliver(event.batch, revision)
           else this.emitStatus(event.status, event.error)
         })
+        if (current()) this.unsubscribe = unsubscribe
+        else unsubscribe()
         return
       }
       const getCredentials = async (forceRefresh = false): Promise<YouTubeChatCredentials> => {
@@ -97,12 +107,15 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           throw new Error('YouTube OAuth credentials unavailable. Sign in again.')
         return { accessToken: this.accessToken }
       }
-      const discover = async (forceRefresh = false) =>
-        (this.transport.resolveLiveChat ?? resolveYouTubeLiveChat)({
+      const discover = async (forceRefresh = false) => {
+        const credentials = await getCredentials(forceRefresh)
+        if (!current()) return undefined
+        return (this.transport.resolveLiveChat ?? resolveYouTubeLiveChat)({
           channelId,
-          credentials: await getCredentials(forceRefresh),
+          credentials,
         })
-      let resolved: Awaited<ReturnType<typeof resolveYouTubeLiveChat>>
+      }
+      let resolved: Awaited<ReturnType<typeof discover>>
       try {
         resolved = await discover()
       } catch (error) {
@@ -110,39 +123,48 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           throw error
         resolved = await discover(true)
       }
-      if (!current()) return
+      if (!resolved || !current()) return
       const createSession =
         this.transport.createSession ??
         (await import('@twirchat/shared/youtube/session')).createYouTubeGrpcSession
       if (!current()) return
       this.liveChatId = resolved.liveChatId
       const normalizer = createYouTubeChatNormalizer({ channelId })
-      this.session = createSession({
+      const session = createSession({
         liveChatId: resolved.liveChatId,
         getCredentials,
         onBatch: (batch) => {
-          if (current()) this.deliver(normalizer.normalize(batch))
+          if (current()) this.deliver(normalizer.normalize(batch), revision)
         },
         onStatus: (status, error) => {
           if (current()) this.emitStatus(status, error)
         },
       })
-      await this.session.start()
+      if (!current()) {
+        session.stop()
+        return
+      }
+      this.session = session
+      await session.start()
     } catch (error) {
       if (current())
         this.emitStatus('error', error instanceof Error ? error.message : String(error))
     }
   }
-  async disconnect(): Promise<void> {
-    this.identityRevision++
-    this.session?.stop()
+  disconnect(): Promise<void> {
+    return this.resetConnection(++this.identityRevision)
+  }
+
+  private async resetConnection(revision: number): Promise<void> {
+    const { session, unsubscribe } = this
     this.session = undefined
-    this.unsubscribe?.()
     this.unsubscribe = undefined
     this.accountId = null
     this.accessToken = null
     this.liveChatId = null
-    this.emitStatus('disconnected')
+    session?.stop()
+    unsubscribe?.()
+    if (revision === this.identityRevision) this.emitStatus('disconnected')
   }
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     const revision = this.identityRevision
@@ -184,11 +206,14 @@ export class YouTubeAdapter extends BasePlatformAdapter {
    * Refreshes the access token if needed.
    */
   private async refreshTokenIfNeeded(force = false): Promise<boolean> {
-    if (!this.accountId) {
-      return false
-    }
+    const { accountId, identityRevision } = this
+    if (!accountId) return false
+    const current = () =>
+      identityRevision === this.identityRevision &&
+      AccountStore.findByPlatform('youtube')?.id === accountId
+    if (!current()) return false
 
-    const tokens = AccountStore.getTokens(this.accountId)
+    const tokens = AccountStore.getTokens(accountId)
     if (!tokens?.refreshToken) {
       return false
     }
@@ -198,13 +223,9 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       log.info('[YouTube] Token expired or expiring soon, refreshing...')
       try {
         const { refreshYouTubeToken } = await import('../../auth/youtube.js')
-        const accountId = this.accountId
+        if (!current()) return false
         const token = await refreshYouTubeToken(accountId)
-        if (
-          this.accountId !== accountId ||
-          AccountStore.findByPlatform('youtube')?.id !== accountId
-        )
-          return false
+        if (!current()) return false
         this.accessToken = token
         log.info('[YouTube] Token refreshed successfully')
         return true

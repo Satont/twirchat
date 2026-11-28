@@ -1,6 +1,6 @@
 import type { Account, ChatSendReceipt, WatchedChannel } from '@twirchat/shared/types'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import type { IPlatformAdapter } from '../platforms/base-adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import type { TwitchSenderPool } from '../platforms/twitch/sender-pool'

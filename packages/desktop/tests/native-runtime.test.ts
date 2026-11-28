@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  GPUIX_NATIVE_API_VERSION,
   GPUI_SOURCE_REVISION,
   GPUIX_SOURCE_REVISION,
   resolveNativeRuntime,
@@ -15,7 +16,7 @@ afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 const manifest = () => ({
-  apiVersion: 3,
+  apiVersion: GPUIX_NATIVE_API_VERSION,
   upstreamSHA: GPUIX_SOURCE_REVISION,
   gpuiSHA: GPUI_SOURCE_REVISION,
   target: 'linux-x64',
@@ -28,6 +29,16 @@ test('native runtime resolution refuses mismatched targets and source revisions'
   expect(() =>
     validateNativeRuntimeManifest({ ...manifest(), upstreamSHA: '0'.repeat(40) }, 'linux-x64'),
   ).toThrow('does not match')
+  expect(() =>
+    validateNativeRuntimeManifest({ ...manifest(), gpuiSHA: '0'.repeat(40) }, 'linux-x64'),
+  ).toThrow('does not match')
+})
+test('native runtime manifest rejects incompatible ABI versions', () => {
+  for (const apiVersion of [GPUIX_NATIVE_API_VERSION - 1, GPUIX_NATIVE_API_VERSION + 1]) {
+    expect(() => validateNativeRuntimeManifest({ ...manifest(), apiVersion }, 'linux-x64')).toThrow(
+      'does not match',
+    )
+  }
 })
 test('native runtime resolution finds the packaged artifact and rejects truncation', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'twirchat-native-runtime-'))

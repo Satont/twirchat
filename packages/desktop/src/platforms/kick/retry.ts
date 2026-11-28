@@ -1,4 +1,4 @@
-import { t } from '../../gpuix/i18n'
+import { t } from '../../i18n'
 
 export interface KickRetryClock {
   now(): number

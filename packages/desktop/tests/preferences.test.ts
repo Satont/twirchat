@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 
-import { persistentResource } from '../src/gpuix/state/persistent-resources'
 import type { PreferenceStore } from '../src/gpuix/state/preferences'
 import { createPreferenceStore, type PreferenceApi } from '../src/gpuix/state/preferences'
+import { persistentResource } from '../src/state/persistent-resources'
 
 interface Value {
   count: number
@@ -170,7 +170,7 @@ describe('persistent preferences', () => {
   })
 })
 
-declare module '../src/gpuix/state/persistent-resources' {
+declare module '../src/state/persistent-resources' {
   interface PersistentResources {
     'test:preference-remount': PreferenceStore<{ count: number }>
   }

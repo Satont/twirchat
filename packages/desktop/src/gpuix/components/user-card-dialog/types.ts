@@ -1,7 +1,7 @@
-import type { MessageKey } from '@desktop/gpuix/i18n'
 import type { IconName } from '@desktop/gpuix/icons'
 import type { DesktopWindows } from '@desktop/gpuix/state/desktop-windows'
 import type { useTextInputFocusTracking } from '@desktop/gpuix/state/focus'
+import type { MessageKey } from '@desktop/i18n'
 import type { UserCardTarget } from '@desktop/views/main/utils/chatCommands'
 import type { Badge as BadgeData, Platform } from '@twirchat/shared/types'
 

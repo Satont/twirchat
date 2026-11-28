@@ -18,7 +18,8 @@ const { nativeWindow } = await import('../src/gpuix/native-window')
 const { ChatMessage } = await import('../src/gpuix/components/ChatMessage')
 const { ThemeContext } = await import('../src/gpuix/theme-context')
 const { darkTheme, lightTheme } = await import('../src/gpuix/theme')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
@@ -301,6 +302,6 @@ try {
   throw error
 } finally {
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

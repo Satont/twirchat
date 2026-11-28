@@ -1,5 +1,5 @@
 import { Text } from '@gpuix/components/ui/Text'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useTheme } from '@gpuix/theme-context'
 
 import type { HistoryRetryButtonProps } from './types'

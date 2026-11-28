@@ -1,3 +1,4 @@
+import { SEVENTV_GQL_ENDPOINT } from '@twirchat/shared/constants'
 import {
   SEVENTV_COSMETICS_INVENTORY_QUERY,
   SEVENTV_COSMETICS_QUERY,
@@ -8,6 +9,7 @@ import { z } from 'zod'
 import { sanitizeDisplayText, truncateGraphemes } from '../views/shared/utils/display-text'
 import { deleteOldestEntry } from './bounded-cache'
 import { COMMUNITY_BADGE_PROVIDERS } from './community-badges'
+import type { CosmeticPaint, CosmeticPaintLayer } from './cosmetic-paint'
 import { getProviderBadges, type ProviderFetch } from './emote-providers'
 import {
   createPaintRenderer,
@@ -28,22 +30,6 @@ const parseColor = (value: unknown): string =>
   /^#[a-f0-9]{6}(?:[a-f0-9]{2})?$/i.test(str(row(value).hex)) ? str(row(value).hex) : '#ffffff'
 const safeUrl = (value: unknown): string | undefined =>
   /^https:\/\/(?:cdn\.7tv\.app|cdn\.7tv\.io)\//i.test(str(value)) ? str(value) : undefined
-interface PaintStop {
-  at: number
-  color: string
-}
-export type CosmeticPaintLayer = { opacity: number } & (
-  | { type: 'color'; color: string }
-  | { type: 'linear'; angle: number; repeating: boolean; stops: PaintStop[] }
-  | { type: 'radial'; shape: string; repeating: boolean; stops: PaintStop[] }
-  | { type: 'image'; imageUrl: string }
-)
-export interface CosmeticPaint {
-  id: string
-  name: string
-  layers: CosmeticPaintLayer[]
-  shadows: Array<{ color: string; offsetX: number; offsetY: number; blur: number }>
-}
 export interface UserCosmetics {
   sevenTvUserId?: string
   personalEmoteSetId?: string
@@ -228,7 +214,7 @@ export function createCosmeticsService(
           const query = preferences.inventory
             ? SEVENTV_COSMETICS_INVENTORY_QUERY
             : SEVENTV_COSMETICS_QUERY
-          const response = await fetcher('https://7tv.io/v4/gql', {
+          const response = await fetcher(SEVENTV_GQL_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

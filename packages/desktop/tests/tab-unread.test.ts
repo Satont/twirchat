@@ -8,14 +8,14 @@ import type {
 } from '@twirchat/shared/types'
 
 import { createDesktopEvents } from '../src/gpuix/backend/events'
+import { accountsStore } from '../src/gpuix/state/accounts'
 import {
-  accountsStore,
   activeTabStore,
   activeWatchedTabStore,
   tabChannelIdsStore,
   watchedChannelsStore,
 } from '../src/gpuix/state/app'
-import { layoutStore } from '../src/gpuix/state/layout'
+import { layoutStore } from '../src/gpuix/state/layout-state'
 import { clearTabUnread, tabUnreadStore, wireTabUnread } from '../src/gpuix/state/tab-unread'
 
 const account: Account = {

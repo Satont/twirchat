@@ -1,14 +1,15 @@
 import { DEFAULT_SETTINGS, type TimestampFormat } from '@twirchat/shared/types'
 import { memo } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import {
   chunkGraphemes,
   sanitizeDisplayText,
   truncateGraphemes,
 } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT, type MessageKey } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { decideTwitchAutoModMessage, type TwitchAutoModRow } from '../state/twitch-automod'
 import { semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'

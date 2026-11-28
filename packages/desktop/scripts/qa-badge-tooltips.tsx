@@ -22,10 +22,12 @@ const { BadgeTooltip } = await import('../src/gpuix/components/ui/BadgeTooltip')
 const { Text } = await import('../src/gpuix/components/ui/Text')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { initCosmeticCaches } = await import('../src/gpuix/state/cosmetics')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { getDbPath } = await import('../src/runtime-config')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
@@ -136,7 +138,7 @@ backend.api.getUserCosmetics = async () => {
 backend.api.getUserProfile = async () => ({ id: 'qa-author', errors: [] })
 initCosmeticCaches(backend.api)
 app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
-app.accountsStore.set([
+accountState.accountsStore.set([
   {
     id: 'qa-kick',
     platform: 'kick',
@@ -509,6 +511,6 @@ try {
   if (timer) clearInterval(timer)
   stopMessages()
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

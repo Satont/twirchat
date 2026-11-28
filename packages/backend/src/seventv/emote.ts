@@ -1,40 +1,24 @@
-import type { SevenTVEventImageFile, SevenTVEventEmoteValue } from './event-client.ts'
-import { sevenTVEventEmoteValueSchema } from './event-schemas'
+import type { SevenTVEmote } from '@twirchat/shared/protocol'
 
-export interface SevenTvEmoteInput {
-  alias: string
-  animated: boolean
-  aspectRatio: number
-  id: string
-  imageUrl: string
-  name: string
-  zeroWidth: boolean
-}
+import type { SevenTVGraphQLEmoteSet } from './client'
+import type { SevenTVEventImageFile, SevenTVEventEmoteValue } from './event-schemas'
 
-export interface SevenTVEmote {
-  id: string
-  alias: string
-  name: string
-  animated: boolean
-  zeroWidth: boolean
-  aspectRatio: number
-  imageUrl: string
-}
-
-export function createSevenTvEmote(input: SevenTvEmoteInput): SevenTVEmote {
+export function createSevenTvEmoteFromCatalogItem(
+  item: SevenTVGraphQLEmoteSet['emotes']['items'][number],
+): SevenTVEmote {
   return {
-    alias: input.alias,
-    animated: input.animated,
-    aspectRatio: input.aspectRatio,
-    id: input.id,
-    imageUrl: input.imageUrl,
-    name: input.name,
-    zeroWidth: input.zeroWidth,
+    alias: item.alias,
+    animated: item.emote.flags.animated,
+    aspectRatio: item.emote.aspectRatio,
+    id: item.emote.id,
+    imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
+    name: item.emote.defaultName,
+    zeroWidth: item.flags.zeroWidth,
   }
 }
 
 export function createSevenTvEmoteFromEventValue(value: SevenTVEventEmoteValue): SevenTVEmote {
-  return createSevenTvEmote({
+  return {
     alias: value.name,
     animated: value.data.animated,
     aspectRatio: 1,
@@ -42,30 +26,10 @@ export function createSevenTvEmoteFromEventValue(value: SevenTVEventEmoteValue):
     imageUrl: selectPreferredSevenTvHostFile(value.data.host.url, value.data.host.files),
     name: value.name,
     zeroWidth: false,
-  })
+  }
 }
 
-export function isSevenTvEventEmoteValue(value: unknown): value is SevenTVEventEmoteValue {
-  return sevenTVEventEmoteValueSchema.safeParse(value).success
-}
-
-export function isSevenTvEventEmoteUpdate(update: {
-  key: string
-  old_value: unknown
-  value: unknown
-}): update is {
-  key: 'emotes'
-  old_value: SevenTVEventEmoteValue
-  value: SevenTVEventEmoteValue
-} {
-  return (
-    update.key === 'emotes' &&
-    isSevenTvEventEmoteValue(update.value) &&
-    isSevenTvEventEmoteValue(update.old_value)
-  )
-}
-
-export function selectPreferredSevenTvImageUrl(
+function selectPreferredSevenTvImageUrl(
   images: Array<{ url?: string | null }> | null | undefined,
 ): string {
   const preferred = findPreferredImage(images, ['.gif', '.webp', '.avif'])
@@ -102,4 +66,27 @@ function findPreferredImage<T extends { url?: string | null; name?: string | nul
   }
 
   return images?.[0]
+}
+
+export function updateSetEmote(
+  emotes: Map<string, SevenTVEmote>,
+  id: string,
+  update: Partial<SevenTVEmote>,
+): SevenTVEmote | undefined {
+  for (const [alias, emote] of emotes) {
+    if (emote.id !== id) continue
+    const changed = { ...emote, ...update }
+    const nextAlias = update.alias || alias
+    if (nextAlias !== alias) emotes.delete(alias)
+    emotes.set(nextAlias, changed)
+    return changed
+  }
+  return undefined
+}
+
+export function removeSetEmote(emotes: Map<string, SevenTVEmote>, id: string): boolean {
+  for (const [alias, emote] of emotes) {
+    if (emote.id === id) return emotes.delete(alias)
+  }
+  return false
 }

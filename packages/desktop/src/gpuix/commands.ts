@@ -1,8 +1,8 @@
 import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t } from '../i18n'
 import { isAutoTranslationCommand } from '../services/translation'
-import { t } from './i18n'
 
 export interface CustomCommandDefinition {
   id: string

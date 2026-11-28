@@ -1,7 +1,7 @@
 import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
-import { getLanguage, t } from '../../../gpuix/i18n'
+import { getLanguage, t } from '../../../i18n'
 import type { UserChatHistoryPage } from '../../../shared/rpc'
 import { sanitizeDisplayText, truncateGraphemes } from '../../shared/utils/display-text'
 import { mergeChatMessageSnapshot } from './chat-message-buffer'

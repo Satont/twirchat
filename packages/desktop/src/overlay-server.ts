@@ -236,9 +236,7 @@ function createFileResponse(filePath: string, contentType?: string): Response {
   })
 }
 
-export function startOverlayServer(
-  port: number = OVERLAY_SERVER_PORT,
-): ReturnType<typeof Bun.serve> {
+export function startOverlayServer(port: number = OVERLAY_SERVER_PORT) {
   const runtimePaths = resolveOverlayRuntimePaths(import.meta.dir)
 
   log.info('Resolved overlay runtime paths', {
@@ -309,7 +307,11 @@ export function startOverlayServer(
   log.info(`Server running on http://localhost:${port}`)
   log.info(`OBS URL: http://localhost:${port}/?bg=transparent`)
 
-  return server
+  let stopping: Promise<void> | undefined
+  return {
+    port: server.port,
+    stop: () => (stopping ??= server.stop(true)),
+  }
 }
 
 // ============================================================

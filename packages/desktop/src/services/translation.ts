@@ -1,7 +1,7 @@
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-import { t, type MessageKey } from '../gpuix/i18n'
+import { t, type MessageKey } from '../i18n'
 import { runInBackground } from './background-task'
 import { deleteOldestEntry } from './bounded-cache'
 

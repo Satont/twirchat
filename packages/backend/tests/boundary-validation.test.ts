@@ -1,10 +1,11 @@
 import { afterEach, expect, test } from 'bun:test'
 
+import type { Platform } from '@twirchat/shared'
+
 import { exchangeKickCode } from '../src/auth/kick'
 import { authRoutes } from '../src/routes/auth'
 import { getEmoteSetById, getUserByConnection } from '../src/seventv/client'
-import { isSevenTvEventEmoteValue } from '../src/seventv/emote'
-import { sevenTVEventSchema } from '../src/seventv/event-schemas'
+import { sevenTVEventEmoteValueSchema, sevenTVEventSchema } from '../src/seventv/event-schemas'
 import { desktopMessageSchema } from '../src/ws/message-schema'
 
 const originalFetch = globalThis.fetch
@@ -65,12 +66,12 @@ test('7TV events verify nested image files and retain typed event variants', () 
       host: { url: '//cdn.7tv.app', files: [{ name: '1x.webp', width: 32 }] },
     },
   }
-  expect(isSevenTvEventEmoteValue(value)).toBe(true)
+  expect(sevenTVEventEmoteValueSchema.safeParse(value).success).toBe(true)
   expect(
-    isSevenTvEventEmoteValue({
+    sevenTVEventEmoteValueSchema.safeParse({
       ...value,
       data: { ...value.data, host: { ...value.data.host, files: [{ name: 42 }] } },
-    }),
+    }).success,
   ).toBe(false)
   expect(
     sevenTVEventSchema.safeParse({
@@ -92,8 +93,29 @@ test('GraphQL nullable lookups represent a missing user or emote set without inv
       Response.json({ data: { users: { userByConnection: null }, emoteSets: { emoteSet: null } } }),
     { preconnect: originalFetch.preconnect },
   )
-  expect((await getUserByConnection('TWITCH', '42')).users.userByConnection).toBeNull()
-  expect((await getEmoteSetById('set')).emoteSets.emoteSet).toBeNull()
+  expect(await getUserByConnection('TWITCH', '42')).toBeNull()
+  expect(await getEmoteSetById('set')).toBeNull()
+})
+
+test('desktop protocol preserves full platform IDs without widening feature subsets', () => {
+  const platforms: Platform[] = ['twitch', 'kick', 'youtube', 'vkplay']
+  for (const platform of platforms) {
+    const logout = desktopMessageSchema.parse({ type: 'auth_logout', platform })
+    expect(logout.type).toBe('auth_logout')
+    if (logout.type === 'auth_logout') expect(logout.platform).toBe(platform)
+    expect(desktopMessageSchema.safeParse({ type: 'auth_start', platform }).success).toBe(
+      platform === 'kick' || platform === 'youtube',
+    )
+    expect(
+      desktopMessageSchema.safeParse({
+        type: 'donation_watch',
+        channels: [{ platform, channel: 'viewer' }],
+      }).success,
+    ).toBe(platform === 'twitch' || platform === 'kick')
+  }
+  for (const platform of ['Twitch', 'kick ', 'unknown']) {
+    expect(desktopMessageSchema.safeParse({ type: 'auth_logout', platform }).success).toBe(false)
+  }
 })
 
 test('desktop protocol validates branch-specific fields and permits unknown future fields', () => {

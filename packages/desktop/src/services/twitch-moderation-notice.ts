@@ -1,7 +1,7 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-import { t, type MessageKey } from '../gpuix/i18n'
+import { t, type MessageKey } from '../i18n'
 import { formatSanctionDuration } from './sanction-duration'
 import { buildTwitchSystemMessage } from './twitch-system-message'
 

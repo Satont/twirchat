@@ -1,4 +1,4 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import { logger } from '@twirchat/shared/logger'
 import type { Badge } from '@twirchat/shared/types'

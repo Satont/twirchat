@@ -1,13 +1,13 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { runInBackground } from '../../services/background-task'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
-type ModerationPlatform = 'twitch' | 'kick'
+type AvatarPlatform = 'twitch' | 'kick'
 
 type AvatarLookup = (params: {
-  platform: ModerationPlatform
+  platform: AvatarPlatform
   authorId: string
   username?: string
 }) => Promise<{ avatarUrl?: string }>
@@ -26,7 +26,7 @@ export function initAvatarCache(lookup: AvatarLookup): void {
 
 // ── Avatars ─────────────────────────────────────────────────────────────────
 
-function avatarPlatform(message: NormalizedChatMessage): ModerationPlatform | undefined {
+function avatarPlatform(message: NormalizedChatMessage): AvatarPlatform | undefined {
   if (message.author.id.trim() === '') return undefined
   if (message.platform === 'twitch') return 'twitch'
   if (
@@ -43,12 +43,12 @@ function normalizedUrl(value: string | undefined): string | undefined {
   return normalized || undefined
 }
 
-export function avatarUrlForUser(platform: ModerationPlatform, userId: string): string | undefined {
+export function avatarUrlForUser(platform: AvatarPlatform, userId: string): string | undefined {
   return avatarUrls.get(`${platform}:${userId}`)
 }
 
 export function ensureAvatarForUser(
-  platform: ModerationPlatform,
+  platform: AvatarPlatform,
   userId: string,
   username?: string,
 ): void {
@@ -111,7 +111,7 @@ export function ensureAvatar(message: NormalizedChatMessage): void {
   )
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     avatarRevision: Store<number>
   }

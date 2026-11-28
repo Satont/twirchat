@@ -80,7 +80,8 @@ const { nativeWindow } = await import('../src/gpuix/native-window')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { WatchedView } = await import('../src/gpuix/components/WatchedView')
 const app = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const accountState = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 import type { NativeRenderer } from '@gpuix/react'
@@ -194,7 +195,7 @@ app.settingsStore.set(
     ? { ...DEFAULT_SETTINGS, chatTheme: args.theme === 'compact' ? 'compact' : 'modern' }
     : { ...DEFAULT_SETTINGS, showAvatars: false, chatTheme: 'compact' },
 )
-app.accountsStore.set([])
+accountState.accountsStore.set([])
 app.watchedChannelsStore.set(channels)
 app.watchedStatusesStore.set(
   new Map(
@@ -567,7 +568,7 @@ try {
   stopMessages()
   await manager.quit()
   await backend.shutdownPlugins?.()
-  backend.dispose?.()
+  await backend.dispose()
   await imageServer.stop(true)
 }
 process.exit(0)

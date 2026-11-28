@@ -5,13 +5,12 @@ import {
   VKPLAY_SCOPES,
 } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
+import { generateState } from '@twirchat/shared/pkce'
 import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { AccountStore } from '../store/account-store'
 import { getVkPlayDesktopClientId } from './client-config'
-import { generateState } from './pkce'
-import { successPage } from './server'
 
 const log = logger('auth-vkplay')
 const SESSION_TTL_MS = 10 * 60 * 1000
@@ -57,44 +56,14 @@ export function getVkPlayAuthUrl(): string {
   return url.toString()
 }
 
-/** Reads the implicit-flow token from the URL fragment and posts it to the auth server. */
-export function vkPlayCallbackPage(): Response {
-  return new Response(
-    `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>VK Play Live</title></head>
-<body style="font-family:sans-serif;padding:2rem;background:#1a1a1a;color:#e5e7eb;">
-  <p id="status">Completing VK Play Live sign-in…</p>
-  <script>
-    const fragment = new URLSearchParams(location.hash.slice(1))
-    history.replaceState(null, '', location.pathname)
-    if (!fragment.toString()) {
-      document.getElementById('status').textContent = 'VK Play Live returned no token.'
-    } else {
-      fetch(location.pathname, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: fragment.toString(),
-      }).then(async (response) => {
-        document.open()
-        document.write(await response.text())
-        document.close()
-      }).catch(() => {
-        document.getElementById('status').textContent = 'VK Play Live sign-in failed.'
-      })
-    }
-  </script>
-</body>
-</html>`,
-    { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
-  )
-}
-
-export async function handleVkPlayToken(params: URLSearchParams): Promise<{
+export async function handleVkPlayToken(
+  params: URLSearchParams,
+  signal?: AbortSignal,
+): Promise<{
   channelSlug: string
-  response: Response
   user: { platform: Platform; username: string; displayName: string }
 }> {
+  signal?.throwIfAborted()
   const error = params.get('error')
   if (error) {
     throw new Error(`VK Play Live OAuth error: ${error} — ${params.get('error_description') ?? ''}`)
@@ -123,13 +92,16 @@ export async function handleVkPlayToken(params: URLSearchParams): Promise<{
       Origin: 'https://live.vkvideo.ru',
       'User-Agent': 'TwirChat',
     },
-    signal: AbortSignal.timeout(15000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
+      : AbortSignal.timeout(15000),
   })
   if (!userRes.ok) throw new Error(`VK Play Live user request failed (HTTP ${userRes.status})`)
   const profile = currentUserSchema.parse(await userRes.json()).data
   const channelSlug = currentUserChannel(profile)
   const displayName = profile.user.nick
 
+  signal?.throwIfAborted()
   AccountStore.upsert({
     accessToken,
     avatarUrl: profile.user.avatar_url,
@@ -145,9 +117,6 @@ export async function handleVkPlayToken(params: URLSearchParams): Promise<{
   log.info('Account signed in', { platform: 'vkplay' })
   return {
     channelSlug,
-    response: new Response(successPage('VK Play Live'), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    }),
     user: { displayName, platform: 'vkplay', username: channelSlug },
   }
 }

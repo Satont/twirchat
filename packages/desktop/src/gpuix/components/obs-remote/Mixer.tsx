@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import type { ObsAudioInput, ObsRemoteCommand } from '../../../services/obs-remote'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { useTheme } from '../../theme-context'
 import { ActionButton, FormInput } from '../ui/Form'
 import { Text } from '../ui/Text'

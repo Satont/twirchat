@@ -2,10 +2,10 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { sanitizeDisplayText, truncateGraphemes } from '../../../views/shared/utils/display-text'
-import { useBackend } from '../../backend/context'
+import { useBackend } from '../../backend-context'
 import { compileFilterExpression } from '../../filter-expression'
 import { runUiTask } from '../../hooks/run-ui-task'
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import {
   compileMessageRules,
   validateChatRules,
@@ -15,10 +15,11 @@ import {
   type SavedFilter,
   type TextRule,
 } from '../../message-rules'
-import { accountsStore, homeMessagesStore, watchedMessagesStore } from '../../state/app'
+import { accountsStore } from '../../state/accounts'
+import { homeMessagesStore, watchedMessagesStore } from '../../state/app'
 import { chatRulesPreferences, chatRulesStore } from '../../state/chat-rules'
-import { useStore } from '../../state/create-store'
 import { useTextInputFocusTracking } from '../../state/focus'
+import { useStore } from '../../state/use-store'
 import { useTheme } from '../../theme-context'
 import { SettingsFooter } from '../settings/SettingsLayout'
 import { Icon } from '../ui/Icon'

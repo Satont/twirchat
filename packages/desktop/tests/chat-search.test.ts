@@ -30,7 +30,7 @@ import {
   registerChatWindowManager,
   registerChatWindowNavigator,
 } from '../src/gpuix/state/chat-windows'
-import { layoutStore } from '../src/gpuix/state/layout'
+import { layoutStore } from '../src/gpuix/state/layout-state'
 import { required } from './fixture-values'
 
 const message = (

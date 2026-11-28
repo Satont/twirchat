@@ -1,8 +1,8 @@
 import type { EventModifiers } from '@gpuix/react'
 
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 
 export interface WindowActivity {
   active: boolean
@@ -37,7 +37,7 @@ export function clearWindowActivity(scope: string): void {
   })
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     windowActivity: Store<Map<string, WindowActivity>>
   }

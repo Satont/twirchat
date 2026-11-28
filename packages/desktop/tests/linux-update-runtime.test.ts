@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, open, readFile, readdir, rm, stat, symlink } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { prepareLinuxUpdateLocator } from '../src/gpuix/linux-update-runtime'
+import { prepareLinuxUpdateLocator } from '../src/services/linux-update-runtime'
 
 const directories: string[] = []
 const linuxTest = test.skipIf(process.platform !== 'linux')

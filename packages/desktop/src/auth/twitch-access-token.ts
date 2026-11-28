@@ -1,7 +1,7 @@
 import { logger } from '@twirchat/shared/logger'
 import type { AccessTokenWithUserId, AuthProvider } from '@twurple/auth'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { AccountStore } from '../store/account-store'
 import { getTwitchDesktopClientId } from './client-config'
 import { refreshTwitchToken } from './twitch'

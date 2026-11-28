@@ -1,4 +1,5 @@
-import { t, useT } from '@gpuix/i18n'
+import { t } from '@desktop/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useTheme } from '@gpuix/theme-context'
 import { memo, useState } from 'react'
 

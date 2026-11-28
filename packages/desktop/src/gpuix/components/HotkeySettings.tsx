@@ -1,8 +1,10 @@
 import type { KeyEvent } from '@gpuix/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { type MessageKey } from '../../i18n'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../hooks/use-translation'
 import {
   HOTKEY_ACTIONS,
   isHotkeyCategory,
@@ -13,14 +15,13 @@ import {
   type HotkeyBinding,
   type HotkeyCategory,
 } from '../hotkey-bindings'
-import { useT, type MessageKey } from '../i18n'
 import {
   actionBindingsPreferences,
   actionBindingsStore,
   loadActionBindings,
   registerHotkeyRecorder,
 } from '../state/action-bindings'
-import { useStore } from '../state/create-store'
+import { useStore } from '../state/use-store'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'

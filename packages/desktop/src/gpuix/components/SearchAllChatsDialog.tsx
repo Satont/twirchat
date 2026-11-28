@@ -2,10 +2,10 @@ import { useGpuixRequired, useWindowSize, type PublicInstance } from '@gpuix/rea
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { compileChatSearch } from '../chat-tools'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { nativeWindow } from '../native-window'
 import {
@@ -14,9 +14,9 @@ import {
   type ChatSearchResult,
   type ChatSearchSnapshot,
 } from '../state/chat-search'
-import { useStore } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
 import { streamerModeStore } from '../state/streamer-mode'
+import { useStore } from '../state/use-store'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { ActionButton } from './ui/Form'

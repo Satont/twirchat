@@ -1,6 +1,6 @@
-import { t, type MessageKey } from './i18n'
-import { en } from './i18n/locales/en'
-import { ru } from './i18n/locales/ru'
+import { t, type MessageKey } from '../i18n'
+import { en } from '../i18n/locales/en'
+import { ru } from '../i18n/locales/ru'
 import { THEME_PRESETS } from './theme'
 
 interface SettingsCategoryMetadata {

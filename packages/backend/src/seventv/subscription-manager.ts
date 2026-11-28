@@ -1,205 +1,344 @@
-import type { Platform, BackendToDesktopMessage } from '@twirchat/shared'
+import type { Platform, BackendToDesktopMessage, SevenTVEmote } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
-import { z } from 'zod'
 
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
-import { sevenTVCache } from './cache'
-import { getEmoteSetById, getUserByConnection } from './client'
+import { sevenTVCache, type CachedEmoteSet } from './cache'
+import { sevenTVChannelKey, type SevenTVChannelKey } from './channel-key'
+import { getEmoteSetById, getUserByConnection, type SevenTVGraphQLEmoteSet } from './client'
 import {
-  createSevenTvEmote,
+  createSevenTvEmoteFromCatalogItem,
   createSevenTvEmoteFromEventValue,
-  isSevenTvEventEmoteUpdate,
-  selectPreferredSevenTvImageUrl,
+  removeSetEmote,
+  updateSetEmote,
 } from './emote'
-import type { SevenTVEmote } from './emote'
-import { sevenTVEventClient } from './event-client'
-import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-client'
+import type { SevenTVEventClient } from './event-client'
+import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-schemas'
 
 const log = logger('seventv:manager')
-function parseChannelKey(key: string): [Platform, string] {
-  const separator = key.indexOf(':')
-  const platform = z.enum(['twitch', 'kick', 'youtube', 'vkplay']).parse(key.slice(0, separator))
-  return [platform, key.slice(separator + 1)]
-}
-
-interface ClientSubscription {
+const emoteSetEvents = ['emote_set.update', 'emote_set.delete']
+const userEvents = ['user.update']
+const BACKFILL_CONCURRENCY = 3
+const BACKFILL_REQUEST_TIMEOUT_MS = 10_000
+interface SubscriptionRequest {
   platform: Platform
   channelId: string
-  emoteSetId: string
+  platformUserId?: string
 }
 
-interface EmoteSetSubscription {
-  emoteSetId: string
-  channelKeys: Set<string> // "platform:channelId"
-  clientSecrets: Set<string>
+interface ChannelSubscription {
+  readonly key: SevenTVChannelKey
+  readonly platform: Platform
+  readonly channelId: string
+  clients: Set<string>
+  emoteSet: CachedEmoteSet
+  switchRequest: { readonly target: string; readonly controller: AbortController } | undefined
+  revision: number
+}
+
+interface JoinLookups {
+  pending: number
+  retired?: ChannelSubscription
 }
 
 export class SevenTVSubscriptionManager {
-  private clientSubscriptions = new Map<string, Set<ClientSubscription>>() // ClientSecret -> subscriptions
-  private emoteSetSubscriptions = new Map<string, EmoteSetSubscription>() // EmoteSetId -> subscription
-  private userSubscriptions = new Map<string, Set<string>>()
-  private channelKeyToUserId = new Map<string, string>()
+  private joinLookups = new Map<SevenTVChannelKey, JoinLookups>()
+  private pendingByClient = new Map<string, Map<SevenTVChannelKey, AbortController>>()
+  private clientSubscriptions = new Map<string, Set<ChannelSubscription>>()
+  private channels = new Map<SevenTVChannelKey, ChannelSubscription>()
+  private emoteSetSubscriptions = new Map<string, Set<ChannelSubscription>>()
+  private userSubscriptions = new Map<string, Set<ChannelSubscription>>()
 
-  // Callback to send messages to desktop clients
-  sendToClient: ((clientSecret: string, message: BackendToDesktopMessage) => void) | null = null
+  private backfillController: AbortController | undefined
+  private backfillRunning = false
 
-  constructor() {
-    // Setup event handler
-    sevenTVEventClient.onEvent = (event) => this.handleEvent(event)
+  constructor(
+    private readonly eventClient: SevenTVEventClient,
+    private readonly sendToClient: (clientSecret: string, message: BackendToDesktopMessage) => void,
+  ) {
+    eventClient.onEvent = (event) => this.handleEvent(event)
+    eventClient.onConnected = (reconnected) => {
+      if (!reconnected) return
+      this.backfillController?.abort()
+      this.backfillController = new AbortController()
+      this.startBackfill()
+    }
+    eventClient.onDisconnected = () => {
+      this.backfillController?.abort()
+      this.backfillController = undefined
+    }
+  }
+
+  private startBackfill(): void {
+    if (this.backfillRunning || !this.backfillController) return
+    this.backfillRunning = true
+    const controller = this.backfillController
+    const channels = [...this.channels.values()]
+    const iterator = channels.values()
+    const worker = async () => {
+      for (const channel of iterator) {
+        if (controller.signal.aborted) return
+        // eslint-disable-next-line no-await-in-loop -- Each worker owns one request slot.
+        await this.reconcileChannel(channel, controller.signal)
+      }
+    }
+    void Promise.all(
+      Array.from({ length: Math.min(channels.length, BACKFILL_CONCURRENCY) }, worker),
+    )
+      .finally(() => {
+        this.backfillRunning = false
+        if (this.backfillController === controller) this.backfillController = undefined
+        this.startBackfill()
+      })
+      .catch((error: unknown) =>
+        log.error('7TV reconnect reconciliation failed', { error: String(error) }),
+      )
+  }
+
+  private async reconcileChannel(channel: ChannelSubscription, signal: AbortSignal): Promise<void> {
+    const isCurrent = () =>
+      !signal.aborted && this.channels.get(channel.key) === channel && !channel.switchRequest
+    const budget = AbortSignal.any([signal, AbortSignal.timeout(BACKFILL_REQUEST_TIMEOUT_MS)])
+    try {
+      // If a dispatch wins the race, take one more snapshot without overwriting it.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!isCurrent()) return
+        const revision = channel.revision
+        // eslint-disable-next-line no-await-in-loop -- Retry only after the first read settles.
+        const fetched = await this.fetchEmoteSet(
+          channel.key,
+          {
+            platform: channel.platform,
+            channelId: channel.channelId,
+            platformUserId: channel.emoteSet.platformUserId,
+          },
+          budget,
+        )
+        budget.throwIfAborted()
+        if (!isCurrent() || !fetched) return
+        if (channel.revision !== revision) continue
+        this.publishSnapshot(channel, fetched)
+        return
+      }
+    } catch (error) {
+      if (isCurrent())
+        log.warn('7TV reconnect snapshot unavailable', {
+          channelKey: channel.key,
+          error: String(error),
+        })
+    }
   }
 
   async subscribeClient(
     clientSecret: string,
-    platform: Platform,
-    channelId: string,
-    platformUserId?: string,
-  ): Promise<boolean> {
-    const channelKey = `${platform}:${channelId}`
+    subscriptions: readonly SubscriptionRequest[],
+    isCurrent: () => boolean,
+  ): Promise<void> {
+    if (!isCurrent() || subscriptions.length === 0) return
+    const pending =
+      this.pendingByClient.get(clientSecret) ?? new Map<SevenTVChannelKey, AbortController>()
+    this.pendingByClient.set(clientSecret, pending)
+    const reservations = new Map<SevenTVChannelKey, AbortController>()
+    const superseded = new Set<AbortController>()
+    // Reserve the whole batch before any lookup yields to a later command.
+    const batch = subscriptions.map(({ platform, channelId, platformUserId }) => {
+      const key = sevenTVChannelKey(platform, channelId)
+      let reservation = reservations.get(key)
+      if (!reservation) {
+        const previous = pending.get(key)
+        if (previous) superseded.add(previous)
+        reservation = new AbortController()
+        reservations.set(key, reservation)
+        pending.set(key, reservation)
+      }
+      return { key, subscription: { platform, channelId, platformUserId }, reservation }
+    })
+    try {
+      for (const previous of superseded) previous.abort()
+      for (const { key, subscription, reservation } of batch) {
+        if (!isCurrent()) break
+        const isPending = () =>
+          isCurrent() && this.pendingByClient.get(clientSecret)?.get(key) === reservation
+        if (isPending())
+          await this.subscribeChannel(
+            clientSecret,
+            key,
+            subscription,
+            isPending,
+            reservation.signal,
+          )
+      }
+    } finally {
+      for (const [key, reservation] of reservations) {
+        if (pending.get(key) === reservation) pending.delete(key)
+      }
+      if (pending.size === 0 && this.pendingByClient.get(clientSecret) === pending)
+        this.pendingByClient.delete(clientSecret)
+    }
+  }
+
+  private async subscribeChannel(
+    clientSecret: string,
+    channelKey: SevenTVChannelKey,
+    subscription: SubscriptionRequest,
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (!isCurrent()) return
+    const { platform, channelId } = subscription
     log.info('Subscribing client to channel', {
       channelKey,
       clientSecret: clientSecret.slice(0, 8),
     })
 
-    // Check if client already subscribed to this channel
-    const clientSubs = this.clientSubscriptions.get(clientSecret)
-    if (clientSubs) {
-      const existing = [...clientSubs].find(
-        (s) => s.platform === platform && s.channelId === channelId,
-      )
-      if (existing) {
-        log.debug('Client already subscribed to channel', {
-          channelKey,
-          clientSecret: clientSecret.slice(0, 8),
-        })
-        return true
+    const active = this.channels.get(channelKey)
+    if (active?.clients.has(clientSecret)) return
+    if (active && (active.switchRequest || !sevenTVCache.isExpired(channelKey))) {
+      this.attachClient(clientSecret, active)
+      return
+    }
+    const cached = sevenTVCache.get(channelKey)
+    let emoteSet = cached
+    if (!cached || sevenTVCache.isExpired(channelKey)) {
+      const cohort: JoinLookups = this.joinLookups.get(channelKey) ?? { pending: 0 }
+      cohort.pending++
+      this.joinLookups.set(channelKey, cohort)
+      const baseline = active ?? cohort.retired
+      const revision = baseline?.revision
+      const snapshot = baseline?.emoteSet
+      const newerRetiredSnapshot = () => {
+        const retired = cohort.retired
+        if (retired && (retired.emoteSet !== snapshot || retired.revision !== revision))
+          return retired.emoteSet
+        return undefined
       }
-    }
-
-    // Check cache first
-    const cached = sevenTVCache.get(platform, channelId)
-    const isExpired = sevenTVCache.isExpired(platform, channelId)
-
-    if (cached && !isExpired) {
-      log.debug('Using cached emote set', { channelKey })
-      this.sendEmoteSetToClient(clientSecret, platform, channelId, cached)
-    }
-
-    // If no cache or expired, fetch from 7TV
-    let userId: string | null = this.channelKeyToUserId.get(channelKey) ?? null
-    if (!cached || isExpired) {
       try {
-        userId = await this.fetchAndCacheEmoteSet(platform, channelId, platformUserId)
-        if (userId) {
-          this.channelKeyToUserId.set(channelKey, userId)
+        const fetched = await this.fetchEmoteSet(channelKey, subscription, signal)
+        if (!isCurrent()) return
+        const current = this.channels.get(channelKey)
+        if (current) {
+          if (
+            fetched &&
+            current === active &&
+            current.revision === revision &&
+            !current.switchRequest
+          ) {
+            this.publishSnapshot(current, fetched)
+          }
+          this.attachClient(clientSecret, current)
+          return
         }
+        const latest = sevenTVCache.get(channelKey)
+        emoteSet =
+          newerRetiredSnapshot() ??
+          (latest && latest !== cached && !sevenTVCache.isExpired(channelKey)
+            ? latest
+            : (fetched ?? latest ?? baseline?.emoteSet))
+        // A fresh channel with no set does not consume a user subscription slot.
+        if (emoteSet === fetched && fetched?.id === null && !cached && !active) return
+        if (fetched && emoteSet === fetched) sevenTVCache.set(channelKey, fetched)
       } catch (error) {
-        log.error('Failed to fetch emote set', {
-          channelId,
-          channelKey,
-          error: String(error),
-        })
-
-        if (cached) {
-          log.warn('Using stale cache', { channelId, channelKey })
-          this.sendEmoteSetToClient(clientSecret, platform, channelId, cached)
+        if (!isCurrent()) return
+        const current = this.channels.get(channelKey)
+        if (current) {
+          this.attachClient(clientSecret, current)
+          return
         }
-
-        return false
+        log.error('Failed to fetch emote set', { channelId, channelKey, error: String(error) })
+        const latest = sevenTVCache.get(channelKey)
+        emoteSet = newerRetiredSnapshot() ?? latest
+        if (!latest || sevenTVCache.isExpired(channelKey)) {
+          const fallback = emoteSet ?? cached
+          if (fallback) this.sendEmoteSetToClient(clientSecret, platform, channelId, fallback)
+          return
+        }
+      } finally {
+        if (--cohort.pending === 0) this.joinLookups.delete(channelKey)
       }
     }
-
-    // Get the emote set ID from cache
-    const emoteSet = sevenTVCache.get(platform, channelId)
     if (!emoteSet) {
       log.error('No emote set found after fetch', { channelKey })
-      return false
+      return
     }
-
-    // Register subscription
-    this.registerSubscription(clientSecret, platform, channelId, emoteSet.id)
-
-    this.subscribeToEmoteSetUpdates(emoteSet.id, channelKey, clientSecret)
-
-    if (userId) {
-      this.subscribeToUserUpdates(userId, channelKey)
+    const retired = this.joinLookups.get(channelKey)?.retired
+    const channel: ChannelSubscription = {
+      key: channelKey,
+      platform,
+      channelId,
+      clients: new Set(),
+      emoteSet,
+      switchRequest: undefined,
+      revision: retired?.emoteSet === emoteSet ? retired.revision : 0,
     }
-
-    // Send emote set to client
-    this.sendEmoteSetToClient(clientSecret, platform, channelId, emoteSet)
-
-    return true
+    this.channels.set(channelKey, channel)
+    if (emoteSet.id !== null)
+      this.retain(this.emoteSetSubscriptions, emoteSet.id, channel, emoteSetEvents)
+    if (emoteSet.userId) this.retain(this.userSubscriptions, emoteSet.userId, channel, userEvents)
+    this.attachClient(clientSecret, channel)
   }
 
   unsubscribeClient(clientSecret: string, platform: Platform, channelId: string): void {
-    const channelKey = `${platform}:${channelId}`
+    const channelKey = sevenTVChannelKey(platform, channelId)
+    const pending = this.pendingByClient.get(clientSecret)
+    const reservation = pending?.get(channelKey)
+    pending?.delete(channelKey)
+    if (pending?.size === 0) this.pendingByClient.delete(clientSecret)
     log.info('Unsubscribing client from channel', {
       channelKey,
       clientSecret: clientSecret.slice(0, 8),
     })
 
-    // Remove from client subscriptions
-    const clientSubs = this.clientSubscriptions.get(clientSecret)
-    if (clientSubs) {
-      const sub = [...clientSubs].find((s) => s.platform === platform && s.channelId === channelId)
+    const channel = this.channels.get(channelKey)
+    if (channel) this.detachClient(clientSecret, channel)
+    reservation?.abort()
+  }
 
-      if (sub) {
-        clientSubs.delete(sub)
-
-        // Remove from emote set subscription
-        const emoteSetSub = this.emoteSetSubscriptions.get(sub.emoteSetId)
-        if (emoteSetSub) {
-          emoteSetSub.channelKeys.delete(channelKey)
-          emoteSetSub.clientSecrets.delete(clientSecret)
-
-          // If no more clients, unsubscribe from 7TV
-          if (emoteSetSub.clientSecrets.size === 0) {
-            log.info('Unsubscribing from 7TV EventAPI', {
-              emoteSetId: sub.emoteSetId,
-            })
-            sevenTVEventClient.unsubscribe('emote_set.update', {
-              object_id: sub.emoteSetId,
-            })
-            sevenTVEventClient.unsubscribe('emote_set.delete', {
-              object_id: sub.emoteSetId,
-            })
-            this.emoteSetSubscriptions.delete(sub.emoteSetId)
-          }
-        }
-
-        const userId = this.channelKeyToUserId.get(channelKey)
-        if (userId) {
-          this.unsubscribeFromUserUpdates(userId, channelKey)
-        }
-      }
-
-      // Clean up empty client subscriptions
-      if (clientSubs.size === 0) {
-        this.clientSubscriptions.delete(clientSecret)
-      }
-    }
+  cancelPendingClient(clientSecret: string): void {
+    const pending = this.pendingByClient.get(clientSecret)
+    this.pendingByClient.delete(clientSecret)
+    for (const reservation of pending?.values() ?? []) reservation.abort()
   }
 
   cleanupClient(clientSecret: string): void {
-    log.info('Cleaning up client subscriptions', {
-      clientSecret: clientSecret.slice(0, 8),
-    })
-
-    const clientSubs = this.clientSubscriptions.get(clientSecret)
-    if (!clientSubs) {
-      return
-    }
-
-    for (const sub of Array.from(clientSubs)) {
-      this.unsubscribeClient(clientSecret, sub.platform, sub.channelId)
-    }
+    this.cancelPendingClient(clientSecret)
+    for (const channel of this.clientSubscriptions.get(clientSecret) ?? [])
+      this.detachClient(clientSecret, channel)
   }
 
-  private async fetchAndCacheEmoteSet(
-    platform: Platform,
-    channelId: string,
-    platformUserId?: string,
-  ): Promise<string | null> {
-    const channelKey = `${platform}:${channelId}`
+  private attachClient(client: string, channel: ChannelSubscription): void {
+    if (channel.clients.has(client)) return
+    channel.clients.add(client)
+    let subscriptions = this.clientSubscriptions.get(client)
+    if (!subscriptions) {
+      subscriptions = new Set()
+      this.clientSubscriptions.set(client, subscriptions)
+    }
+    subscriptions.add(channel)
+    this.sendEmoteSetToClient(client, channel.platform, channel.channelId, channel.emoteSet)
+  }
+
+  private detachClient(client: string, channel: ChannelSubscription): void {
+    if (!channel.clients.delete(client)) return
+    const subscriptions = this.clientSubscriptions.get(client)
+    subscriptions?.delete(channel)
+    if (subscriptions?.size === 0) this.clientSubscriptions.delete(client)
+    if (channel.clients.size !== 0) return
+    const lookups = this.joinLookups.get(channel.key)
+    if (lookups) lookups.retired = channel
+    this.channels.delete(channel.key)
+    const request = channel.switchRequest
+    channel.switchRequest = undefined
+    if (channel.emoteSet.id !== null)
+      this.release(this.emoteSetSubscriptions, channel.emoteSet.id, channel, emoteSetEvents)
+    if (channel.emoteSet.userId)
+      this.release(this.userSubscriptions, channel.emoteSet.userId, channel, userEvents)
+    request?.controller.abort()
+  }
+
+  private async fetchEmoteSet(
+    channelKey: SevenTVChannelKey,
+    { platform, channelId, platformUserId }: SubscriptionRequest,
+    signal: AbortSignal,
+  ): Promise<CachedEmoteSet | null> {
     log.info('Fetching emote set from 7TV', { channelKey })
 
     // Convert platform to 7TV Platform enum
@@ -209,7 +348,7 @@ export class SevenTVSubscriptionManager {
     let sevenTVPlatformId = channelId
     if (platform === 'twitch') {
       const twitchIdentifier = isTwitchUserId(platformUserId) ? platformUserId : channelId
-      const resolvedPlatformId = await resolveTwitchUserId(twitchIdentifier)
+      const resolvedPlatformId = await resolveTwitchUserId(twitchIdentifier, signal)
       if (!resolvedPlatformId) {
         throw new Error(`Twitch user not found for identifier: ${twitchIdentifier}`)
       }
@@ -223,187 +362,90 @@ export class SevenTVSubscriptionManager {
       })
     }
 
-    const result = await getUserByConnection(sevenTVPlatform, sevenTVPlatformId)
-
-    const user = result.users?.userByConnection
+    signal.throwIfAborted()
+    const user = await getUserByConnection(sevenTVPlatform, sevenTVPlatformId, signal)
     if (!user) {
       throw new Error(`User not found on 7TV for ${platform}:${sevenTVPlatformId}`)
     }
 
-    const emoteSet = user.style?.activeEmoteSet
-    if (!emoteSet) {
+    const emoteSet = user.activeEmoteSet
+    if (emoteSet === undefined) {
       throw new Error('No active emote set found')
     }
 
-    // Convert to cache format
+    return this.createSnapshot(emoteSet, {
+      userId: user.id,
+      platformUserId: sevenTVPlatformId,
+    })
+  }
+
+  private createSnapshot(
+    emoteSet: SevenTVGraphQLEmoteSet,
+    identity: Pick<CachedEmoteSet, 'userId' | 'platformUserId'>,
+  ): CachedEmoteSet & { id: string }
+  private createSnapshot(
+    emoteSet: SevenTVGraphQLEmoteSet | null,
+    identity: Pick<CachedEmoteSet, 'userId' | 'platformUserId'>,
+  ): CachedEmoteSet
+  private createSnapshot(
+    emoteSet: SevenTVGraphQLEmoteSet | null,
+    { userId, platformUserId }: Pick<CachedEmoteSet, 'userId' | 'platformUserId'>,
+  ): CachedEmoteSet {
     const emotes = new Map<string, SevenTVEmote>()
 
-    for (const item of emoteSet.emotes?.items ?? []) {
-      emotes.set(
-        item.alias,
-        createSevenTvEmote({
-          alias: item.alias,
-          animated: item.emote.flags?.animated ?? false,
-          aspectRatio: item.emote.aspectRatio ?? 1,
-          id: item.emote.id,
-          imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
-          name: item.emote.defaultName,
-          zeroWidth: item.flags?.zeroWidth ?? false,
-        }),
-      )
+    for (const item of emoteSet?.emotes.items ?? []) {
+      emotes.set(item.alias, createSevenTvEmoteFromCatalogItem(item))
     }
 
-    sevenTVCache.set(platform, channelId, {
-      channelId,
+    return {
       emotes,
-      fetchedAt: Date.now(),
-      id: emoteSet.id,
-      name: emoteSet.name,
-      platform,
-      ttl: 5 * 60 * 1000,
-    })
-
-    log.info('Emote set cached', {
-      channelKey,
-      emoteCount: emotes.size,
-      emoteSetId: emoteSet.id,
-    })
-
-    return user.id ?? null
+      ...(emoteSet ? { id: emoteSet.id, name: emoteSet.name } : { id: null, name: null }),
+      userId,
+      platformUserId,
+    }
   }
 
-  private async fetchAndCacheEmoteSetById(
-    emoteSetId: string,
-    platform: Platform,
-    channelId: string,
-  ): Promise<string> {
-    const channelKey = `${platform}:${channelId}`
-    log.info('Fetching emote set by ID from 7TV', { channelKey, emoteSetId })
-
-    const result = await getEmoteSetById(emoteSetId)
-    const emoteSet = result.emoteSets?.emoteSet
-    if (!emoteSet) {
-      throw new Error(`Emote set ${emoteSetId} not found on 7TV`)
-    }
-
-    const emotes = new Map<string, SevenTVEmote>()
-    for (const item of emoteSet.emotes?.items ?? []) {
-      emotes.set(
-        item.alias,
-        createSevenTvEmote({
-          alias: item.alias,
-          animated: item.emote.flags?.animated ?? false,
-          aspectRatio: item.emote.aspectRatio ?? 1,
-          id: item.emote.id,
-          imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
-          name: item.emote.defaultName,
-          zeroWidth: item.flags?.zeroWidth ?? false,
-        }),
-      )
-    }
-
-    sevenTVCache.set(platform, channelId, {
-      channelId,
-      emotes,
-      fetchedAt: Date.now(),
-      id: emoteSet.id,
-      name: emoteSet.name,
-      platform,
-      ttl: 5 * 60 * 1000,
-    })
-
-    log.info('Emote set cached by ID', {
-      channelKey,
-      emoteCount: emotes.size,
-      emoteSetId: emoteSet.id,
-    })
-
-    return emoteSet.name
+  private async fetchEmoteSetById(
+    id: string,
+    channel: ChannelSubscription,
+    signal: AbortSignal,
+  ): Promise<CachedEmoteSet & { id: string }> {
+    const emoteSet = await getEmoteSetById(id, signal)
+    signal.throwIfAborted()
+    if (!emoteSet) throw new Error(`Emote set ${id} not found on 7TV`)
+    return this.createSnapshot(emoteSet, channel.emoteSet)
   }
 
-  private registerSubscription(
-    clientSecret: string,
-    platform: Platform,
-    channelId: string,
-    emoteSetId: string,
+  private retain(
+    index: Map<string, Set<ChannelSubscription>>,
+    id: string,
+    channel: ChannelSubscription,
+    events: readonly string[],
   ): void {
-    let clientSubs = this.clientSubscriptions.get(clientSecret)
-    if (!clientSubs) {
-      clientSubs = new Set()
-      this.clientSubscriptions.set(clientSecret, clientSubs)
-    }
-
-    clientSubs.add({ channelId, emoteSetId, platform })
-  }
-
-  private subscribeToEmoteSetUpdates(
-    emoteSetId: string,
-    channelKey: string,
-    clientSecret: string,
-  ): void {
-    let sub = this.emoteSetSubscriptions.get(emoteSetId)
-
-    if (!sub) {
-      sub = {
-        channelKeys: new Set(),
-        clientSecrets: new Set(),
-        emoteSetId,
-      }
-      this.emoteSetSubscriptions.set(emoteSetId, sub)
-
-      // Subscribe to 7TV EventAPI
-      log.info('SUBSCRIBING TO 7TV', {
-        channelKey,
-        emoteSetId,
-        type: 'emote_set.update',
-      })
-      sevenTVEventClient.subscribe('emote_set.update', {
-        object_id: emoteSetId,
-      })
-      sevenTVEventClient.subscribe('emote_set.delete', {
-        object_id: emoteSetId,
-      })
-
-      // Ensure connection is established
-      if (!sevenTVEventClient.isConnected) {
-        sevenTVEventClient
-          .connect()
-          .catch((error: unknown) => log.error('Connection failed', { error: String(error) }))
-      }
-    }
-
-    sub.channelKeys.add(channelKey)
-    sub.clientSecrets.add(clientSecret)
-  }
-
-  private subscribeToUserUpdates(userId: string, channelKey: string): void {
-    let channelKeys = this.userSubscriptions.get(userId)
-    if (!channelKeys) {
-      channelKeys = new Set()
-      this.userSubscriptions.set(userId, channelKeys)
-      log.info('Subscribing to 7TV user.update', { channelKey, userId })
-      sevenTVEventClient.subscribe('user.update', { object_id: userId })
-      if (!sevenTVEventClient.isConnected) {
-        sevenTVEventClient
-          .connect()
-          .catch((error: unknown) => log.error('Connection failed', { error: String(error) }))
-      }
-    }
-    channelKeys.add(channelKey)
-  }
-
-  private unsubscribeFromUserUpdates(userId: string, channelKey: string): void {
-    const channelKeys = this.userSubscriptions.get(userId)
-    if (!channelKeys) {
+    const existing = index.get(id)
+    if (existing) {
+      existing.add(channel)
       return
     }
-    channelKeys.delete(channelKey)
-    this.channelKeyToUserId.delete(channelKey)
-    if (channelKeys.size === 0) {
-      this.userSubscriptions.delete(userId)
-      log.info('Unsubscribing from 7TV user.update', { userId })
-      sevenTVEventClient.unsubscribe('user.update', { object_id: userId })
+    index.set(id, new Set([channel]))
+    for (const type of events) this.eventClient.subscribe(type, { object_id: id })
+    if (!this.eventClient.isConnected) {
+      this.eventClient
+        .connect()
+        .catch((error: unknown) => log.error('Connection failed', { error: String(error) }))
     }
+  }
+
+  private release(
+    index: Map<string, Set<ChannelSubscription>>,
+    id: string,
+    channel: ChannelSubscription,
+    events: readonly string[],
+  ): void {
+    const channels = index.get(id)
+    if (!channels?.delete(channel) || channels.size !== 0) return
+    index.delete(id)
+    for (const type of events) this.eventClient.unsubscribe(type, { object_id: id })
   }
 
   private handleEvent(event: SevenTVEvent): void {
@@ -454,18 +496,19 @@ export class SevenTVSubscriptionManager {
           name: emote.name,
         })
 
-        for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = parseChannelKey(channelKey)
-          sevenTVCache.addEmote(platform, channelId, emote)
+        for (const channel of emoteSetSub) {
+          const { platform, channelId } = channel
+          channel.revision++
+          channel.emoteSet.emotes.set(emote.alias, { ...emote })
 
-          this.broadcastToChannel(channelKey, {
+          this.broadcastToChannel(channel, {
             channelId,
             emote,
             platform,
             type: 'seventv_emote_added',
           })
 
-          this.broadcastToChannel(channelKey, {
+          this.broadcastToChannel(channel, {
             action: 'added',
             actorName,
             channelId,
@@ -488,18 +531,19 @@ export class SevenTVSubscriptionManager {
           name: emote.name,
         })
 
-        for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = parseChannelKey(channelKey)
-          sevenTVCache.removeEmote(platform, channelId, emote.id)
+        for (const channel of emoteSetSub) {
+          const { platform, channelId } = channel
+          channel.revision++
+          removeSetEmote(channel.emoteSet.emotes, emote.id)
 
-          this.broadcastToChannel(channelKey, {
+          this.broadcastToChannel(channel, {
             channelId,
             emoteId: emote.id,
             platform,
             type: 'seventv_emote_removed',
           })
 
-          this.broadcastToChannel(channelKey, {
+          this.broadcastToChannel(channel, {
             action: 'removed',
             actorName,
             channelId,
@@ -512,7 +556,7 @@ export class SevenTVSubscriptionManager {
     }
 
     for (const update of body.updated ?? []) {
-      if (update.key === 'name' && typeof update.value === 'string') {
+      if (update.kind === 'field' && update.key === 'name' && typeof update.value === 'string') {
         const newName = update.value
         const oldName = typeof update.old_value === 'string' ? update.old_value : ''
 
@@ -522,15 +566,13 @@ export class SevenTVSubscriptionManager {
           oldName,
         })
 
-        for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = parseChannelKey(channelKey)
+        for (const channel of emoteSetSub) {
+          if (channel.emoteSet.id !== body.id) continue
+          const { platform, channelId } = channel
+          channel.revision++
+          channel.emoteSet.name = newName
 
-          const cachedSet = sevenTVCache.get(platform, channelId)
-          if (cachedSet) {
-            cachedSet.name = newName
-          }
-
-          this.broadcastToChannel(channelKey, {
+          this.broadcastToChannel(channel, {
             action: 'set_renamed',
             channelId,
             newName,
@@ -541,7 +583,7 @@ export class SevenTVSubscriptionManager {
         }
       }
 
-      if (isSevenTvEventEmoteUpdate(update)) {
+      if (update.kind === 'emote') {
         const newValue = update.value
         const oldValue = update.old_value
 
@@ -552,13 +594,13 @@ export class SevenTVSubscriptionManager {
           oldAlias: oldValue.name,
         })
 
-        for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = parseChannelKey(channelKey)
-          sevenTVCache.updateEmote(platform, channelId, newValue.id, {
-            alias: newValue.name,
-          })
-
-          this.broadcastToChannel(channelKey, {
+        for (const channel of emoteSetSub) {
+          const { platform, channelId } = channel
+          channel.revision++
+          const emoteForMessage =
+            updateSetEmote(channel.emoteSet.emotes, newValue.id, { alias: newValue.name }) ??
+            createSevenTvEmoteFromEventValue(newValue)
+          this.broadcastToChannel(channel, {
             alias: newValue.name,
             channelId,
             emoteId: newValue.id,
@@ -566,19 +608,7 @@ export class SevenTVSubscriptionManager {
             type: 'seventv_emote_updated',
           })
 
-          const cachedSet = sevenTVCache.get(platform, channelId)
-          let emoteForMessage = createSevenTvEmoteFromEventValue(newValue)
-
-          if (cachedSet) {
-            for (const [, cachedEmote] of cachedSet.emotes) {
-              if (cachedEmote.id === newValue.id) {
-                emoteForMessage = cachedEmote
-                break
-              }
-            }
-          }
-
-          this.broadcastToChannel(channelKey, {
+          this.broadcastToChannel(channel, {
             action: 'updated',
             channelId,
             emote: emoteForMessage,
@@ -600,12 +630,13 @@ export class SevenTVSubscriptionManager {
 
     log.info('7TV emote set DELETED', { emoteSetId: body.id })
 
-    for (const channelKey of emoteSetSub.channelKeys) {
-      const [platform, channelId] = parseChannelKey(channelKey)
-      const cachedSet = sevenTVCache.get(platform, channelId)
-      const setName = cachedSet?.name ?? body.id
+    for (const channel of emoteSetSub) {
+      const { platform, channelId } = channel
+      channel.revision++
+      const setName = channel.emoteSet.name
+      if (setName === null) continue
 
-      this.broadcastToChannel(channelKey, {
+      this.broadcastToChannel(channel, {
         action: 'set_deleted',
         channelId,
         platform,
@@ -615,187 +646,78 @@ export class SevenTVSubscriptionManager {
     }
   }
 
-  private async handleUserUpdateEvent(body: UserUpdateEvent): Promise<void> {
-    log.info('[handleUserUpdateEvent] called', {
-      updatedKeys: body.updated?.map((u) => u.key),
-      userId: body.id,
-    })
-
-    const channelKeys = this.userSubscriptions.get(body.id)
-    if (!channelKeys) {
-      log.info('[handleUserUpdateEvent] no channelKeys for userId — ignoring', { userId: body.id })
-      return
-    }
-
-    log.info('[handleUserUpdateEvent] found channelKeys', {
-      channelKeys: [...channelKeys],
-      userId: body.id,
-    })
-
-    let newEmoteSetId: string | null = null
-    for (const update of body.updated ?? []) {
-      log.info('[handleUserUpdateEvent] processing update', {
-        isArray: Array.isArray(update.value),
-        key: update.key,
-        valueType: typeof update.value,
-      })
-      if (update.key !== 'connections') {
-        continue
-      }
-      const nested = Array.isArray(update.value)
-        ? z.array(z.object({ key: z.string(), value: z.unknown() })).parse(update.value)
-        : []
-      log.info('[handleUserUpdateEvent] connections nested fields', {
-        count: nested.length,
-        fields: nested.map((f) => ({ key: f.key, value: f.value, valueType: typeof f.value })),
-      })
-      for (const field of nested) {
-        if (field.key === 'emote_set_id' && typeof field.value === 'string') {
-          newEmoteSetId = field.value
-          break
-        }
-      }
-      if (newEmoteSetId) {
-        break
-      }
-    }
-
-    if (!newEmoteSetId) {
-      log.info('[handleUserUpdateEvent] no emote_set_id string found in update — ignoring', {
-        userId: body.id,
-      })
-      return
-    }
-
-    log.info('Active emote set changed', {
-      newEmoteSetId,
-      userId: body.id,
-    })
-
-    for (const channelKey of channelKeys) {
-      const [platform, channelId] = parseChannelKey(channelKey)
-
-      const existing = this.findClientSubscriptionForChannel(platform, channelId)
-      if (!existing) {
-        log.info('[handleUserUpdateEvent] no client subscription for channel — skipping', {
-          channelKey,
-        })
-        continue
-      }
-
-      const oldEmoteSetId = existing.emoteSetId
-      if (oldEmoteSetId === newEmoteSetId) {
-        log.info('[handleUserUpdateEvent] emoteSetId unchanged — skipping', {
-          channelKey,
-          oldEmoteSetId,
-        })
-        continue
-      }
-
-      log.info('[handleUserUpdateEvent] swapping emote set', {
-        channelKey,
-        newEmoteSetId,
-        oldEmoteSetId,
-      })
-
-      const oldEmoteSetSub = this.emoteSetSubscriptions.get(oldEmoteSetId)
-      if (oldEmoteSetSub) {
-        oldEmoteSetSub.channelKeys.delete(channelKey)
-        for (const [clientSecret, subs] of this.clientSubscriptions) {
-          for (const sub of subs) {
-            if (sub.platform === platform && sub.channelId === channelId) {
-              oldEmoteSetSub.clientSecrets.delete(clientSecret)
-            }
-          }
-        }
-        if (oldEmoteSetSub.clientSecrets.size === 0) {
-          log.info('[handleUserUpdateEvent] unsubscribing from old emote_set.update', {
-            oldEmoteSetId,
-          })
-          sevenTVEventClient.unsubscribe('emote_set.update', { object_id: oldEmoteSetId })
-          sevenTVEventClient.unsubscribe('emote_set.delete', { object_id: oldEmoteSetId })
-          this.emoteSetSubscriptions.delete(oldEmoteSetId)
-        }
-      }
-
-      let newSetName: string
-      try {
-        newSetName = await this.fetchAndCacheEmoteSetById(newEmoteSetId, platform, channelId)
-      } catch (error) {
-        log.error('Failed to fetch new emote set after active set change', {
-          channelKey,
-          error: String(error),
-        })
-        continue
-      }
-
-      const affectedClientSecrets: string[] = []
-      for (const [clientSecret, subs] of this.clientSubscriptions) {
-        for (const sub of subs) {
-          if (sub.platform === platform && sub.channelId === channelId) {
-            sub.emoteSetId = newEmoteSetId
-            affectedClientSecrets.push(clientSecret)
-          }
-        }
-      }
-
-      log.info('[handleUserUpdateEvent] subscribing to new emote set for clients', {
-        channelKey,
-        clientCount: affectedClientSecrets.length,
-        newEmoteSetId,
-      })
-      for (const clientSecret of affectedClientSecrets) {
-        this.subscribeToEmoteSetUpdates(newEmoteSetId, channelKey, clientSecret)
-      }
-
-      const newEmoteSet = sevenTVCache.get(platform, channelId)
-      if (newEmoteSet) {
-        log.info('[handleUserUpdateEvent] sending new emote set to clients', {
-          channelKey,
-          clientCount: affectedClientSecrets.length,
-          newEmoteSetId,
-        })
-        for (const clientSecret of affectedClientSecrets) {
-          this.sendEmoteSetToClient(clientSecret, platform, channelId, newEmoteSet)
-        }
-      } else {
-        log.error(
-          '[handleUserUpdateEvent] emote set not in cache after fetch — cannot push to clients',
-          { channelKey, newEmoteSetId },
-        )
-      }
-
-      this.broadcastToChannel(channelKey, {
-        action: 'set_changed',
-        channelId,
-        platform,
-        setName: newSetName,
-        type: 'seventv_system_message',
-      })
-    }
+  private async handleUserUpdateEvent({ id, activeSetId }: UserUpdateEvent): Promise<void> {
+    if (activeSetId === undefined) return
+    const channels = this.userSubscriptions.get(id)
+    if (!channels) return
+    await Promise.all([...channels].map((channel) => this.switchEmoteSet(channel, activeSetId)))
   }
 
-  private findClientSubscriptionForChannel(
-    platform: Platform,
-    channelId: string,
-  ): ClientSubscription | null {
-    for (const subs of this.clientSubscriptions.values()) {
-      for (const sub of subs) {
-        if (sub.platform === platform && sub.channelId === channelId) {
-          return sub
-        }
-      }
+  private async switchEmoteSet(channel: ChannelSubscription, id: string): Promise<void> {
+    const previous = channel.switchRequest
+    if (previous?.target === id || this.channels.get(channel.key) !== channel) return
+    const request =
+      channel.emoteSet.id === id ? undefined : { target: id, controller: new AbortController() }
+    channel.revision++
+    channel.switchRequest = request
+    previous?.controller.abort()
+    if (!request || channel.switchRequest !== request) return
+    const { key, platform, channelId } = channel
+    let emoteSet: Awaited<ReturnType<SevenTVSubscriptionManager['fetchEmoteSetById']>>
+    try {
+      emoteSet = await this.fetchEmoteSetById(id, channel, request.controller.signal)
+    } catch (error) {
+      if (channel.switchRequest !== request) return
+      channel.switchRequest = undefined
+      log.error('Failed to fetch new emote set after active set change', {
+        channelKey: key,
+        error: String(error),
+      })
+      return
     }
-    return null
+    if (this.channels.get(key) !== channel || channel.switchRequest !== request) return
+    channel.switchRequest = undefined
+    this.publishSnapshot(channel, emoteSet)
+    this.broadcastToChannel(channel, {
+      action: 'set_changed',
+      channelId,
+      platform,
+      setName: emoteSet.name,
+      type: 'seventv_system_message',
+    })
+  }
+
+  private publishSnapshot(channel: ChannelSubscription, emoteSet: CachedEmoteSet): void {
+    this.replaceSnapshot(channel, emoteSet)
+    for (const client of channel.clients)
+      this.sendEmoteSetToClient(client, channel.platform, channel.channelId, emoteSet)
+  }
+
+  private replaceSnapshot(channel: ChannelSubscription, emoteSet: CachedEmoteSet): void {
+    const previous = channel.emoteSet
+    channel.revision++
+    channel.emoteSet = emoteSet
+    sevenTVCache.set(channel.key, emoteSet)
+    if (previous.id !== emoteSet.id) {
+      if (previous.id !== null)
+        this.release(this.emoteSetSubscriptions, previous.id, channel, emoteSetEvents)
+      if (emoteSet.id !== null)
+        this.retain(this.emoteSetSubscriptions, emoteSet.id, channel, emoteSetEvents)
+    }
+    if (previous.userId !== emoteSet.userId) {
+      if (previous.userId)
+        this.release(this.userSubscriptions, previous.userId, channel, userEvents)
+      if (emoteSet.userId) this.retain(this.userSubscriptions, emoteSet.userId, channel, userEvents)
+    }
   }
 
   private sendEmoteSetToClient(
     clientSecret: string,
     platform: Platform,
     channelId: string,
-    emoteSet: { id: string; emotes: Map<string, SevenTVEmote> },
+    emoteSet: Pick<CachedEmoteSet, 'emotes'>,
   ): void {
-    this.sendToClient?.(clientSecret, {
+    this.sendToClient(clientSecret, {
       channelId,
       emotes: Array.from(emoteSet.emotes.values()),
       platform,
@@ -803,29 +725,8 @@ export class SevenTVSubscriptionManager {
     })
   }
 
-  private broadcastToChannel(channelKey: string, message: BackendToDesktopMessage): void {
-    const [platform, channelId] = parseChannelKey(channelKey)
-
-    // Find all clients subscribed to this channel
-    let foundClients = 0
-    for (const [clientSecret, subs] of this.clientSubscriptions) {
-      for (const sub of subs) {
-        if (sub.platform === platform && sub.channelId === channelId) {
-          this.sendToClient?.(clientSecret, message)
-          foundClients++
-          break
-        }
-      }
-    }
-
-    log.info('Broadcast result', {
-      channelKey,
-      clientCount: foundClients,
-      messageType:
-        typeof message === 'object' && message !== null && 'type' in message
-          ? message.type
-          : undefined,
-    })
+  private broadcastToChannel(channel: ChannelSubscription, message: BackendToDesktopMessage): void {
+    for (const client of channel.clients) this.sendToClient(client, message)
   }
 
   getStats(): {
@@ -836,9 +737,7 @@ export class SevenTVSubscriptionManager {
     return {
       connectedClients: this.clientSubscriptions.size,
       emoteSetSubscriptions: this.emoteSetSubscriptions.size,
-      eventClientConnected: sevenTVEventClient.isConnected,
+      eventClientConnected: this.eventClient.isConnected,
     }
   }
 }
-
-export const sevenTVManager = new SevenTVSubscriptionManager()

@@ -3,7 +3,7 @@ import { PLATFORM_COMMAND_NAMES } from '@twirchat/shared/channel-tools'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { useEffect, useRef, useState } from 'react'
 
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import {
   commandApplies,
   expandCustomCommand,
@@ -11,16 +11,17 @@ import {
   type CommandContext,
 } from '../commands'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { claimMessageRowClick } from '../message-row-click'
 import type { IgnoreRule } from '../message-rules'
 import { usePaneAccountId } from '../pane-account-context'
-import { accountsStore, showNotice, streamStatusStore } from '../state/app'
+import { accountsStore } from '../state/accounts'
+import { showNotice, streamStatusStore } from '../state/app'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
-import { useStoreSelector } from '../state/create-store'
 import { customCommandsStore } from '../state/custom-commands'
 import { useOverlayClose } from '../state/overlays'
 import { requestMessageTranslation } from '../state/translation'
+import { useStoreSelector } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'

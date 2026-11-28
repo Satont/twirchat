@@ -1,6 +1,6 @@
 import { logger } from '@twirchat/shared/logger'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import type {
   PluginTransportCallbacks,
   PluginTransportConnection,

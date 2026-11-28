@@ -1,35 +1,20 @@
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import * as schemas from './event-schemas'
+import type { SevenTVEvent, SevenTVEventMessage, SevenTVHello } from './event-schemas'
 import { sevenTVEventMessageSchema, sevenTVHelloSchema, sevenTVEventSchema } from './event-schemas'
 
 const log = logger('seventv:event')
 
 const SEVENTV_EVENT_API_URL = 'wss://events.7tv.io/v3'
 
-export type SevenTVEventMessage = z.infer<typeof schemas.sevenTVEventMessageSchema>
-export type SevenTVHello = z.infer<typeof schemas.sevenTVHelloSchema>
-export type UserUpdateEventNestedField = z.infer<typeof schemas.userUpdateNestedFieldSchema>
-export type UserUpdateEvent = z.infer<typeof schemas.userUpdateSchema>
-export type SevenTVEventImageFile = z.infer<typeof schemas.eventImageFileSchema>
-export type SevenTVEventEmoteData = z.infer<typeof schemas.sevenTVEventEmoteValueSchema.shape.data>
-export type SevenTVEventEmoteValue = z.infer<typeof schemas.sevenTVEventEmoteValueSchema>
-export type SevenTVEventEmoteInsert = z.infer<typeof schemas.emoteInsertSchema>
-export type SevenTVEventEmoteRemove = z.infer<typeof schemas.emoteRemoveSchema>
-export type SevenTVEventEmoteUpdate = z.infer<typeof schemas.emoteUpdateSchema>
-export type SevenTVEventFieldUpdate = z.infer<typeof schemas.fieldUpdateSchema>
-export type SevenTVEvent = z.infer<typeof schemas.sevenTVEventSchema>
-export type EmoteSetUpdateEvent = z.infer<typeof schemas.emoteSetUpdateSchema>
-export type EmoteSetDeleteEvent = z.infer<typeof schemas.emoteSetDeleteSchema>
-
-export type SevenTVEventHandler = (event: SevenTVEvent) => void
-
 export class SevenTVEventClient {
   private ws: WebSocket | null = null
+  private helloTimer: Timer | null = null
   private heartbeatTimer: Timer | null = null
   private reconnectTimer: Timer | null = null
   private receivedHello = false
+  private hasConnected = false
   private heartbeatInterval = 0
   private lastHeartbeat = 0
   private isConnecting = false
@@ -40,14 +25,17 @@ export class SevenTVEventClient {
 
   private subscriptions = new Map<string, { type: string; condition: Record<string, string> }>()
 
-  onEvent: SevenTVEventHandler | null = null
-  onConnected: (() => void) | null = null
+  onEvent: ((event: SevenTVEvent) => void) | null = null
+  onConnected: ((reconnected: boolean) => void) | null = null
   onDisconnected: (() => void) | null = null
 
-  constructor(private readonly url = SEVENTV_EVENT_API_URL) {}
+  constructor(
+    private readonly url = SEVENTV_EVENT_API_URL,
+    private readonly helloTimeoutMs = 10_000,
+  ) {}
 
   async connect(): Promise<void> {
-    if (this.isConnecting || this.ws) {
+    if (this.isConnecting || this.ws || this.reconnectTimer) {
       return
     }
 
@@ -61,6 +49,11 @@ export class SevenTVEventClient {
       ws.onopen = () => {
         if (this.ws !== ws) return
         this.isConnecting = false
+        this.helloTimer = setTimeout(() => {
+          if (this.ws !== ws || this.receivedHello) return
+          log.warn('Timed out waiting for 7TV Hello')
+          this.retry()
+        }, this.helloTimeoutMs)
         log.info('WebSocket connected')
       }
 
@@ -71,11 +64,7 @@ export class SevenTVEventClient {
       ws.onclose = (event) => {
         if (this.ws !== ws) return
         log.info('WebSocket closed', { code: event.code, reason: event.reason })
-        this.cleanup()
-
-        if (this.shouldReconnect) {
-          this.scheduleReconnect(event.code)
-        }
+        this.retry(event.code)
       }
 
       ws.onerror = (error) => {
@@ -93,11 +82,25 @@ export class SevenTVEventClient {
     log.info('Disconnecting from 7TV EventAPI...')
     this.shouldReconnect = false
     this.cleanup()
+    this.onDisconnected?.()
+  }
+
+  private retry(closeCode?: number): void {
+    this.cleanup()
+    this.scheduleReconnect(closeCode)
+    this.onDisconnected?.()
+  }
+
+  private clearHelloTimer(): void {
+    if (!this.helloTimer) return
+    clearTimeout(this.helloTimer)
+    this.helloTimer = null
   }
 
   private cleanup(): void {
     this.isConnecting = false
     this.receivedHello = false
+    this.clearHelloTimer()
 
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
@@ -119,8 +122,6 @@ export class SevenTVEventClient {
         // Ignore
       }
     }
-
-    this.onDisconnected?.()
   }
 
   private handleMessage(data: string): void {
@@ -162,7 +163,7 @@ export class SevenTVEventClient {
         case 4: {
           // Reconnect
           log.info('Server requested reconnect')
-          this.reconnect()
+          this.retry()
           break
         }
         case 5: {
@@ -200,6 +201,10 @@ export class SevenTVEventClient {
       subscriptionLimit: hello.subscription_limit,
     })
 
+    if (this.receivedHello) return
+    const reconnected = this.hasConnected
+    this.hasConnected = true
+    this.clearHelloTimer()
     this.receivedHello = true
     this.heartbeatInterval = hello.heartbeat_interval
     this.lastHeartbeat = Date.now()
@@ -213,7 +218,7 @@ export class SevenTVEventClient {
     }
 
     this.reconnectAttempts = 0
-    this.onConnected?.()
+    this.onConnected?.(reconnected)
   }
 
   private startHeartbeat(): void {
@@ -231,7 +236,7 @@ export class SevenTVEventClient {
       // If no heartbeat for 3 intervals, consider connection dead
       if (elapsed > this.heartbeatInterval * 3) {
         log.warn('Heartbeat timeout, reconnecting...')
-        this.reconnect()
+        this.retry()
       }
     }, checkInterval)
   }
@@ -269,13 +274,6 @@ export class SevenTVEventClient {
     if (this.receivedHello && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
     }
-  }
-
-  private reconnect(): void {
-    this.cleanup()
-    this.connect().catch((error: unknown) =>
-      log.error('Connection failed', { error: String(error) }),
-    )
   }
 
   private scheduleReconnect(closeCode?: number): void {
@@ -320,5 +318,3 @@ export class SevenTVEventClient {
     return this.subscriptions.size
   }
 }
-
-export const sevenTVEventClient = new SevenTVEventClient()

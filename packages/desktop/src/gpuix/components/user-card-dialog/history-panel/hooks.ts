@@ -1,5 +1,5 @@
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '@desktop/shared/rpc'
-import { useBackend, useBackendEvent } from '@gpuix/backend/context'
+import { useBackend, useBackendEvent } from '@gpuix/backend-context'
 import { errorText } from '@gpuix/components/user-card/format'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'

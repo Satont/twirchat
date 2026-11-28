@@ -106,7 +106,31 @@ export class DesktopSevenTVService {
     channelId: string,
     owner = 'default',
   ): Promise<void> {
-    const channelKey = this.resolveChannelKey(platform, channelId)
+    this.releaseSubscription(
+      this.resolveChannelKey(platform, channelId),
+      platform,
+      channelId,
+      owner,
+    )
+  }
+
+  async unsubscribeOwner(owner: string): Promise<void> {
+    const owned = [...this.subscriptions].filter(([, subscription]) =>
+      subscription.owners.has(owner),
+    )
+    await Promise.all(
+      owned.map(async ([key, { platform, channelId }]) => {
+        this.releaseSubscription(key, platform, channelId, owner)
+      }),
+    )
+  }
+
+  private releaseSubscription(
+    channelKey: string,
+    platform: Platform,
+    channelId: string,
+    owner: string,
+  ): void {
     const subscription = this.subscriptions.get(channelKey)
     subscription?.owners.delete(owner)
     if (subscription && subscription.owners.size > 0) return
@@ -118,7 +142,9 @@ export class DesktopSevenTVService {
 
     if (subscription) {
       for (const lookupId of subscription.lookupIds) {
-        this.lookupToChannelKey.delete(this.getChannelKey(platform, lookupId))
+        const lookupKey = this.getChannelKey(platform, lookupId)
+        if (this.lookupToChannelKey.get(lookupKey) === channelKey)
+          this.lookupToChannelKey.delete(lookupKey)
       }
     } else {
       this.lookupToChannelKey.delete(this.getChannelKey(platform, channelId))

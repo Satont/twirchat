@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { type MessageKey } from '../../i18n'
 import type { StreamerMode, StreamerModeSettings as Settings } from '../../services/streamer-mode'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT, type MessageKey } from '../i18n'
-import { useStore } from '../state/create-store'
+import { useT } from '../hooks/use-translation'
 import {
   loadStreamerMode,
   saveStreamerMode,
@@ -12,6 +12,7 @@ import {
   streamerModeRequestStore,
   streamerModeStore,
 } from '../state/streamer-mode'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton } from './ui/Form'

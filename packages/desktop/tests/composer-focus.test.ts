@@ -12,11 +12,11 @@ import {
 import {
   cleanupWindowLayoutFocus,
   focusLayoutPanel,
-  layoutStore,
   registerLayoutPanelFocus,
   requestLayoutPanelFocus,
   splitPanel,
 } from '../src/gpuix/state/layout'
+import { layoutStore } from '../src/gpuix/state/layout-state'
 import { literal } from './fixture-values'
 const scopes = ['main', 'focus-other', 'focus-queued']
 afterEach(() => {

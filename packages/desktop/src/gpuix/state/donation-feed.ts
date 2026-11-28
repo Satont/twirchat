@@ -1,8 +1,8 @@
 import type { DonationEvent } from '@twirchat/shared/donations'
 
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 const MAX_ROWS = 200
 const RECENT_KEY_LIMIT = 1000
@@ -96,7 +96,7 @@ export const sharedDonationFeeds = persistentResource(
   createSharedDonationFeeds,
 )
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     donationFeed: ReturnType<typeof createDonationFeed>
     sharedDonationFeeds: ReturnType<typeof createSharedDonationFeeds>

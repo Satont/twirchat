@@ -17,7 +17,7 @@ import type {
 import { z } from 'zod'
 
 import { focusNativeQaWindow, getNativeQaWindowGeometry } from '../scripts/qa-x11'
-import type { DesktopBackend } from '../src/gpuix/backend/server'
+import type { DesktopBackend } from '../src/gpuix/backend/contract'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 import { captureGuiQaDisplay } from '../src/services/gui-qa-screenshot'
 
@@ -29,17 +29,19 @@ const { useGpuixRequired } = await import('@gpuix/react')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { BackendConnection } = await import('../src/backend-connection')
 const { ChatAggregator } = await import('../src/chat/aggregator')
-const { createDesktopApi, planTwitchActivitySnapshot, requestTwitchActivitiesSnapshot } =
+const { createDesktopApi, planTwitchActivitySnapshot, createTwitchActivitySnapshots } =
   await import('../src/gpuix/backend/api')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { TwitchDeviceDialog } = await import('../src/gpuix/components/TwitchDeviceDialog')
 const { TwitchSessionSettings } = await import('../src/gpuix/components/TwitchSessionSettings')
-const { setLanguage } = await import('../src/gpuix/i18n')
+const { setLanguage } = await import('../src/i18n')
 const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const app = await import('../src/gpuix/state/app')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const accountState = await import('../src/gpuix/state/accounts')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { wireTwitchActivities } = await import('../src/gpuix/state/twitch-activities')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { TwitchActivityRefreshClient } = await import('../src/services/twitch-activity-refresh')
@@ -239,11 +241,11 @@ if (deviceAuth) {
   AccountStore.setActive('twitch', primary.id)
   globalThis.fetch = Object.assign(mockTwitch, { preconnect: originalFetch.preconnect })
 }
+const activitySnapshots = createTwitchActivitySnapshots()
 const activityRefresh = deviceAuth
   ? new TwitchActivityRefreshClient({
       plan: (slug) => planTwitchActivitySnapshot(slug, false),
-      snapshot: (channelSlug, sections) =>
-        requestTwitchActivitiesSnapshot({ channelSlug, sections }),
+      snapshot: (channelSlug, sections) => activitySnapshots.request({ channelSlug, sections }),
       publish: (update) => events.emit('twitch_activity_snapshot', update),
       capability: (capability) => events.emit('twitch_activity_capability', capability),
     })
@@ -254,6 +256,7 @@ const api = createDesktopApi({
   backendConn: new BackendConnection('isolated-channel-points'),
   watchedChannelManager: new WatchedChannelManager(),
   currentStatuses: new Map(),
+  twitchActivitySnapshots: activitySnapshots,
   twitchActivityRefresh: activityRefresh,
   openBrowser(url) {
     assert(deviceAuth && url === activationUrl, 'Only the simulated Twitch activation page opens.')
@@ -301,11 +304,11 @@ app.settingsStore.set({
   showTimestamp: true,
 })
 if (rewardFeed) setLanguage('ru')
-app.accountsStore.set([
+accountState.accountsStore.set([
   primary,
   { ...primary, id: 'kick', platform: 'kick', platformUserId: '4001' },
 ])
-app.savedAccountsStore.set([primary, alternate])
+accountState.savedAccountsStore.set([primary, alternate])
 app.watchedChannelsStore.set([channel, kick])
 app.watchedStatusesStore.set(
   new Map(

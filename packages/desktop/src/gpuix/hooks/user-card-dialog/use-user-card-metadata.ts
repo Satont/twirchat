@@ -1,11 +1,11 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { errorText } from '@gpuix/components/user-card/format'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-type ModerationPlatform = 'twitch' | 'kick'
+import type { ModerationPlatform } from '../../../services/moderation/types'
 
 interface UseUserCardMetadataOptions {
   target: UserCardTarget

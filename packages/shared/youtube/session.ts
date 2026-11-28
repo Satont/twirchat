@@ -69,7 +69,7 @@ export function createYouTubeGrpcSession(options: {
     const finish = (code: number, message: string) => {
       if (!current() || finished) return
       finished = true
-      epoch++
+      const retryEpoch = ++epoch
       close()
       if (code === status.UNAUTHENTICATED && !refreshed) {
         refreshed = true
@@ -99,6 +99,7 @@ export function createYouTubeGrpcSession(options: {
         30000,
       )
       options.onStatus('connecting', `${message} Reconnecting…`)
+      if (stopped || epoch !== retryEpoch) return
       timer = setTimeout(() => {
         timer = undefined
         open().catch(reportOpenError)
@@ -132,7 +133,9 @@ export function createYouTubeGrpcSession(options: {
         failures = 0
         if (batch.nextPageToken) resumeToken = batch.nextPageToken
         options.onStatus('connected')
+        if (!current()) return
         options.onBatch(batch)
+        if (!current()) return
         if (batch.offlineAt || batch.items.some((item) => item.snippet?.type === 4)) {
           stop()
           options.onStatus(

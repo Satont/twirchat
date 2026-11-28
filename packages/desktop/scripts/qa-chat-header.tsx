@@ -8,19 +8,19 @@ import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 assertGuiQaEnvironment()
 await import('../src/gpuix/native-bootstrap')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import('@gpuix/react')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
-const { setLanguage } = await import('../src/gpuix/i18n')
+const { setLanguage } = await import('../src/i18n')
 const {
-  accountsStore,
   settingsStore,
   streamStatusStore,
   watchedChannelsStore,
   watchedStatusesStore,
   wireBackendToStores,
 } = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const { accountsStore } = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { wireTwitchActivities } = await import('../src/gpuix/state/twitch-activities')
 const { darkTheme } = await import('../src/gpuix/theme')
 const { ThemeContext } = await import('../src/gpuix/theme-context')

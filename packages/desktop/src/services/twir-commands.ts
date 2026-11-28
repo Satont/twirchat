@@ -1,7 +1,7 @@
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { deleteOldestEntry } from './bounded-cache'
 import { readPublicBotJson } from './public-bot-commands'
 import {

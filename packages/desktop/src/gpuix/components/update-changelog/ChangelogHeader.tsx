@@ -1,6 +1,6 @@
 import type { LinearGradientBackground } from '@gpuix/react'
 
-import { useT } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { formatReleaseDate } from '../../release-notes'
 import { useTheme } from '../../theme-context'
 import { Icon } from '../ui/Icon'

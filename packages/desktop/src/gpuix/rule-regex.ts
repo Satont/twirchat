@@ -1,6 +1,6 @@
 import { createPCRE2, FLAGS, PCRE2MatchError, type PCRE2Regex } from 'pcre2-wasm'
 
-import { t } from './i18n'
+import { t } from '../i18n'
 
 // One engine survives hot reloads. Handles are resolved on use so LRU eviction never
 // invalidates a compiled filter retained by a chat pane.

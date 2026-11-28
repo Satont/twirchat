@@ -1,7 +1,7 @@
 import type { ChatHeaderAction } from '@twirchat/shared/types'
 
+import type { MessageKey } from '../i18n'
 import type { IconName } from './components/ui/Icon'
-import type { MessageKey } from './i18n'
 
 export interface ChatHeaderActionMeta {
   /** Menu label. */

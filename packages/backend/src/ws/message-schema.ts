@@ -1,7 +1,8 @@
 import type { DesktopToBackendMessage } from '@twirchat/shared'
 import { DONATION_PROVIDERS, DONATION_SHARE_LIMITS as limits } from '@twirchat/shared/donations'
 import { z } from 'zod'
-const platform = z.enum(['twitch', 'kick', 'youtube', 'vkplay'])
+
+import { platformSchema as platform } from '../platform-schema'
 const sharePlatform = z.enum(['twitch', 'kick'])
 const shareChannel = z.object({
   platform: sharePlatform,

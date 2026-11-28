@@ -159,7 +159,7 @@ jobs:
           path: |
             .native-cache
             packages/desktop/dist/native
-          key: native-v1-macos13-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json', 'packages/desktop/native/gpuix/patches/*.patch', 'packages/desktop/scripts/build-gpuix-native.ts') }}
+          key: native-v1-macos13-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json', 'packages/desktop/native/gpuix/patches/*.patch', 'packages/desktop/scripts/build-gpuix-native.ts', 'packages/desktop/scripts/native-source.ts', 'packages/desktop/src/services/native-runtime.ts') }}
       - name: Find a trusted native artifact for this exact source revision
         id: promoted-native
         if: steps.native-cache.outputs.cache-hit != 'true'

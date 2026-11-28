@@ -151,7 +151,8 @@ Run production commands from the repository root using `docker-compose.yml`. It 
 `127.0.0.1:3000` by default, leaves PostgreSQL private to the Compose network and stores
 PostgreSQL 18 data at `/var/lib/postgresql` in a named volume. The project name is `twirchat`
 and the default image version is `1.0.0`. `docker/docker-compose.yml` is a compatibility include
-of this canonical configuration and requires Docker Compose 2.20 or newer.
+of this canonical configuration. The include was verified with Docker Compose 2.38.2;
+use the root entry point if an older Compose version cannot resolve it.
 
 1. Copy `.env.production.example` to `.env` in the repository root and fill in every required
    value from `packages/backend/src/config.ts`:
@@ -173,7 +174,8 @@ of this canonical configuration and requires Docker Compose 2.20 or newer.
 
 2. Put a reverse proxy with HTTPS in front of the backend and forward WebSocket upgrades on
    `/ws`. The legacy Kick OAuth callback and webhooks must reach their configured public URLs.
-3. Before replacing an existing backend, save the current image digest and take a database backup:
+3. Before replacing an existing backend, record its current release tag (`TWIRCHAT_VERSION`)
+   and take a database backup:
 
    ```bash
    docker compose images
@@ -199,7 +201,7 @@ routes that accepted user credentials. Upgrade desktop clients alongside the bac
 desktop signs Twitch accounts out once on upgrade. Users sign in again with Device Code Grant
 and reconnect YouTube accounts authorized with a previous OAuth client.
 
-For application rollback, select the previous version or digest and repeat pull/start. A binary
+For application rollback, set `TWIRCHAT_VERSION` to the previous release tag and repeat pull/start. A binary
 rollback is safe only when that version supports the current database schema. For an incompatible
 schema change, restore the saved database backup during a coordinated maintenance window.
 Never use `docker compose down --volumes` as an upgrade or rollback step.

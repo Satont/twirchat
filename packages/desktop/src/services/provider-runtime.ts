@@ -102,6 +102,7 @@ export class ProviderRuntime {
   private emptyEnrich = createProviderEmoteEnricher([], this.preferences)
   private authors = new Map<string, AuthorEntry>()
   private accountIds = new Map<Platform, string>()
+  private accountsDirty = false
   private combinedEnrichers = new Map<
     string,
     { channel: EmoteCatalogEntry[]; personal: EmoteCatalogEntry[]; enrich: ChannelEntry['enrich'] }
@@ -116,6 +117,7 @@ export class ProviderRuntime {
     return this.dependencies.now?.() ?? Date.now()
   }
   refreshPreferences(): void {
+    if (this.stopped) return
     const raw = this.dependencies.readPreferences()
     if (raw === this.rawPreferences) return
     this.rawPreferences = raw
@@ -228,10 +230,11 @@ export class ProviderRuntime {
     if (this.queue.length >= 128) return entry.catalog
     const requestedAt = this.catalogRevision
     const lifecycle = this.lifecycle
+    const isCurrent = () => lifecycle === this.lifecycle
     const task = (async () => {
       if (!(await this.acquire())) return []
       try {
-        if (this.stopped || lifecycle !== this.lifecycle) return []
+        if (!isCurrent()) return []
         const account = this.dependencies
           .accounts()
           .find((candidate) => candidate.platform === platform)
@@ -248,6 +251,7 @@ export class ProviderRuntime {
         } catch {
           /* Global catalogs and existing data remain useful if identity lookup fails. */
         }
+        if (!isCurrent()) return []
         if (resolved) {
           entry.numericId = resolved.platformUserId
           entry.slug = normalize(resolved.login)
@@ -265,6 +269,7 @@ export class ProviderRuntime {
             ? this.dependencies.badges(entry.slug).catch(() => undefined)
             : Promise.resolve(undefined),
         ])
+        if (!isCurrent()) return []
         const sevenTV = forceRemote ? undefined : this.dependencies.sevenTv(platform, entry.slug)
         const catalog = await this.dependencies.catalog(platform, entry.slug, {
           nativeEmotes: native,
@@ -273,7 +278,7 @@ export class ProviderRuntime {
           personalUserId: account?.platformUserId,
           preferences: prefs,
         })
-        if (this.stopped || lifecycle !== this.lifecycle) return []
+        if (!isCurrent()) return []
         if (requestedAt !== this.catalogRevision)
           return mergeProviderEmotes([entry.catalog], this.preferences)
         entry.catalog = catalog
@@ -290,6 +295,7 @@ export class ProviderRuntime {
         if (requestedAt !== this.catalogRevision) entry.expires = 0
         return mergeProviderEmotes([entry.catalog], this.preferences)
       } catch (error) {
+        if (!isCurrent()) return []
         entry.expires = this.now() + 30000
         if (forceRemote) throw error
         return mergeProviderEmotes([entry.catalog], this.preferences)
@@ -298,7 +304,7 @@ export class ProviderRuntime {
       }
     })().finally(() => {
       entry.pending = undefined
-      if (!this.stopped && lifecycle === this.lifecycle && requestedAt !== this.catalogRevision)
+      if (isCurrent() && requestedAt !== this.catalogRevision)
         runInBackground(
           this.warm(platform, channelId, channelSlug, true),
           'provider-runtime background operation failed',
@@ -308,6 +314,7 @@ export class ProviderRuntime {
     return task
   }
   setJoined(source: string, platform: Platform, channel: string | null): void {
+    if (this.stopped) return
     if (!channel) {
       this.joined.delete(source)
       return
@@ -379,16 +386,24 @@ export class ProviderRuntime {
     channel: string,
     kind: 'channel' | 'subscriber' = 'channel',
   ): Promise<void> {
-    if (this.stopped) throw new Error('Emote providers are stopped.')
+    const lifecycle = this.lifecycle
+    const checkRunning = () => {
+      if (this.stopped || lifecycle !== this.lifecycle)
+        throw new Error('Emote providers are stopped.')
+    }
+    checkRunning()
     if (kind === 'subscriber' && !this.preferences.enabled.twitch)
       throw new Error('Enable Twitch emotes in Emote settings before reloading subscriber emotes.')
     if (kind === 'subscriber' && platform !== 'twitch')
       throw new Error('Subscriber emote catalogs are supported for Twitch accounts.')
     const entry = this.entry(platform, channel)
     await entry.pending
+    checkRunning()
     await this.dependencies.invalidate?.()
+    checkRunning()
     entry.expires = 0
     await this.warm(platform, channel, undefined, true, true)
+    checkRunning()
     const failures = this.dependencies.errors?.() ?? []
     if (failures.length)
       throw new Error(
@@ -396,6 +411,7 @@ export class ProviderRuntime {
       )
   }
   refreshChannel(platform: Platform, channelId: string): void {
+    if (this.stopped) return
     const entry = this.aliases.get(key(platform, channelId))
     if (entry) {
       this.updateLiveCatalog(entry)
@@ -407,6 +423,11 @@ export class ProviderRuntime {
       )
   }
   refreshAccounts(): void {
+    if (this.stopped) {
+      this.accountsDirty = true
+      return
+    }
+    this.accountsDirty = false
     this.accountIds = new Map(
       this.dependencies.accounts().map((account) => [account.platform, account.platformUserId]),
     )
@@ -449,26 +470,27 @@ export class ProviderRuntime {
     )
       return
     const authorKey = key(platform, userId)
+    const lifecycle = this.lifecycle
     let author = this.authors.get(authorKey)
     if (author?.pending && author.setId === setId) return author.pending
     if (author && author.setId === setId && author.expires > this.now()) return
     if (this.queue.length >= 128) return
-    if (!author || author.setId !== setId) {
+    const replaced = !author || author.setId !== setId
+    if (!author || replaced) {
       author = { platform, userId, setId, catalog: [], expires: 0 }
       this.authors.delete(authorKey)
       this.authors.set(authorKey, author)
-      this.publishAuthor(author)
       while (this.authors.size > 256) deleteOldestEntry(this.authors)
     }
     const current = author
-    const lifecycle = this.lifecycle
+    const isCurrent = () => this.lifecycle === lifecycle && this.authors.get(authorKey) === current
     const task = (async () => {
       if (!(await this.acquire())) return
       try {
+        if (!isCurrent()) return
         const catalog =
           setId && this.dependencies.personalSet ? await this.dependencies.personalSet(setId) : []
-        if (this.stopped || lifecycle !== this.lifecycle || this.authors.get(authorKey) !== current)
-          return
+        if (!isCurrent()) return
         current.catalog = catalog.map((emote) => ({
           ...emote,
           source: 'personal',
@@ -477,7 +499,7 @@ export class ProviderRuntime {
         current.expires = this.now() + 300000
         this.publishAuthor(current)
       } catch {
-        current.expires = this.now() + 30000
+        if (isCurrent()) current.expires = this.now() + 30000
       } finally {
         this.release()
       }
@@ -485,9 +507,11 @@ export class ProviderRuntime {
       current.pending = undefined
     })
     current.pending = task
+    if (replaced) this.publishAuthor(current)
     return task
   }
   setActiveChannel(channel: ProviderActiveChannel | null): void {
+    if (this.stopped) return
     const unchanged =
       this.active?.platform === channel?.platform &&
       this.active?.channelId === channel?.channelId &&
@@ -523,34 +547,35 @@ export class ProviderRuntime {
     if (!account) return
     this.presenceRunning = true
     const requestedAt = this.revision
+    const isCurrent = () => requestedAt === this.revision
     this.presenceNext = this.now() + 60000
     try {
       await this.warm(active.platform, active.channelId, active.channelSlug)
+      if (!isCurrent()) return
       const entry = this.aliases.get(key(active.platform, active.channelId))
       if (!entry?.numericId || !/^\d+$/.test(entry.numericId)) return
       const userId = await this.dependencies.sevenTvUser(account.platform, account.platformUserId)
+      if (!userId || !isCurrent()) return
       this.refreshPreferences()
+      if (!isCurrent()) return
       const currentAccount = this.dependencies
         .accounts()
         .find((candidate) => candidate.platform === active.platform)
       if (
-        !userId ||
-        this.stopped ||
-        requestedAt !== this.revision ||
-        !this.preferences.sendPresence ||
         currentAccount?.id !== account.id ||
         currentAccount.platformUserId !== account.platformUserId
       )
         return
       await this.dependencies.presence(userId, active.platform, entry.numericId)
     } catch {
-      if (requestedAt === this.revision) this.presenceNext = this.now() + 120000
+      if (isCurrent()) this.presenceNext = this.now() + 120000
     } finally {
       this.presenceRunning = false
     }
   }
   start(): void {
     if (this.timer) return
+    const restarting = this.stopped
     this.stopped = false
     this.timer = setInterval(() => {
       this.refreshPreferences()
@@ -566,6 +591,8 @@ export class ProviderRuntime {
       runInBackground(this.pulsePresence(), 'provider-runtime background operation failed')
     }, 1000)
     this.timer.unref?.()
+    if (this.accountsDirty) this.refreshAccounts()
+    if (restarting) this.refreshPreferences()
   }
   stop(): void {
     this.stopped = true

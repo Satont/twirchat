@@ -12,7 +12,7 @@ import {
   groupEmoteCatalog,
   applyLiveEmoteLocks,
 } from '../../views/main/utils/emote-catalog'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import { runUiTask } from '../hooks/run-ui-task'
 import {
   focusPopupSearch,
@@ -20,13 +20,13 @@ import {
   scrollPopupPage,
   usePopupHotkeys,
 } from '../hooks/use-popup-hotkeys'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { nativeWindow } from '../native-window'
 import { emoteStore, loadEmotes, showNotice } from '../state/app'
-import { useStore } from '../state/create-store'
 import { emotePreferencesStore, loadEmotePreferences } from '../state/emote-preferences'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useOverlayClose } from '../state/overlays'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { EmoteTooltip } from './ui/EmoteTooltip'
 import { ActionButton } from './ui/Form'

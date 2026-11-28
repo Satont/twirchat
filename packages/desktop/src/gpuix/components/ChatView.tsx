@@ -23,6 +23,7 @@ import {
   hoverPauseDurationMs,
   DOUBLE_CLICK_PAUSE_MS,
 } from '../../services/chat-pause'
+import { formatChatTranscript } from '../../services/chat-transcript'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
@@ -35,8 +36,8 @@ import {
   type DesktopWatchedChannel,
   type PluginWatchedChannel,
 } from '../../watched-channels/plugin-channel-types'
+import { useBackend } from '../backend-context'
 import type { DesktopApi } from '../backend/api'
-import { useBackend } from '../backend/context'
 import { CHAT_HEADER_ACTION_META } from '../chat-header-actions'
 import {
   autoModSearchMessage,
@@ -47,19 +48,19 @@ import {
   pluginChatSearchMessage,
   timelineRowKey,
 } from '../chat-timeline'
-import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
+import { chatMessageKey, compileChatSearch } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../hooks/use-translation'
 import { parseHotkeyChoice } from '../hotkey-bindings'
-import { useT } from '../i18n'
 import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
 import { nativeWindow } from '../native-window'
 import { PaneAccountContext } from '../pane-account-context'
+import { accountsStore, savedAccountsStore } from '../state/accounts'
 import { useHotkeyContext, useHotkeyRoute, dispatchCustomHotkey } from '../state/action-bindings'
 import { activePaneByWindowStore, getActivePane, setActivePane } from '../state/active-pane'
 import {
-  accountsStore,
   activeTabStore,
   aliasesStore,
   applyModerationOutcome,
@@ -68,7 +69,6 @@ import {
   clearModerationSanction,
   homeMessagesStore,
   moderationViewStore,
-  savedAccountsStore,
   settingsStore,
   streamStatusStore,
   watchedMessagesStore,
@@ -94,7 +94,6 @@ import {
   type ComposerMentionTarget,
 } from '../state/composer'
 import { focusComposerByKey } from '../state/composer-focus'
-import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import {
   donationFeed,
@@ -114,7 +113,8 @@ import {
   type HomePluginRow,
 } from '../state/home-plugin-channels'
 import { invokeHotkeyUiAction } from '../state/hotkeys'
-import { allPanels, layoutStore, focusLayoutPanel } from '../state/layout'
+import { focusLayoutPanel } from '../state/layout'
+import { allPanels, layoutStore } from '../state/layout-state'
 import { messageSimilarityStore, messageSimilarityReaderStore } from '../state/message-similarity'
 import { useOverlayClose } from '../state/overlays'
 import { resolvePaneAccount } from '../state/pane-accounts'
@@ -129,6 +129,7 @@ import {
   twitchAutoModStore,
   type TwitchAutoModRow,
 } from '../state/twitch-automod'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { createWatchedFeedReader, observeWatchedFeedSources } from '../state/watched-feed'
 import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
 import { useWindowPresentation } from '../state/window-presentation'

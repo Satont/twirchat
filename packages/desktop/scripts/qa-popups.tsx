@@ -7,13 +7,13 @@ import { join } from 'node:path'
 
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 
-import type { ChannelChatters, ChattersTarget } from '../src/gpuix/backend/api'
+import type { ChannelChatters, ChattersTarget } from '../src/services/chatters-types'
 import type { UserCardTarget } from '../src/views/main/utils/chatCommands'
 
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider, useGpuixRequired } =
   await import('@gpuix/react')
-const { BackendContext } = await import('../src/gpuix/backend/context')
+const { BackendContext } = await import('../src/gpuix/backend-context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { handleGlobalKeyDown } = await import('../src/gpuix/state/hotkeys')
 const { actionBindingsStore, registerHotkeyContext, setHotkeyRoute, observeNativeHotkeyPlan } =

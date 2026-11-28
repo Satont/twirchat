@@ -46,8 +46,10 @@ const { ChatMessage, BadgeList } = await import('../src/gpuix/components/ChatMes
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { Text } = await import('../src/gpuix/components/ui/Text')
 const app = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const accountState = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { updateComposer, editComposer, composerStore } = await import('../src/gpuix/state/composer')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const { chatPauseStore } = await import('../src/gpuix/state/chat-pause')
@@ -132,7 +134,7 @@ backend.api.sendMessage = (params) => {
 }
 backend.api.getChannelEmotes = async () => []
 app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', fontSize: 14 })
-app.accountsStore.set(accounts)
+accountState.accountsStore.set(accounts)
 app.homeMessagesStore.set([])
 app.channelStatusStore.set({
   twitch: {
@@ -591,6 +593,6 @@ try {
 } finally {
   stopMessages()
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

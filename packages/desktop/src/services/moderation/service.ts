@@ -1,3 +1,5 @@
+import type { ModerationAction } from '@twirchat/shared/types'
+
 import { resolveTwitchUserId, type TwitchUserCredentials } from '../twitch-users.ts'
 import * as Twitch from './twitch.ts'
 import type {
@@ -7,8 +9,6 @@ import type {
   ModerationError,
   TwitchBanRequest,
 } from './types.ts'
-
-export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
 
 interface ModerationCredentials extends TwitchUserCredentials {
   platformUserId: string

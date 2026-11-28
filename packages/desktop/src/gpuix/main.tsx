@@ -11,7 +11,9 @@ import './native-bootstrap'
 import { z } from 'zod'
 
 import { APP_ENV } from '../build-info'
+import { t } from '../i18n'
 import { getDbPath, setRuntimeConfig } from '../runtime-config'
+import { createDesktopExit } from '../services/desktop-exit'
 import { exitAfterFlushingDiagnosticLogs } from '../services/diagnostic-logging'
 import { assertGuiQaEnvironment } from '../services/gui-qa'
 import { establishLinuxSingleInstance } from '../services/linux-single-instance'
@@ -19,15 +21,9 @@ import { getDesktopBackend } from './backend/server'
 import { App } from './components/App'
 import { ChatImageWindow } from './components/ChatImagePreview'
 import { ChatWindow } from './components/ChatWindow'
-import { t } from './i18n'
 import { loadActionBindings } from './state/action-bindings'
 import { wireProviderChannelFocus } from './state/active-pane'
-import {
-  activeWatchedTabStore,
-  loadInitialData,
-  wireBackendToStores,
-  showNotice,
-} from './state/app'
+import { activeWatchedTabStore, wireBackendToStores, showNotice } from './state/app'
 import { initAvatarCache } from './state/caches'
 import { wireChannelState } from './state/channel-state'
 import { loadChatPausePreferences } from './state/chat-pause'
@@ -38,6 +34,7 @@ import {
   notificationPreferences,
   wireHighlightNotifications,
 } from './state/highlight-notifications'
+import { loadInitialData } from './state/initial-data'
 import { loadMessageSimilaritySettings } from './state/message-similarity'
 import { loadStreamerMode, wireStreamerMode } from './state/streamer-mode'
 import { wireTabUnread } from './state/tab-unread'
@@ -55,7 +52,12 @@ else if (process.platform === 'linux' && process.env.GPUIX_BACKGROUND === '1') {
 setRuntimeConfig({ nodeEnv: APP_ENV })
 const instance = await establishLinuxSingleInstance(getDbPath())
 if (instance.kind === 'forwarded') process.exit(0)
-const backend = getDesktopBackend()
+const desktopExit = (globalThis.twirchatDesktopExit ??= createDesktopExit({
+  closeWindows: (): Promise<void> => windows.quit(),
+  shutdown: shutdownDesktop,
+  exit: exitAfterFlushingDiagnosticLogs,
+}))
+const backend = getDesktopBackend(desktopExit.scheduleUpdateExit)
 initCosmeticCaches(backend.api)
 void Promise.all([
   loadEmotePreferences(backend.api),
@@ -84,7 +86,8 @@ declare global {
   var __twirchatTranslationsWired: boolean | undefined
   var __twirchatProviderFocusWired: boolean | undefined
   var __twirchatStreamerModeWired: boolean | undefined
-  var __twirchatWatchedSubscriptionsWired: boolean | undefined
+  var __twirchatStopWatchedSubscriptions: (() => void) | undefined
+  var twirchatDesktopExit: ReturnType<typeof createDesktopExit> | undefined
 }
 const g = globalThis
 
@@ -124,15 +127,13 @@ if (!g.__twirchatStreamerModeWired) {
   g.__twirchatStreamerModeWired = true
   wireStreamerMode(backend)
 }
-if (!g.__twirchatWatchedSubscriptionsWired) {
-  g.__twirchatWatchedSubscriptionsWired = true
-  wireActiveWatchedChannels(backend)
-}
+g.__twirchatStopWatchedSubscriptions ??= wireActiveWatchedChannels(backend)
 
 async function shutdownDesktop(): Promise<void> {
+  g.__twirchatStopWatchedSubscriptions?.()
   const stopActivation = instance.kind === 'primary' ? instance.stopActivation() : undefined
   await Promise.allSettled([stopActivation, backend.shutdownPlugins?.()])
-  backend.dispose?.()
+  await backend.dispose()
 }
 
 const windows = mountDesktopWindows(
@@ -142,9 +143,7 @@ const windows = mountDesktopWindows(
     if (descriptor.kind === 'image') return <ChatImageWindow src={descriptor.src} />
     return <ChatWindow descriptor={descriptor} />
   },
-  () => {
-    void shutdownDesktop().then(exitAfterFlushingDiagnosticLogs, exitAfterFlushingDiagnosticLogs)
-  },
+  desktopExit.quit,
 )
 
 if (instance.kind === 'primary') instance.bindActivation(() => windows.activate())
@@ -157,7 +156,8 @@ const debugPayloadSchema = z.object({
 })
 globalThis.__twirchatDevHook = async (action, payload) => {
   const p = debugPayloadSchema.parse(payload ?? {})
-  const { layoutStore, splitPanel } = await import('./state/layout')
+  const { splitPanel } = await import('./state/layout')
+  const { layoutStore } = await import('./state/layout-state')
   if (action === 'dump-layout') {
     const tabId = p.tabId ?? activeWatchedTabStore.get()
     return layoutStore.get().get(tabId) ?? null

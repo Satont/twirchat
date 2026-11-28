@@ -1,6 +1,6 @@
 import type { TimestampFormat } from '@twirchat/shared/types'
 
-import { t } from './i18n'
+import { t } from '../i18n'
 
 const FORMATTERS: Record<TimestampFormat, Intl.DateTimeFormat> = {
   'HH:MM:SS': new Intl.DateTimeFormat(undefined, {

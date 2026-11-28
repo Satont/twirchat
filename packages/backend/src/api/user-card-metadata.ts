@@ -8,7 +8,7 @@ import type {
 } from '@twirchat/shared'
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken } from './app-credentials.ts'
 
 interface KickChannelUserIdentityResponse {
   id?: number | string

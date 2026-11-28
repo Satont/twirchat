@@ -34,6 +34,7 @@ import {
   type ReactNode,
 } from 'react'
 
+import { t as translate } from '../../i18n'
 import type { JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { normalizePrivateCommand } from '../../services/private-commands'
 import {
@@ -54,7 +55,7 @@ import {
 import { resolveUserCardCommand, type UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import type { PluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
-import { useBackend } from '../backend/context'
+import { useBackend } from '../backend-context'
 import {
   commandApplies,
   runCommandActions,
@@ -66,14 +67,15 @@ import {
 } from '../commands'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
-import { t as translate, useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { nativeWindow, type NativeTextAction } from '../native-window'
+import { savedAccountsStore } from '../state/accounts'
 import {
   registerSupplementalHotkeys,
   useHotkeyContext,
   useHotkeyRoute,
 } from '../state/action-bindings'
-import { aliasesStore, savedAccountsStore, showNotice, streamStatusStore } from '../state/app'
+import { aliasesStore, showNotice, streamStatusStore } from '../state/app'
 import { emoteStore } from '../state/app'
 import {
   autoTranslationLanguagesStore,
@@ -91,7 +93,6 @@ import {
   updateComposer,
 } from '../state/composer'
 import { useComposerFocusRegistration } from '../state/composer-focus'
-import { useStore, useStoreSelector } from '../state/create-store'
 import { customCommandsStore, loadCustomCommands } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
 import { homeComposerPlatformPreferences } from '../state/home-composer-platforms'
@@ -99,6 +100,7 @@ import type { PluginChannelFeedStatus } from '../state/home-plugin-channels'
 import { resolvePaneAccount } from '../state/pane-accounts'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
+import { useStore, useStoreSelector } from '../state/use-store'
 import { useWindowScope } from '../state/window-scope'
 import { platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'

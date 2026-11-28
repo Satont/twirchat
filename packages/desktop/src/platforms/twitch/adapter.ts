@@ -19,7 +19,7 @@ import type { ChatMessage, ChatRaidInfo, ChatSubGiftInfo, ChatSubInfo } from '@t
 import { LogLevel } from '@twurple/chat'
 
 import { createTwitchChatAuthProvider } from '../../auth/twitch-access-token'
-import { t, tPlural } from '../../gpuix/i18n'
+import { t, tPlural } from '../../i18n'
 import { runInBackground } from '../../services/background-task'
 import { buildTwitchSystemMessage } from '../../services/twitch-system-message'
 import { AccountStore } from '../../store/account-store'

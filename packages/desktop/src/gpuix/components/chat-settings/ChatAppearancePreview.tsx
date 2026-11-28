@@ -7,8 +7,9 @@
 import type { AppSettings, MentionAvatarStyle, Platform } from '@twirchat/shared/types'
 import { useMemo } from 'react'
 
+import { type MessageKey } from '../../../i18n'
 import { initialsOf } from '../../../views/shared/utils/display-text'
-import { useT, type MessageKey } from '../../i18n'
+import { useT } from '../../hooks/use-translation'
 import { inlineMentionAvatarSize, resolveMentionAvatarStyle } from '../../mention-avatar'
 import { platformColor, readableOn } from '../../theme'
 import { useFont, useTheme } from '../../theme-context'

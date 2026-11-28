@@ -1,7 +1,7 @@
 import { ActionButton } from '@gpuix/components/ui/Form'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import { useOverlayClose } from '@gpuix/state/overlays'
 import { withAlpha } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'

@@ -2,8 +2,8 @@ import { expect, test } from 'bun:test'
 
 import type { TimestampFormat } from '@twirchat/shared/types'
 
-import { t } from '../src/gpuix/i18n'
 import { formatMessageTime } from '../src/gpuix/timestamp-format'
+import { t } from '../src/i18n'
 
 const CASES = [
   ['HH:MM:SS', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }],

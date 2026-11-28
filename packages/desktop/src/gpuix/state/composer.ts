@@ -1,9 +1,9 @@
 import type { Platform } from '@twirchat/shared/types'
 
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import { JEETBOT_RELOAD_COMMAND_NAME, TWIR_RELOAD_COMMAND_NAME } from '../commands'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export interface ComposerState {
   text: string
@@ -220,7 +220,7 @@ export function composerTranslationMode(
   return state.translateOnSend === true && configured === 'off' ? 'send' : configured
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     composers: Store<Map<string, ComposerState>>
     autoTranslationLanguages: Store<ReadonlyMap<string, string>>

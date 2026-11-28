@@ -1,7 +1,7 @@
 import { TWITCH_TOKEN_URL } from '@twirchat/shared/constants'
 import type { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { postOAuthForm } from './oauth-form'
 import { OAuthRefreshError } from './refresh-token'
 import { expiresAt, hasOAuthErrorMessage, oauthTokenSchema } from './response-schemas'

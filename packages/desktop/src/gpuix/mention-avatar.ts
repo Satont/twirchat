@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, type MentionAvatarStyle } from '@twirchat/shared/types'
 
-import type { MessageKey } from './i18n'
+import type { MessageKey } from '../i18n'
 
 export interface MentionAvatarOption {
   readonly value: MentionAvatarStyle

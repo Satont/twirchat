@@ -6,14 +6,14 @@ import {
   validateImageUploaderSettings,
   type ImageUploaderSettings as Settings,
 } from '../../services/image-uploader'
-import { useBackend } from '../backend/context'
-import { useT } from '../i18n'
-import { useStore } from '../state/create-store'
+import { useBackend } from '../backend-context'
+import { useT } from '../hooks/use-translation'
 import {
   applyImageUploaderSettings,
   imageUploaderSettingsStore,
   loadImageUploaderSettings,
 } from '../state/image-uploader'
+import { useStore } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'

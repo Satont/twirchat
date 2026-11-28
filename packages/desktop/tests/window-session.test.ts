@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import type { NativeWindowBounds } from '../src/gpuix/native-window'
+import type { NativeWindowBounds } from '../src/services/window-session'
 import {
   createWindowSessionController,
   MAX_DESKTOP_WINDOWS,

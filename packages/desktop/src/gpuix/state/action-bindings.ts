@@ -1,6 +1,8 @@
 import type { KeyEvent } from '@gpuix/react'
 import { useEffect, useRef } from 'react'
 
+import { t } from '../../i18n'
+import { persistentResource } from '../../state/persistent-resources'
 import {
   createHotkeyDispatcher,
   HOTKEY_ACTIONS,
@@ -11,11 +13,9 @@ import {
   type HotkeyConfiguration,
   type HotkeyBinding,
 } from '../hotkey-bindings'
-import { t } from '../i18n'
 import { showNotice } from './app'
 import { onTextInputFocusChange } from './focus'
 import { getTopOverlayHotkeyContext, onOverlayStackChange } from './overlays'
-import { persistentResource } from './persistent-resources'
 import type { PreferenceStore } from './preferences'
 import { createPreferenceStore, type PreferenceApi } from './preferences'
 import { useWindowScope } from './window-scope'
@@ -452,7 +452,7 @@ export function useHotkeyRoute(
   }, [scope, identity, enabled, priority])
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:ui.actionBindings': PreferenceStore<HotkeyConfiguration>
   }

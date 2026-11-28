@@ -18,12 +18,13 @@ const { nativeWindow } = await import('../src/gpuix/native-window')
 const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { WatchedChannelStore } = await import('../src/store/watched-channels-store')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
-const { chatTabsStore, closeChatTab, restoreClosedChatTab } =
-  await import('../src/gpuix/state/chat-tabs')
+const { chatTabsStore, restoreClosedChatTab } = await import('../src/gpuix/state/chat-tabs')
+const { closeChatTab } = await import('../src/gpuix/state/layout')
 const { wireActiveWatchedChannels } = await import('../src/gpuix/state/watched-subscriptions')
 const { wireTabUnread } = await import('../src/gpuix/state/tab-unread')
 const { composerStore } = await import('../src/gpuix/state/composer')
 const app = await import('../src/gpuix/state/app')
+const { loadInitialData } = await import('../src/gpuix/state/initial-data')
 
 interface AutomationNode {
   id: number
@@ -182,7 +183,7 @@ function incoming(channel: WatchedChannel, id: string, text: string, name: strin
 try {
   assert.deepEqual(WatchedChannelStore.findAll(), [])
   await backend.api.setTabChannelIds({ ids: [] })
-  await app.loadInitialData(backend)
+  await loadInitialData(backend)
   await manager.start()
   await until(() => renderer && chatTabsStore.get().loaded && find('tab-add'), 'tab bar')
   await focusNativeQaWindow('TwirChat')
@@ -394,6 +395,6 @@ try {
   stopSubscriptions()
   stopMessages()
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

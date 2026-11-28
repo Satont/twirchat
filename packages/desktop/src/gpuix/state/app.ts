@@ -5,17 +5,21 @@ import type {
   SevenTVEmote,
 } from '@twirchat/shared/protocol'
 import type {
-  Account,
   AppSettings,
   ModerationOutcome,
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
+import { type Language } from '@twirchat/shared/types'
 
+import { getLanguage, t } from '../../i18n'
 import { similarityChannelKey } from '../../services/message-similarity'
 import { formatSanctionDuration } from '../../services/sanction-duration'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import {
   appendLiveChatMessagesWithCount,
   mergeChatMessageSnapshot,
@@ -32,18 +36,14 @@ import {
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
-import type { DesktopEvents } from '../backend/events'
-import type { DesktopBackend } from '../backend/server'
-import { getLanguage, setLanguage, t, type Language } from '../i18n'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
+import type { DesktopBackend } from '../backend/contract'
+import { accountsStore, savedAccountsStore } from './accounts'
 import { donationFeed, sharedDonationFeeds } from './donation-feed'
 import { mentionAppearances } from './mention-appearances'
 import { classifyIncomingSimilarity, hydrateSimilarityHistory } from './message-similarity'
-import { persistentResource } from './persistent-resources'
 import { recordWatchedFeedAppend } from './watched-feed'
 
-function hydrateMessageHistory(messages: readonly NormalizedChatMessage[]): void {
+export function hydrateMessageHistory(messages: readonly NormalizedChatMessage[]): void {
   const channels = new Map<string, NormalizedChatMessage[]>()
   for (const message of messages) {
     mentionAppearances.addMessage(message)
@@ -59,11 +59,6 @@ function hydrateMessageHistory(messages: readonly NormalizedChatMessage[]): void
 
 export const settingsStore = persistentResource('settings', () =>
   createStore<AppSettings | null>(null),
-)
-export const accountsStore = persistentResource('accounts', () => createStore<Account[]>([]))
-/** Every saved identity, active or not; chats may sign in with any of them. */
-export const savedAccountsStore = persistentResource('savedAccounts', () =>
-  createStore<Account[]>([]),
 )
 export const aliasesStore = persistentResource('aliases', () => createStore<UserAlias[]>([]))
 /** False until the first alias list arrives; snapshots are only a fallback before that. */
@@ -366,7 +361,7 @@ export function moderationOutcomeFor(
   return moderationViewStore.get().outcomeFor(message)
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     moderationState: ModerationState
     moderationView: Store<ModerationView>
@@ -614,81 +609,6 @@ export function showConnectionNotice(status: PlatformStatusInfo): void {
   }
 }
 
-// ── Initial data load (port of App.vue loadInitialData) ─────────────────────
-
-export async function loadInitialData(backend: DesktopBackend): Promise<void> {
-  try {
-    const [accs, saved, aliases, setts, statList, watched] = await Promise.all([
-      backend.api.getAccounts(),
-      backend.api.getSavedAccounts(),
-      backend.api.getUserAliases(),
-      backend.api.getSettings(),
-      backend.api.getStatuses(),
-      backend.api.getWatchedChannels(),
-    ])
-    accountsStore.set(accs)
-    savedAccountsStore.set(saved)
-    aliasesStore.set(aliases)
-    aliasesLoadedStore.set(true)
-    settingsStore.set(setts)
-    setLanguage(setts.language)
-    const statusMap: Partial<Record<Platform, PlatformStatusInfo>> = {}
-    for (const s of statList) statusMap[s.platform] = s
-    channelStatusStore.set(statusMap)
-    watchedChannelsStore.set(watched)
-
-    const [{ initializeChatTabs }, { loadHomePluginChannels }] = await Promise.all([
-      import('./chat-tabs'),
-      import('./home-plugin-channels'),
-    ])
-    await Promise.all([initializeChatTabs(backend), loadHomePluginChannels(backend.api)])
-
-    try {
-      const watchedStats = await backend.api.getWatchedChannelStatuses()
-      watchedStatusesStore.modify((current) => {
-        const next = new Map(current)
-        for (const { channelId, status } of watchedStats) next.set(channelId, status)
-        return next
-      })
-    } catch {
-      // not fatal
-    }
-  } catch (error) {
-    console.warn('[state] Initial data load failed, retrying in 1s...', error)
-    setTimeout(() => void loadInitialData(backend), 1000)
-    return
-  }
-
-  try {
-    const recent = await backend.api.getRecentMessages({})
-    if (recent.length > 0) {
-      hydrateMessageHistory(recent)
-      appendHomeMessages(recent)
-    }
-  } catch (error) {
-    console.warn('[state] Failed to load recent messages:', error)
-  }
-
-  for (const ch of watchedChannelsStore.get()) {
-    if (isPluginWatchedChannel(ch)) continue
-    try {
-      const msgs = await backend.api.getWatchedChannelMessages({ id: ch.id })
-      if (msgs.length > 0) {
-        hydrateMessageHistory(msgs)
-        watchedMessagesStore.modify((current) => {
-          const next = new Map(current)
-          next.set(ch.id, mergeChatMessageSnapshot(next.get(ch.id) ?? [], msgs, 200))
-          return next
-        })
-      }
-    } catch {
-      // not fatal
-    }
-  }
-
-  startStreamStatusPolling(backend)
-}
-
 /** Quiet chat still appears within one frame. */
 const MESSAGE_FLUSH_MS = 16
 /** Every publication repaints the visible rows, so a flood shares one per interval. */
@@ -697,7 +617,7 @@ const MESSAGE_FLUSH_INTERVAL_MS = 66
 // ── Backend event wiring ────────────────────────────────────────────────────
 
 export interface AppStoreBackend {
-  events: DesktopEvents
+  events: DesktopBackend['events']
   api: Pick<
     DesktopApi,
     | 'getAccounts'
@@ -927,11 +847,9 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     settings: Store<AppSettings | null>
-    accounts: Store<Account[]>
-    savedAccounts: Store<Account[]>
     aliases: Store<UserAlias[]>
     aliasesLoaded: Store<boolean>
     channelStatuses: Store<Partial<Record<Platform, PlatformStatusInfo>>>

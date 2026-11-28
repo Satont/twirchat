@@ -3,19 +3,20 @@ import { z } from 'zod'
 
 import { runInBackground } from '../../services/background-task'
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
-import type { DesktopBackend } from '../backend/server'
+import type { DesktopBackend } from '../backend/contract'
 import { chatMessageKey, createMentionMatcher } from '../chat-tools'
 import { compileMessageRules } from '../message-rules'
-import { accountsStore, watchedChannelsStore, watchedStatusesStore } from './app'
+import { accountsStore } from './accounts'
+import { watchedChannelsStore, watchedStatusesStore } from './app'
 import { avatarUrlFor } from './caches'
 import { chatRulesStore } from './chat-rules'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
 import { ensureImage, imageSnapshot, subscribeImage } from './image-cache'
 import { getMessageSimilarity } from './message-similarity'
-import { persistentResource } from './persistent-resources'
 import type { PreferenceStore } from './preferences'
 import { createPreferenceStore } from './preferences'
 import { streamerModeStore } from './streamer-mode'
@@ -308,7 +309,7 @@ export function wireHighlightNotifications(backend: {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     'preference:notifications_v1': PreferenceStore<typeof DEFAULT_NOTIFICATIONS>
     highlightFlashes: Store<Map<string, { until: number; color?: string }>>

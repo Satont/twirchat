@@ -1,12 +1,14 @@
-import { useSyncExternalStore } from 'react'
+import type { Language } from '@twirchat/shared/types'
 
-import { getLanguage, languageStore } from './language'
+import { getLanguage } from './language'
 import { en } from './locales/en'
 import { ru } from './locales/ru'
-import type { Dictionary, Language, TranslationParams } from './types'
 
-export { getLanguage, languageStore, normalizeLanguage, setLanguage } from './language'
-export type { Dictionary, Language, TranslationParams } from './types'
+/** Values substituted into `{placeholder}` tokens. */
+type TranslationParams = Record<string, string | number | boolean | undefined | null>
+type Dictionary = Record<string, string>
+
+export { getLanguage, setLanguage } from './language'
 
 export type MessageKey = keyof typeof en
 
@@ -70,19 +72,4 @@ export function tPlural(base: string, count: number, params?: TranslationParams)
  */
 export function translatorFor(language: Language): typeof t {
   return (key, params) => translateFor(language, key, params)
-}
-
-/** React hook: re-renders the component when the UI language changes. */
-export function useLanguage(): Language {
-  return useSyncExternalStore(languageStore.subscribe, languageStore.get, languageStore.get)
-}
-
-/** React hook returning a language-aware `t`/`tPlural` pair. */
-export function useT(): {
-  t: typeof t
-  tPlural: typeof tPlural
-  language: Language
-} {
-  const language = useLanguage()
-  return { t, tPlural, language }
 }

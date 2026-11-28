@@ -1,6 +1,6 @@
 import type { ChatClient } from '@twurple/chat'
 
-import { t, type MessageKey } from '../../gpuix/i18n'
+import { t, type MessageKey } from '../../i18n'
 
 type Outcome = { kind: 'sent' | 'held' | 'disconnected' } | { kind: 'rejected'; reason: string }
 

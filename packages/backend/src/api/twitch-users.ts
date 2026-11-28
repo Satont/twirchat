@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken } from './app-credentials.ts'
 
 export interface HelixUser {
   id: string
@@ -36,7 +36,11 @@ export function isTwitchUserId(id: string | undefined | null): id is string {
   return Boolean(id && TWITCH_USER_ID_RE.test(id))
 }
 
-export async function resolveTwitchUserId(identifier: string): Promise<string | null> {
+export async function resolveTwitchUserId(
+  identifier: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  signal?.throwIfAborted()
   if (isTwitchUserId(identifier)) {
     return identifier
   }
@@ -46,11 +50,14 @@ export async function resolveTwitchUserId(identifier: string): Promise<string | 
     return null
   }
 
-  const resolvedUsers = await resolveTwitchUserIdsByLogin([normalizedLogin])
+  const resolvedUsers = await resolveTwitchUserIdsByLogin([normalizedLogin], signal)
   return resolvedUsers.get(normalizedLogin) ?? null
 }
 
-export async function resolveTwitchUserIdsByLogin(logins: string[]): Promise<Map<string, string>> {
+export async function resolveTwitchUserIdsByLogin(
+  logins: string[],
+  signal?: AbortSignal,
+): Promise<Map<string, string>> {
   const normalizedLogins = [
     ...new Set(logins.map(normalizeTwitchLogin).filter((login): login is string => Boolean(login))),
   ]
@@ -62,7 +69,7 @@ export async function resolveTwitchUserIdsByLogin(logins: string[]): Promise<Map
 
   const params = normalizedLogins.map((login) => `login=${encodeURIComponent(login)}`).join('&')
   const url = `https://api.twitch.tv/helix/users?${params}`
-  const response = await fetchTwitchHelixWithAppToken(url)
+  const response = await fetchTwitchHelixWithAppToken(url, { signal })
 
   if (!response.ok) {
     const body = await response.text()

@@ -17,7 +17,8 @@ const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { ChatMessage } = await import('../src/gpuix/components/ChatMessage')
-const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { createStore } = await import('../src/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { emoteStore } = await import('../src/gpuix/state/app')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
 const { getDbPath } = await import('../src/runtime-config')
@@ -219,7 +220,7 @@ try {
   throw error
 } finally {
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
   for (const request of pendingRequests) request.resolve(new Response(null, { status: 204 }))
   await server.stop(true)
 }

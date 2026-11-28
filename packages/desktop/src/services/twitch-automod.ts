@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { t, type MessageKey } from '../gpuix/i18n'
+import { t, type MessageKey } from '../i18n'
 import { buildTwitchSystemMessage } from './twitch-system-message'
 
 export interface TwitchAutoModHold {

@@ -19,6 +19,7 @@ const { chatPauseStore } = await import('../src/gpuix/state/chat-pause')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 
 interface AutomationNode {
   id: number
@@ -50,7 +51,7 @@ backend.api.sendWatchedChannelMessage = async (payload) => {
 }
 backend.api.getChannelEmotes = async () => []
 backend.api.getModerationCapabilities = async () => ({ canModerate: false })
-app.accountsStore.set([
+accountState.accountsStore.set([
   {
     id: 'qa-account',
     platform: 'twitch',
@@ -228,6 +229,6 @@ try {
   stopHotkeys()
   stopMessages()
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

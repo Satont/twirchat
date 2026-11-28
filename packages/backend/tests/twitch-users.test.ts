@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 
-import { getTwitchAppToken } from '../src/api/stream-status.ts'
 import {
   fetchTwitchUserById,
   fetchTwitchUserByLogin,
@@ -119,7 +118,7 @@ describe('twitch-users helpers', () => {
           const authHeader = new Headers(init?.headers).get('Authorization')
           authorizations.push(authHeader)
 
-          if (authorizations.length === 1) {
+          if (!priming && authorizations.length === 2) {
             return new Response('Unauthorized', { status: 401 })
           }
 
@@ -133,7 +132,7 @@ describe('twitch-users helpers', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const initialToken = await getTwitchAppToken()
+    await resolveTwitchUserIdsByLogin(['satont'])
     priming = false
     calls.length = 0
     tokenRequestCount = 0
@@ -141,7 +140,9 @@ describe('twitch-users helpers', () => {
     const result = await resolveTwitchUserIdsByLogin(['satont'])
 
     expect(result.get('satont')).toBe('100')
-    expect(authorizations).toEqual([`Bearer ${initialToken}`, 'Bearer fresh-token'])
+    expect(authorizations).toHaveLength(3)
+    expect(authorizations[1]).toBe(authorizations[0])
+    expect(authorizations[2]).toBe('Bearer fresh-token')
     expect(tokenRequestCount).toBe(1)
     expect(calls).toEqual([
       'https://api.twitch.tv/helix/users?login=satont',

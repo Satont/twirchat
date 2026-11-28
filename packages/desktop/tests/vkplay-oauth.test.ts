@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { VKPLAY_REDIRECT_URI } from '@twirchat/shared/constants'
 
-import { getVkPlayAuthUrl, handleVkPlayToken, vkPlayCallbackPage } from '../src/auth/vkplay'
+import { getVkPlayAuthUrl, handleVkPlayToken } from '../src/auth/vkplay'
 import { AccountStore } from '../src/store/account-store'
 import { initDb } from '../src/store/db'
 
@@ -19,10 +19,6 @@ test('VK Play Live uses ImplicitFlow with a public client and no secret', () => 
   } finally {
     delete process.env.TWIRCHAT_VKPLAY_CLIENT_ID
   }
-})
-
-test('VK Play Live callback reads the token from the URL fragment', () => {
-  expect(vkPlayCallbackPage().headers.get('content-type')).toContain('text/html')
 })
 
 test('VK Play Live rejects an incomplete implicit token before any request', async () => {

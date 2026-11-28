@@ -40,7 +40,7 @@ function snapshot(pointsBalance: number): TwitchActivitiesSnapshot {
 }
 function fixture(request: () => Promise<TwitchActivitiesSnapshot>) {
   const events = createDesktopEvents()
-  const backend: Parameters<typeof wireTwitchActivities>[0] = {
+  const backend = {
     events,
     api: {
       getTwitchActivities: request,

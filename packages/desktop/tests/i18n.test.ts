@@ -1,12 +1,15 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 
-import { getLanguage, setLanguage, t, tPlural } from '../src/gpuix/i18n'
-import { en } from '../src/gpuix/i18n/locales/en'
-import { ru } from '../src/gpuix/i18n/locales/ru'
+import { getLanguage, setLanguage, t, tPlural, translatorFor } from '../src/i18n'
+import { languageStore } from '../src/i18n/language'
+import { en } from '../src/i18n/locales/en'
+import { ru } from '../src/i18n/locales/ru'
 
 describe('i18n', () => {
+  afterEach(() => setLanguage(DEFAULT_SETTINGS.language))
+
   test('new installs start in English', () => {
     expect(DEFAULT_SETTINGS.language).toBe('en')
   })
@@ -16,8 +19,8 @@ describe('i18n', () => {
   })
 
   test('no dictionary value is empty', () => {
-    for (const [key, value] of Object.entries({ ...en, ...ru })) {
-      expect(value.trim(), key).not.toBe('')
+    for (const dictionary of [en, ru]) {
+      for (const [key, value] of Object.entries(dictionary)) expect(value.trim(), key).not.toBe('')
     }
   })
 
@@ -29,6 +32,35 @@ describe('i18n', () => {
     setLanguage('ru')
     expect(t('settings.title')).toBe('Настройки')
     expect(t('settings.selfPing.previewMessage', { name: '@user' })).toContain('@user')
+  })
+
+  test('keeps a bound translator independent of the active language', () => {
+    const english = translatorFor('en')
+    setLanguage('ru')
+    expect(english('settings.title')).toBe('Settings')
+    expect(t('settings.title')).toBe('Настройки')
+  })
+
+  test('keeps the active language and subscribers across module reload', async () => {
+    setLanguage('ru')
+    const remounted: typeof import('../src/i18n/language') = await import(
+      `../src/i18n/language.ts?qa-reload=${crypto.randomUUID()}`
+    )
+    expect(remounted.languageStore).toBe(languageStore)
+    expect(remounted.getLanguage()).toBe('ru')
+
+    const notifications: string[] = []
+    const unsubscribe = languageStore.subscribe(() => notifications.push(t('settings.title')))
+    try {
+      remounted.setLanguage('en')
+      expect(t('settings.title')).toBe('Settings')
+      await Promise.resolve()
+      expect(notifications).toEqual([])
+      await Bun.sleep(1)
+      expect(notifications).toEqual(['Settings'])
+    } finally {
+      unsubscribe()
+    }
   })
 
   test('selects Russian plural forms', () => {

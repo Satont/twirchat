@@ -1,8 +1,8 @@
 import { chatMessageIdentity } from '@twirchat/shared/message-identity'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
+import { persistentResource } from '../../state/persistent-resources'
 import { compareMessages } from '../../views/main/utils/chat-message-buffer'
-import { persistentResource } from './persistent-resources'
 
 const FEED_LIMIT = 500
 type Buffer = readonly NormalizedChatMessage[]
@@ -188,7 +188,7 @@ export function createWatchedFeedReader(channelIds: readonly string[]) {
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     watchedFeedLineage: {
       readers: Map<string, number>

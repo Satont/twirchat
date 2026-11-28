@@ -1,8 +1,8 @@
+import { t } from '../../i18n'
+import { createStore, type Store } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import type { DesktopApi } from '../backend/api'
 import { validateCustomCommands, type CustomCommandDefinition } from '../commands'
-import { t } from '../i18n'
-import { createStore, type Store } from './create-store'
-import { persistentResource } from './persistent-resources'
 
 export const CUSTOM_COMMANDS_KEY = 'custom_commands_v1'
 type PersistenceApi = Pick<DesktopApi, 'getUiState' | 'setUiState'>
@@ -113,7 +113,7 @@ controllerStore.set(controller)
 export const loadCustomCommands = controller.load
 export const saveCustomCommands = controller.save
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     customCommands: Store<CustomCommandsState>
     customCommandsController: Store<ReturnType<typeof createCustomCommandsController> | null>

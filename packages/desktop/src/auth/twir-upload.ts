@@ -1,6 +1,5 @@
+import { generateCodeChallenge, generateCodeVerifier, generateState } from '@twirchat/shared/pkce'
 import { z } from 'zod'
-
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
 
 const CLIENT_ID = 'egf1qr_loCDEMb01_s1DfKLu2cbX9Hg4XhrusaO8qS0'
 const RESOURCE = 'https://twir.app/api'

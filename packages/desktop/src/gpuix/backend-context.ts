@@ -2,13 +2,13 @@
  * React bindings for the in-process desktop backend.
  *
  * Components never import stores/adapters directly — they go through this
- * facade, keeping the same RPC-shaped boundary the Wails build has.
+ * adapter. The context exposes requests and subscriptions, not backend lifecycle.
  */
 
 import { createContext, useContext, useEffect, useRef } from 'react'
 
-import type { DesktopEventMap, DesktopEventName } from './events'
-import type { DesktopBackend } from './server'
+import type { DesktopBackend } from './backend/contract'
+import type { DesktopEventMap, DesktopEventName } from './backend/events'
 
 export const BackendContext = createContext<DesktopBackend | null>(null)
 

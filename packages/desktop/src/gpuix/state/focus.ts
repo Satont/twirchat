@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import { persistentResource } from './persistent-resources'
+import { persistentResource } from '../../state/persistent-resources'
 import { useWindowScope } from './window-scope'
 
 /**
@@ -86,7 +86,7 @@ export function useTextInputFocusTracking(onChange?: (focused: boolean) => void)
   }
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     textInputFocusRuntime: TextInputFocusRuntime
   }

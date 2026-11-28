@@ -18,8 +18,7 @@ import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import { config } from '../config.ts'
-import { fetchTwitchHelixWithAppToken, getKickAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken, createKickRead } from './app-credentials.ts'
 import {
   isTwitchUserId,
   normalizeTwitchLogin,
@@ -222,17 +221,9 @@ async function fetchTwitchChannelsStatus(
 
 async function fetchKickChannelStatus(
   channel: ChannelStatusRequest,
-  token: string,
+  read: Awaited<ReturnType<typeof createKickRead>>,
 ): Promise<ChannelStatus> {
-  const res = await fetch(
-    `https://api.kick.com/public/v1/channels?slug=${encodeURIComponent(channel.channelLogin)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Client-ID': config.KICK_CLIENT_ID,
-      },
-    },
-  )
+  const res = await read(`/public/v1/channels?slug=${encodeURIComponent(channel.channelLogin)}`)
 
   if (!res.ok) {
     log.warn('Kick channel fetch failed', { channel: channel.channelLogin, status: res.status })
@@ -280,9 +271,9 @@ async function fetchKickChannelsStatus(channels: ChannelStatusRequest[]): Promis
     return []
   }
 
-  const token = await getKickAppToken()
+  const read = await createKickRead()
   return mapWithConcurrency(channels, KICK_CHANNEL_FETCH_CONCURRENCY, (channel) =>
-    fetchKickChannelStatus(channel, token),
+    fetchKickChannelStatus(channel, read),
   )
 }
 

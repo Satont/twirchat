@@ -1,6 +1,6 @@
 import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
 
-import { t } from '../../../gpuix/i18n'
+import { t } from '../../../i18n'
 import { emoteProvider } from '../../../services/provider-emotes'
 import { fuzzyFilter } from './fuzzyFilter'
 

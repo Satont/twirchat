@@ -107,6 +107,40 @@ test('active selection rejects malformed input before any store mutation', async
   ).toBe(200)
   expect(calls).toEqual([['select', 'client-a', 'twitch', null]])
 })
+test.each([
+  ['twitch', true],
+  ['kick', true],
+  ['youtube', true],
+  ['vkplay', true],
+  ['Twitch', false],
+  ['kick ', false],
+  ['unknown', false],
+])('account mutations validate platform %j', async (platform, accepted) => {
+  const { routes, calls } = fixture()
+  const removed = await routes['/api/accounts/:platform'].DELETE(
+    Object.assign(new Request('http://local/api/accounts', { method: 'DELETE' }), {
+      params: { platform },
+    }),
+  )
+  const selected = await routes['/api/accounts/:platform/active'].PATCH(
+    patch('{"accountId":null}', platform),
+  )
+
+  expect([removed.status, selected.status]).toEqual(accepted ? [200, 200] : [400, 400])
+  expect(calls).toEqual(
+    accepted
+      ? [
+          ['delete-all', 'client-a', platform],
+          ['select', 'client-a', platform, null],
+        ]
+      : [],
+  )
+  if (!accepted) {
+    expect(await removed.json()).toEqual({ error: 'Invalid platform.' })
+    expect(await selected.json()).toEqual({ error: 'Invalid platform.' })
+  }
+})
+
 test('selection errors neither disclose ownership nor expose internal database errors', async () => {
   const f = fixture()
   f.store.setActive = async () => {

@@ -1,6 +1,6 @@
 import type { Account, Platform, WatchedChannel } from '@twirchat/shared/types'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import { AccountStore } from '../store/account-store'
 import { WatchedChannelStore } from '../store/watched-channels-store'
 

@@ -6,14 +6,17 @@ import type {
   WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 
+import { t } from '../../i18n'
+import type { Store } from '../../state/create-store'
+import { createStore } from '../../state/create-store'
+import { persistentResource } from '../../state/persistent-resources'
 import { panelWatchedSources } from '../../views/main/utils/layout-tree'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { chatMessageKey, compileChatSearch, type SearchDetails } from '../chat-tools'
-import { t } from '../i18n'
 import { compileMessageRules } from '../message-rules'
+import { accountsStore } from './accounts'
 import {
-  accountsStore,
   activeWatchedTabStore,
   aliasesStore,
   channelStatusStore,
@@ -26,11 +29,8 @@ import {
 } from './app'
 import { chatRulesStore } from './chat-rules'
 import { chatWindowsStore, isMainChatWindowOpen, activateChatSearchWindow } from './chat-windows'
-import type { Store } from './create-store'
-import { createStore } from './create-store'
-import { allPanels, layoutStore } from './layout'
+import { allPanels, layoutStore } from './layout-state'
 import { getMessageSimilarity } from './message-similarity'
-import { persistentResource } from './persistent-resources'
 import { requestLeaveSettings, setMainTab } from './settings-session'
 import { readWatchedFeed } from './watched-feed'
 
@@ -330,7 +330,7 @@ export function finishChatSearchJump(requestId: string, found: boolean): void {
   if (!found) showNotice('info', t('notices.search.revealFailed'))
 }
 
-declare module './persistent-resources' {
+declare module '../../state/persistent-resources' {
   interface PersistentResources {
     chatSearchJump: Store<ChatSearchJump | null>
   }

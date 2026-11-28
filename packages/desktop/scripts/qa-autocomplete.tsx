@@ -23,10 +23,11 @@ const { nativeWindow } = await import('../src/gpuix/native-window')
 import type { NativeWindowControls } from '../src/gpuix/native-window'
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { actionBindingsStore } = await import('../src/gpuix/state/action-bindings')
-const { useStore } = await import('../src/gpuix/state/create-store')
+const { useStore } = await import('../src/gpuix/state/use-store')
 const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { customCommandsStore } = await import('../src/gpuix/state/custom-commands')
 const { composerStore, editComposer, updateComposer } = await import('../src/gpuix/state/composer')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
@@ -385,7 +386,7 @@ try {
   )
   await focusNativeQaWindow('TwirChat')
   assert.equal((await backend.api.getAccounts()).length, 0, 'No real credentials')
-  app.accountsStore.set([
+  accountState.accountsStore.set([
     {
       id: 'qa-kick-account',
       platform: 'kick',
@@ -726,8 +727,8 @@ try {
     platformUserId: '9002',
     username: 'qa_other',
   }
-  app.accountsStore.set(
-    app.accountsStore
+  accountState.accountsStore.set(
+    accountState.accountsStore
       .get()
       .map((account) => (account.id === twitchAccount.id ? alternateAccount : account)),
   )

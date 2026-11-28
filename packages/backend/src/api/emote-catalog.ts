@@ -5,7 +5,7 @@ import {
 } from '@twirchat/shared/twitch-emote-catalog'
 import { z } from 'zod'
 
-import { fetchTwitchHelixWithAppToken } from './stream-status'
+import { fetchTwitchHelixWithAppToken } from './app-credentials'
 
 export function createEmoteCatalogService(
   appFetch: (url: string) => Promise<Response> = fetchTwitchHelixWithAppToken,

@@ -7,7 +7,7 @@ import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatMessage, extractMessageText, parseTwitchMessage } from '@twurple/chat'
 import { z } from 'zod'
 
-import { t } from '../gpuix/i18n'
+import { t } from '../i18n'
 import {
   createTwitchBadgeCatalog,
   type TwitchBadgeCatalog,

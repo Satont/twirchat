@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
-import { useBackend, useBackendEvent } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend-context'
 import type { DesktopEventMap } from '../backend/events'
 import { runUiTask } from '../hooks/run-ui-task'
-import { useT } from '../i18n'
+import { useT } from '../hooks/use-translation'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { ActionButton } from './ui/Form'

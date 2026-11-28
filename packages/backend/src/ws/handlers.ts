@@ -1,5 +1,4 @@
 import type { DesktopToBackendMessage } from '@twirchat/shared'
-import type { BackendToDesktopMessage } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import type { ServerWebSocket } from 'bun'
 
@@ -9,7 +8,8 @@ import { ClientStore } from '../db/index.ts'
 import { AccountStore } from '../db/index.ts'
 import { verifyDonationShareIdentity } from '../donations/share-identity.ts'
 import { createDonationShareRelay } from '../donations/share-relay.ts'
-import { sevenTVManager } from '../seventv/index.ts'
+import { SevenTVEventClient } from '../seventv/event-client'
+import { SevenTVSubscriptionManager } from '../seventv/subscription-manager'
 import { YouTubeChatRelay } from '../youtube/relay.ts'
 import { connectionManager } from './connection-manager.ts'
 import type { WsData } from './connection-manager.ts'
@@ -31,16 +31,20 @@ export const donationShareRelay = createDonationShareRelay({
   },
 })
 
-// Setup 7TV manager to send messages to clients
-sevenTVManager.sendToClient = (clientSecret: string, message: BackendToDesktopMessage) => {
-  connectionManager.send(clientSecret, message)
-}
+export const sevenTVEventClient = new SevenTVEventClient()
+export const sevenTVManager = new SevenTVSubscriptionManager(
+  sevenTVEventClient,
+  (client, message) => {
+    connectionManager.send(client, message)
+  },
+)
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   log.info('WebSocket opened', { client: ws.data.clientSecret.slice(0, 8) })
   youtubeChatRelay.cleanupClient(ws.data.clientSecret)
   donationShareRelay.removeClient(ws.data.clientSecret)
   connectionManager.register(ws)
+  sevenTVManager.cancelPendingClient(ws.data.clientSecret)
   await ClientStore.touch(ws.data.clientSecret)
 }
 
@@ -165,14 +169,11 @@ export async function handleWsMessage(
     }
 
     case 'seventv_subscribe': {
+      const isCurrent = () => connectionManager.isCurrent(ws)
       try {
-        await sevenTVManager.subscribeClient(
-          ws.data.clientSecret,
-          msg.platform,
-          msg.channelId,
-          msg.platformUserId,
-        )
+        await sevenTVManager.subscribeClient(ws.data.clientSecret, [msg], isCurrent)
       } catch (error) {
+        if (!isCurrent()) return
         log.error('7TV subscribe error', { error: String(error) })
         ws.send(
           JSON.stringify({
@@ -194,16 +195,10 @@ export async function handleWsMessage(
     }
 
     case 'seventv_resubscribe': {
-      // Handle reconnect - client sends list of channels to resubscribe
       try {
-        for (const sub of msg.subscriptions) {
-          await sevenTVManager.subscribeClient(
-            ws.data.clientSecret,
-            sub.platform,
-            sub.channelId,
-            sub.platformUserId,
-          )
-        }
+        await sevenTVManager.subscribeClient(ws.data.clientSecret, msg.subscriptions, () =>
+          connectionManager.isCurrent(ws),
+        )
       } catch (error) {
         log.error('7TV resubscribe error', { error: String(error) })
       }

@@ -1,22 +1,23 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'react'
 
+import { t as translate, tPlural as translatePlural } from '../../i18n'
 import {
   isClipboardImagePath,
   type ClipboardUploadImage,
   type ImageUploaderSettings,
   type ImageUploadResult,
 } from '../../services/image-uploader'
-import { useBackend } from '../backend/context'
-import { t as translate, tPlural as translatePlural, useT } from '../i18n'
+import { useBackend } from '../backend-context'
+import { useT } from '../hooks/use-translation'
 import { nativeWindow, type NativeImagePaste } from '../native-window'
 import { showNotice } from '../state/app'
-import { useStoreSelector } from '../state/create-store'
 import {
   applyImageUploaderSettings,
   imageUploaderSettingsStore,
   loadImageUploaderSettings,
 } from '../state/image-uploader'
+import { useStoreSelector } from '../state/use-store'
 import { useTheme } from '../theme-context'
 import { ActionButton } from './ui/Form'
 import { Text } from './ui/Text'

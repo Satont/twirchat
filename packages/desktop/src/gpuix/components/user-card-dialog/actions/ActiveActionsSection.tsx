@@ -1,10 +1,10 @@
-import { useBackend } from '@gpuix/backend/context'
+import { useBackend } from '@gpuix/backend-context'
 import { useActionToast } from '@gpuix/components/action-toast'
 import { ActionButton } from '@gpuix/components/ui/Form'
-import { useT } from '@gpuix/i18n'
+import { useT } from '@gpuix/hooks/use-translation'
 import type { IconName } from '@gpuix/icons'
 import { chatRulesPreferences, chatRulesStore } from '@gpuix/state/chat-rules'
-import { useStore } from '@gpuix/state/create-store'
+import { useStore } from '@gpuix/state/use-store'
 import { useTheme } from '@gpuix/theme-context'
 import { useEffect } from 'react'
 
