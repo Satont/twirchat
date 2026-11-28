@@ -236,6 +236,55 @@ describe('official YouTube streaming', () => {
     expect(client.closed).toBe(3)
   })
 
+  for (const restart of [false, true]) {
+    test(`retry notification can ${restart ? 'replace' : 'stop'} the session without an orphan retry`, async () => {
+      const client = fakeClient()
+      const retryDelayMs = 1
+      let credentialReads = 0
+      let openNotifications = 0
+      const batches: unknown[] = []
+      const replacement: Promise<void>[] = []
+      const session = createYouTubeGrpcSession({
+        liveChatId: 'chat',
+        clientFactory: client.factory,
+        retryDelayMs,
+        getCredentials: () => {
+          credentialReads++
+          return { apiKey: 'fixture' }
+        },
+        onBatch: (batch) => batches.push(batch),
+        onStatus(state, message) {
+          if (state !== 'connecting') return
+          if (!message) {
+            openNotifications++
+            return
+          }
+          session.stop()
+          if (restart) replacement.push(session.start())
+        },
+      })
+      try {
+        await session.start()
+        const old = required(client.calls[0])
+        old.stream.emit('error', { code: status.UNAVAILABLE, message: 'offline' })
+        await Promise.all(replacement)
+        // Any retry queued before or during the notification has had a chance to run.
+        await new Promise<void>((resolve) => setTimeout(resolve, retryDelayMs))
+        const expected = restart ? 2 : 1
+        expect(credentialReads).toBe(expected)
+        expect(openNotifications).toBe(expected)
+        expect(client.calls).toHaveLength(expected)
+        expect(client.closed).toBe(1)
+        old.stream.emit('data', response())
+        if (restart) required(client.calls[1]).stream.emit('data', response([], 'replacement'))
+        expect(batches).toHaveLength(restart ? 1 : 0)
+        expect(session.getResumeToken()).toBe(restart ? 'replacement' : undefined)
+      } finally {
+        session.stop()
+      }
+    })
+  }
+
   for (const code of [3, 5, 7, 8, 9])
     test(`status ${code} terminates without a retry`, async () => {
       const client = fakeClient()
