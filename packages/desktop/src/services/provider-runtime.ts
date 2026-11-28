@@ -102,6 +102,7 @@ export class ProviderRuntime {
   private emptyEnrich = createProviderEmoteEnricher([], this.preferences)
   private authors = new Map<string, AuthorEntry>()
   private accountIds = new Map<Platform, string>()
+  private accountsDirty = false
   private combinedEnrichers = new Map<
     string,
     { channel: EmoteCatalogEntry[]; personal: EmoteCatalogEntry[]; enrich: ChannelEntry['enrich'] }
@@ -116,6 +117,7 @@ export class ProviderRuntime {
     return this.dependencies.now?.() ?? Date.now()
   }
   refreshPreferences(): void {
+    if (this.stopped) return
     const raw = this.dependencies.readPreferences()
     if (raw === this.rawPreferences) return
     this.rawPreferences = raw
@@ -312,6 +314,7 @@ export class ProviderRuntime {
     return task
   }
   setJoined(source: string, platform: Platform, channel: string | null): void {
+    if (this.stopped) return
     if (!channel) {
       this.joined.delete(source)
       return
@@ -408,6 +411,7 @@ export class ProviderRuntime {
       )
   }
   refreshChannel(platform: Platform, channelId: string): void {
+    if (this.stopped) return
     const entry = this.aliases.get(key(platform, channelId))
     if (entry) {
       this.updateLiveCatalog(entry)
@@ -419,6 +423,11 @@ export class ProviderRuntime {
       )
   }
   refreshAccounts(): void {
+    if (this.stopped) {
+      this.accountsDirty = true
+      return
+    }
+    this.accountsDirty = false
     this.accountIds = new Map(
       this.dependencies.accounts().map((account) => [account.platform, account.platformUserId]),
     )
@@ -502,6 +511,7 @@ export class ProviderRuntime {
     return task
   }
   setActiveChannel(channel: ProviderActiveChannel | null): void {
+    if (this.stopped) return
     const unchanged =
       this.active?.platform === channel?.platform &&
       this.active?.channelId === channel?.channelId &&
@@ -537,34 +547,35 @@ export class ProviderRuntime {
     if (!account) return
     this.presenceRunning = true
     const requestedAt = this.revision
+    const isCurrent = () => requestedAt === this.revision
     this.presenceNext = this.now() + 60000
     try {
       await this.warm(active.platform, active.channelId, active.channelSlug)
+      if (!isCurrent()) return
       const entry = this.aliases.get(key(active.platform, active.channelId))
       if (!entry?.numericId || !/^\d+$/.test(entry.numericId)) return
       const userId = await this.dependencies.sevenTvUser(account.platform, account.platformUserId)
+      if (!userId || !isCurrent()) return
       this.refreshPreferences()
+      if (!isCurrent()) return
       const currentAccount = this.dependencies
         .accounts()
         .find((candidate) => candidate.platform === active.platform)
       if (
-        !userId ||
-        this.stopped ||
-        requestedAt !== this.revision ||
-        !this.preferences.sendPresence ||
         currentAccount?.id !== account.id ||
         currentAccount.platformUserId !== account.platformUserId
       )
         return
       await this.dependencies.presence(userId, active.platform, entry.numericId)
     } catch {
-      if (requestedAt === this.revision) this.presenceNext = this.now() + 120000
+      if (isCurrent()) this.presenceNext = this.now() + 120000
     } finally {
       this.presenceRunning = false
     }
   }
   start(): void {
     if (this.timer) return
+    const restarting = this.stopped
     this.stopped = false
     this.timer = setInterval(() => {
       this.refreshPreferences()
@@ -580,6 +591,8 @@ export class ProviderRuntime {
       runInBackground(this.pulsePresence(), 'provider-runtime background operation failed')
     }, 1000)
     this.timer.unref?.()
+    if (this.accountsDirty) this.refreshAccounts()
+    if (restarting) this.refreshPreferences()
   }
   stop(): void {
     this.stopped = true

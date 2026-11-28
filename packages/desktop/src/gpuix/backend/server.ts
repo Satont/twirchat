@@ -782,6 +782,7 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
     shutdownPlugins,
     dispose: async () => {
       try {
+        providerRuntime.stop()
         twitchActivityRefresh.stop()
         twitchActivitySnapshots.stop()
         twitchEventSub.stop()
@@ -810,7 +811,6 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
         twitchBadges.dispose()
         twitchSenders.dispose()
         streamerMode.stop()
-        providerRuntime.stop()
         backendConn.disconnect()
         await stopOverlay
       } finally {

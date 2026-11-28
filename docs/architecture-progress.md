@@ -231,6 +231,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** A channel warmup checks its runtime lifetime after identity resolution, after native emote and badge reads, and before accepting catalog results or caching failures. A manual reload cannot continue into a new lifetime after waiting for another read or invalidating caches. Already-started provider calls can settle; stopping does not abort them.
 - **Safeguard:** Deferred identity, native emote, and cache-invalidation fixtures stop and restart the runtime while each operation is pending. The retired work cannot start the next stage or publish. Concurrency limits and normal account/preference refresh behavior are unchanged. Audit the presence identity lookup and provider stop ordering separately; neither is changed by this slice.
 
+### Round 44 — Retire provider refresh and presence at backend disposal entry
+
+- **Decision:** Stop provider work before the first teardown await. Late channel, account, and preference refreshes cannot repopulate or publish retired state. Presence checks its revision before resolving the 7TV identity and before sending a heartbeat; changes to focus, account, or settings still invalidate it. The hosted socket stays open for adapter-owned 7TV unsubscriptions.
+- **Safeguard:** Tests retire a presence pulse before warmup resumes and deliver late provider updates to a stopped runtime. Restart invalidates private catalogs if accounts changed while stopped, then applies saved preferences before serving cached emotes. Already-started calls may settle; activation and plugin teardown before backend disposal keep their existing order.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

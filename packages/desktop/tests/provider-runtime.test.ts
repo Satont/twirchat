@@ -301,6 +301,79 @@ test('7TV presence is opt-in, uses resolved identity, and respects the heartbeat
   expect(state.presence).toHaveLength(2)
 })
 
+test('retiring presence before the warmup resumes skips the 7TV identity lookup', async () => {
+  let lookups = 0
+  const state = fixture({
+    sevenTvUser: async () => {
+      lookups++
+      return 'seven-tv-owner'
+    },
+  })
+  await state.runtime.warm('twitch', 'viewer')
+  state.runtime.setActiveChannel({ platform: 'twitch', channelId: 'viewer' })
+  state.preferences({ sendPresence: true })
+  const pending = state.runtime.pulsePresence()
+  state.runtime.stop()
+  state.runtime.start()
+  await pending
+  expect(lookups).toBe(0)
+  expect(state.presence).toEqual([])
+})
+
+test('late provider refreshes do not publish or restore stopped channel state', async () => {
+  let liveReads = 0
+  let resolutions = 0
+  const state = fixture({
+    resolve: async () => {
+      resolutions++
+      return { platformUserId: '42', login: 'viewer' }
+    },
+    sevenTv: () => {
+      liveReads++
+      return undefined
+    },
+  })
+  await state.runtime.warm('twitch', 'viewer')
+  state.runtime.stop()
+  const before = { publications: state.published.length, liveReads, resolutions }
+  state.preferences({ badges: false, sendPresence: true })
+  state.runtime.refreshChannel('twitch', 'viewer')
+  state.runtime.setJoined('watched:late', 'twitch', 'viewer')
+  state.runtime.setActiveChannel({ platform: 'twitch', channelId: 'viewer' })
+  state.runtime.refreshAccounts()
+  expect({ publications: state.published.length, liveReads, resolutions }).toEqual(before)
+
+  state.runtime.start()
+  await state.runtime.pulsePresence()
+  expect(state.presence).toEqual([])
+  expect(resolutions).toBe(before.resolutions)
+})
+
+test('restart applies preferences saved while stopped before serving cached emotes', async () => {
+  const state = fixture({
+    catalog: async () => [{ ...emote('Private', 'seventv'), source: 'personal' }],
+  })
+  const warm = () => state.runtime.warm('twitch', 'viewer')
+  expect((await warm()).map(({ alias }) => alias)).toEqual(['Private'])
+  state.runtime.stop()
+  state.preferences({ personal: false })
+  state.runtime.start()
+  expect(await warm()).toEqual([])
+})
+
+test('account changes while stopped invalidate private emotes before restart', async () => {
+  const state = fixture({
+    catalog: async (_platform, _channel, options) =>
+      options.personalUserId ? [{ ...emote('Private', 'seventv'), source: 'personal' }] : [],
+  })
+  const warm = () => state.runtime.warm('twitch', 'viewer')
+  expect((await warm()).map(({ alias }) => alias)).toEqual(['Private'])
+  state.runtime.stop()
+  state.logout()
+  state.runtime.start()
+  expect(await warm()).toEqual([])
+})
+
 test('opting out while the user identity loads prevents a pending presence write', async () => {
   let lookupStarted = false
   const { promise: user, resolve: resolveUser } = Promise.withResolvers<string>()
