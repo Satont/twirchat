@@ -1,6 +1,6 @@
+import { SEVENTV_GQL_ENDPOINT } from '@twirchat/shared/constants'
 import { z } from 'zod'
 
-const SEVENTV_GQL_ENDPOINT = 'https://7tv.io/v4/gql'
 const SEVENTV_REQUEST_TIMEOUT_MS = 10_000
 
 const EMOTE_SET_FIELDS = `

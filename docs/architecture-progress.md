@@ -321,6 +321,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** EventAPI schemas own the types derived from them. The socket client, subscription manager, emote conversion, and loopback fixtures import the types directly from that boundary. Unused aliases and sub-schema exports are removed; accepted payloads and socket behavior are unchanged.
 - **Safeguard:** Workspace typechecks verify the migrated imports; loopback and dispatch tests continue to exercise the actual schemas and transport.
 
+### Round 62 — Share the 7TV GraphQL destination
+
+- **Decision:** Use the shared GraphQL URL for hosted catalog reads, desktop cosmetics requests, and the relay's exact origin/path match. Keep REST and WebSocket routes separate. Remove the unused HTTPS EventAPI constant; the hosted WebSocket default is unchanged.
+- **Safeguard:** Pin the deployed destination and relay normalization with fixtures, including empty delimiters. Existing relay tests guard the allowed request bodies and verify that desktop cosmetics use the hosted relay.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

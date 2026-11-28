@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 
+import { SEVENTV_GQL_ENDPOINT } from '../constants'
 import {
   providerImageProxyPath,
   providerImageSource,
@@ -53,6 +54,30 @@ test('proxy URL conversion leaves unrelated assets and already proxied URLs unto
   ]) {
     expect(providerImageProxyPath(url)).toBeNull()
     expect(proxiedProviderImage(url, 'https://backend.invalid')).toBe(url)
+  }
+})
+
+test('the 7TV GraphQL relay preserves its exact destination and URL normalization', () => {
+  const accepted: [string, string][] = [
+    [SEVENTV_GQL_ENDPOINT, 'https://7tv.io/v4/gql'],
+    ['//7TV.IO:443/v4/gql', 'https://7tv.io/v4/gql'],
+    ['https://7tv.io/v4/gql?', 'https://7tv.io/v4/gql?'],
+    ['https://7tv.io/v4/gql#', 'https://7tv.io/v4/gql#'],
+    ['https://7tv.io/v4/gql?#', 'https://7tv.io/v4/gql?#'],
+  ]
+  for (const [source, href] of accepted) {
+    const target = providerMetadataTarget(source)
+    expect(target?.kind).toBe('cosmetics')
+    expect(target?.url.href).toBe(href)
+  }
+  for (const source of [
+    'https://7tv.io/v4/gql/',
+    'https://7tv.io/v4/gql?query=example',
+    'https://7tv.io:8443/v4/gql',
+    'http://7tv.io/v4/gql',
+    'https://example.invalid/v4/gql',
+  ]) {
+    expect(providerMetadataTarget(source)).toBeNull()
   }
 })
 

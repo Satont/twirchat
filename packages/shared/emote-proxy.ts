@@ -1,3 +1,7 @@
+import { SEVENTV_GQL_ENDPOINT } from './constants'
+
+const { origin: sevenTVGraphQLOrigin, pathname: sevenTVGraphQLPath } = new URL(SEVENTV_GQL_ENDPOINT)
+
 const IMAGE_HOSTS = new Set([
   'cdn.7tv.app',
   'cdn.7tv.io',
@@ -97,8 +101,9 @@ export function providerMetadataTarget(value: string): ProviderMetadataTarget | 
     return { url, kind: 'catalog' }
   if (url.hostname === 'twir.app' && url.pathname === '/api/v1/public/badges')
     return { url, kind: 'catalog' }
+  if (url.origin === sevenTVGraphQLOrigin && url.pathname === sevenTVGraphQLPath)
+    return { url, kind: 'cosmetics' }
   if (url.hostname !== '7tv.io') return null
-  if (url.pathname === '/v4/gql') return { url, kind: 'cosmetics' }
   if (/^\/v3\/users\/[A-Za-z0-9_-]{1,100}\/presences$/.test(url.pathname))
     return { url, kind: 'presence' }
   return /^\/v3\/(?:emote-sets\/[A-Za-z0-9_-]{1,100}|users\/(?:twitch|kick)\/[A-Za-z0-9_-]{1,100})$/.test(

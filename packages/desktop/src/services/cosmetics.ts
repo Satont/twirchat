@@ -1,3 +1,4 @@
+import { SEVENTV_GQL_ENDPOINT } from '@twirchat/shared/constants'
 import {
   SEVENTV_COSMETICS_INVENTORY_QUERY,
   SEVENTV_COSMETICS_QUERY,
@@ -213,7 +214,7 @@ export function createCosmeticsService(
           const query = preferences.inventory
             ? SEVENTV_COSMETICS_INVENTORY_QUERY
             : SEVENTV_COSMETICS_QUERY
-          const response = await fetcher('https://7tv.io/v4/gql', {
+          const response = await fetcher(SEVENTV_GQL_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
