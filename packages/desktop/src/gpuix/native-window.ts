@@ -1,5 +1,6 @@
 import type { NativeRenderer, WindowOptions } from '@gpuix/react'
 
+import { GPUIX_NATIVE_API_VERSION } from '../services/native-runtime'
 import type { NativeWindowBounds } from '../services/window-session'
 import type { WindowVisibility } from './state/window-visibility'
 
@@ -73,7 +74,10 @@ export function hasNativeControls(renderer: object): renderer is NativeWindowCon
   if (!nativeControlMethods.every((name) => typeof Reflect.get(renderer, name) === 'function'))
     return false
   const version: unknown = Reflect.get(renderer, 'getTwirNativeApiVersion')
-  return typeof version === 'function' && Reflect.apply(version, renderer, []) === 3
+  return (
+    typeof version === 'function' &&
+    Reflect.apply(version, renderer, []) === GPUIX_NATIVE_API_VERSION
+  )
 }
 
 export function nativeWindow<T extends NativeRenderer>(renderer: T): T & NativeWindowControls {

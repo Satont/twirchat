@@ -7,7 +7,11 @@ import { join } from 'node:path'
 import { nativeArtifactName } from '../scripts/build-gpuix-native'
 import { parseNativeSourceManifest } from '../scripts/native-source'
 import { assertNativeBinaryTarget, stageNativeRuntime } from '../scripts/package-runtime-assets'
-import { GPUI_SOURCE_REVISION, GPUIX_SOURCE_REVISION } from '../src/services/native-runtime'
+import {
+  GPUIX_NATIVE_API_VERSION,
+  GPUI_SOURCE_REVISION,
+  GPUIX_SOURCE_REVISION,
+} from '../src/services/native-runtime'
 import { literal } from './fixture-values'
 
 const directories: string[] = []
@@ -68,7 +72,7 @@ async function fixture() {
     .slice(0, 16)
   const bytes = binary()
   const manifest = {
-    apiVersion: 3,
+    apiVersion: GPUIX_NATIVE_API_VERSION,
     version: source.version,
     rustToolchain: source.rustToolchain,
     target: `${process.platform}-${process.arch}`,

@@ -12,7 +12,11 @@ import {
   sameFileSystemPath,
 } from '../scripts/build-release'
 import { backendWebSocketUrl } from '../src/build-info'
-import { GPUI_SOURCE_REVISION, GPUIX_SOURCE_REVISION } from '../src/services/native-runtime'
+import {
+  GPUIX_NATIVE_API_VERSION,
+  GPUI_SOURCE_REVISION,
+  GPUIX_SOURCE_REVISION,
+} from '../src/services/native-runtime'
 
 test('release backend websocket follows the configured HTTP endpoint', () => {
   expect(backendWebSocketUrl('https://chat.twir.app')).toBe('wss://chat.twir.app/ws')
@@ -58,7 +62,7 @@ test('signed native manifest keeps source provenance while describing final sign
   try {
     const path = join(directory, 'gpuix.node')
     const original = {
-      apiVersion: 3,
+      apiVersion: GPUIX_NATIVE_API_VERSION,
       upstreamSHA: GPUIX_SOURCE_REVISION,
       gpuiSHA: GPUI_SOURCE_REVISION,
       target: `${process.platform}-${process.arch}`,

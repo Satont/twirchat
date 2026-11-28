@@ -1,11 +1,12 @@
 import { expect, test } from 'bun:test'
 
 import { hasNativeControls, type NativeWindowControls } from '../src/gpuix/native-window'
+import { GPUIX_NATIVE_API_VERSION } from '../src/services/native-runtime'
 
 function controls(): NativeWindowControls {
   return {
     getTwirNativeApiVersion() {
-      return 3
+      return GPUIX_NATIVE_API_VERSION
     },
     closeWindow() {},
     isWindowOpen() {
@@ -49,7 +50,7 @@ function controls(): NativeWindowControls {
 test('native controls guard checks every required method and keeps the actual receiver', () => {
   const renderer = controls()
   renderer.getTwirNativeApiVersion = function () {
-    return this === renderer ? 3 : 0
+    return this === renderer ? GPUIX_NATIVE_API_VERSION : 0
   }
   expect(hasNativeControls(renderer)).toBe(true)
   for (const method of Object.keys(controls())) {
@@ -64,7 +65,7 @@ test('native controls guard checks every required method and keeps the actual re
 
 test('native controls guard rejects incompatible API versions before narrowing', () => {
   const renderer = controls()
-  for (const version of [0, 2, 4]) {
+  for (const version of [0, GPUIX_NATIVE_API_VERSION - 1, GPUIX_NATIVE_API_VERSION + 1]) {
     renderer.getTwirNativeApiVersion = () => version
     expect(hasNativeControls(renderer)).toBe(false)
   }
