@@ -3,7 +3,7 @@ import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
-import { sevenTVCache } from './cache'
+import { sevenTVCache, type CachedEmoteSet } from './cache'
 import { getEmoteSetById, getUserByConnection } from './client'
 import {
   createSevenTvEmote,
@@ -51,9 +51,10 @@ export class SevenTVSubscriptionManager {
   async subscribeClient(
     clientSecret: string,
     platform: Platform,
-    channelId: string,
-    platformUserId?: string,
+    { channelId, platformUserId }: { channelId: string; platformUserId?: string },
+    isCurrent: () => boolean,
   ): Promise<boolean> {
+    if (!isCurrent()) return false
     const channelKey = `${platform}:${channelId}`
     log.info('Subscribing client to channel', {
       channelKey,
@@ -88,11 +89,15 @@ export class SevenTVSubscriptionManager {
     let userId: string | null = this.channelKeyToUserId.get(channelKey) ?? null
     if (!cached || isExpired) {
       try {
-        userId = await this.fetchAndCacheEmoteSet(platform, channelId, platformUserId)
+        const fetched = await this.fetchEmoteSet(platform, channelId, platformUserId)
+        if (!isCurrent()) return false
+        if (fetched) sevenTVCache.set(platform, channelId, fetched.emoteSet)
+        userId = fetched?.userId ?? null
         if (userId) {
           this.channelKeyToUserId.set(channelKey, userId)
         }
       } catch (error) {
+        if (!isCurrent()) return false
         log.error('Failed to fetch emote set', {
           channelId,
           channelKey,
@@ -194,11 +199,11 @@ export class SevenTVSubscriptionManager {
     }
   }
 
-  private async fetchAndCacheEmoteSet(
+  private async fetchEmoteSet(
     platform: Platform,
     channelId: string,
     platformUserId?: string,
-  ): Promise<string | null> {
+  ): Promise<{ emoteSet: CachedEmoteSet; userId: string } | null> {
     const channelKey = `${platform}:${channelId}`
     log.info('Fetching emote set from 7TV', { channelKey })
 
@@ -253,23 +258,18 @@ export class SevenTVSubscriptionManager {
       )
     }
 
-    sevenTVCache.set(platform, channelId, {
-      channelId,
-      emotes,
-      fetchedAt: Date.now(),
-      id: emoteSet.id,
-      name: emoteSet.name,
-      platform,
-      ttl: 5 * 60 * 1000,
-    })
-
-    log.info('Emote set cached', {
-      channelKey,
-      emoteCount: emotes.size,
-      emoteSetId: emoteSet.id,
-    })
-
-    return user.id ?? null
+    return {
+      userId: user.id,
+      emoteSet: {
+        channelId,
+        emotes,
+        fetchedAt: Date.now(),
+        id: emoteSet.id,
+        name: emoteSet.name,
+        platform,
+        ttl: 5 * 60 * 1000,
+      },
+    }
   }
 
   private async fetchAndCacheEmoteSetById(
