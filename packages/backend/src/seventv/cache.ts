@@ -1,5 +1,6 @@
+import type { SevenTVEmote } from '@twirchat/shared/protocol'
+
 import type { SevenTVChannelKey } from './channel-key'
-import type { SevenTVEmote } from './emote.ts'
 
 interface SnapshotMetadata {
   userId?: string

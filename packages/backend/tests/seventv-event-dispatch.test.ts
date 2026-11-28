@@ -327,6 +327,83 @@ test('real object dispatches update both platform caches and attribute chat noti
   }
 })
 
+test('7TV GraphQL catalogs publish canonical emote fields and exact aliases', async () => {
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager()
+  const received: BackendToDesktopMessage[] = []
+  manager.sendToClient = (_, message) => received.push(message)
+  const images = ['4x.webp', '2x.GIF'].map((file) => ({
+    url: `https://cdn.7tv.app/emote/provider-id/${file}`,
+    mime: 'image',
+    size: 128,
+    scale: 2,
+    width: 180,
+    height: 128,
+    frameCount: 42,
+  }))
+  const lookup = spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    Response.json({
+      data: {
+        users: {
+          userByConnection: {
+            id: 'fixture-user',
+            style: {
+              activeEmoteSet: {
+                ...set(setId),
+                emotes: {
+                  items: [
+                    {
+                      id: 'set-entry-id',
+                      alias: 'MixedAlias',
+                      flags: { zeroWidth: true },
+                      emote: {
+                        id: 'provider-id',
+                        defaultName: 'OriginalName',
+                        aspectRatio: 1.5,
+                        flags: { animated: true },
+                        images,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  )
+  try {
+    await manager.subscribeClient(
+      'viewer',
+      [{ platform: 'kick', channelId: 'dispatch-kick' }],
+      () => true,
+    )
+    expect(received).toEqual([
+      {
+        type: 'seventv_emote_set',
+        platform: 'kick',
+        channelId: 'dispatch-kick',
+        emotes: [
+          {
+            alias: 'MixedAlias',
+            animated: true,
+            aspectRatio: 1.5,
+            id: 'provider-id',
+            imageUrl: 'https://cdn.7tv.app/emote/provider-id/2x.GIF',
+            name: 'OriginalName',
+            zeroWidth: true,
+          },
+        ],
+      },
+    ])
+  } finally {
+    manager.cleanupClient('viewer')
+    lookup.mockRestore()
+    connect.mockRestore()
+  }
+})
+
 test('mixed 7TV field changes rename the set and preserve exact emote aliases', async () => {
   const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
   const manager = new SevenTVSubscriptionManager()

@@ -1,39 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  createSevenTvEmote,
-  createSevenTvEmoteFromEventValue,
-  updateSetEmote,
-} from '../src/seventv/emote.ts'
+import type { SevenTVEmote } from '@twirchat/shared/protocol'
+
+import { createSevenTvEmoteFromEventValue, updateSetEmote } from '../src/seventv/emote.ts'
 import { emoteUpdateSchema } from '../src/seventv/event-schemas'
 
 describe('7TV alias casing', () => {
-  it('preserves exact alias casing when building emitted emotes', () => {
-    const uppercaseAlias = createSevenTvEmote({
-      alias: 'WW',
-      animated: false,
-      aspectRatio: 1,
-      id: 'emote-ww',
-      imageUrl: 'https://cdn.7tv.app/emote/emote-ww/4x.webp',
-      name: 'w',
-      zeroWidth: false,
-    })
-    const lowercaseAlias = createSevenTvEmote({
-      alias: 'vahui',
-      animated: false,
-      aspectRatio: 1,
-      id: 'emote-vahui',
-      imageUrl: 'https://cdn.7tv.app/emote/emote-vahui/4x.webp',
-      name: 'vahui',
-      zeroWidth: false,
-    })
-
-    expect(uppercaseAlias.alias).toBe('WW')
-    expect(uppercaseAlias.name).toBe('w')
-    expect(lowercaseAlias.alias).toBe('vahui')
-    expect(lowercaseAlias.name).toBe('vahui')
-  })
-
   it('preserves exact alias casing when mapping event payload emotes', () => {
     const uppercaseAlias = createSevenTvEmoteFromEventValue({
       id: 'emote-ww',
@@ -99,7 +71,7 @@ describe('7TV alias casing', () => {
   })
 
   it('updates only the matching emote and preserves case-distinct aliases', () => {
-    const uppercase = createSevenTvEmote({
+    const uppercase: SevenTVEmote = {
       alias: 'WW',
       animated: false,
       aspectRatio: 1,
@@ -107,7 +79,7 @@ describe('7TV alias casing', () => {
       imageUrl: 'https://cdn.7tv.app/emote/emote-ww-upper/4x.webp',
       name: 'w',
       zeroWidth: false,
-    })
+    }
     const lowercase = { ...uppercase, alias: 'ww', id: 'emote-ww-lower' }
     const emotes = new Map([
       [uppercase.alias, uppercase],

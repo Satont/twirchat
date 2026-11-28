@@ -331,6 +331,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The GraphQL client returns a validated set or a user's catalog projection, not a provider response envelope. The subscription manager owns identity, cache snapshots, and switch behavior. The upstream queries, schemas, and cancellation policy are unchanged.
 - **Safeguard:** Lookup tests cover explicit null, omitted results, malformed sets, and cancellation. Dispatch tests continue to distinguish a confirmed inactive set from an incomplete provider response.
 
+### Round 64 — Use one hosted 7TV emote contract
+
+- **Decision:** Use the shared `SevenTVEmote` protocol type for the hosted cache and message production. Map GraphQL and EventAPI data in the emote module and remove the duplicate backend types and field-copy factory.
+- **Safeguard:** A GraphQL-to-desktop fixture pins the emitted fields, exact alias, provider emote ID, and image preference. Existing EventAPI dispatch tests cover alias updates and notifications.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

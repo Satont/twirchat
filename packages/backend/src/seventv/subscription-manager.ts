@@ -1,4 +1,4 @@
-import type { Platform, BackendToDesktopMessage } from '@twirchat/shared'
+import type { Platform, BackendToDesktopMessage, SevenTVEmote } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
@@ -6,13 +6,11 @@ import { sevenTVCache, type CachedEmoteSet } from './cache'
 import { sevenTVChannelKey, type SevenTVChannelKey } from './channel-key'
 import { getEmoteSetById, getUserByConnection, type SevenTVGraphQLEmoteSet } from './client'
 import {
-  createSevenTvEmote,
+  createSevenTvEmoteFromCatalogItem,
   createSevenTvEmoteFromEventValue,
   removeSetEmote,
-  selectPreferredSevenTvImageUrl,
   updateSetEmote,
 } from './emote'
-import type { SevenTVEmote } from './emote'
 import { sevenTVEventClient, type SevenTVEventClient } from './event-client'
 import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-schemas'
 
@@ -395,19 +393,8 @@ export class SevenTVSubscriptionManager {
   ): CachedEmoteSet {
     const emotes = new Map<string, SevenTVEmote>()
 
-    for (const item of emoteSet?.emotes?.items ?? []) {
-      emotes.set(
-        item.alias,
-        createSevenTvEmote({
-          alias: item.alias,
-          animated: item.emote.flags?.animated ?? false,
-          aspectRatio: item.emote.aspectRatio ?? 1,
-          id: item.emote.id,
-          imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
-          name: item.emote.defaultName,
-          zeroWidth: item.flags?.zeroWidth ?? false,
-        }),
-      )
+    for (const item of emoteSet?.emotes.items ?? []) {
+      emotes.set(item.alias, createSevenTvEmoteFromCatalogItem(item))
     }
 
     return {
