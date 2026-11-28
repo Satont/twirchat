@@ -7,9 +7,8 @@ import {
 } from 'node:crypto'
 
 import type { DonationOAuthTokens } from '@twirchat/shared/donations'
+import { generateCodeChallenge } from '@twirchat/shared/pkce'
 import { z } from 'zod'
-
-import { generateCodeChallenge } from './pkce'
 
 const MEME_ALERTS_ORIGIN = 'https://memealerts.com'
 const SCOPE = 'oauth-user-show oauth-donation-subscribe'

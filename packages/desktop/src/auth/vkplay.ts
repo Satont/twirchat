@@ -5,12 +5,12 @@ import {
   VKPLAY_SCOPES,
 } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
+import { generateState } from '@twirchat/shared/pkce'
 import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { AccountStore } from '../store/account-store'
 import { getVkPlayDesktopClientId } from './client-config'
-import { generateState } from './pkce'
 import { successPage } from './server'
 
 const log = logger('auth-vkplay')

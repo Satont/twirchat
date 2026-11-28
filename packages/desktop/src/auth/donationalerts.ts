@@ -1,7 +1,7 @@
+import { generateState } from '@twirchat/shared/pkce'
 import { z } from 'zod'
 
 import { getDonationAlertsDesktopClientId } from './client-config'
-import { generateState } from './pkce'
 
 const PORT = 45826
 const HOST = `localhost:${PORT}`

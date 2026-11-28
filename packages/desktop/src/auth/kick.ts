@@ -1,6 +1,7 @@
 import type { KickBuildUrlRequest, KickExchangeRequest } from '@twirchat/shared'
 import { KICK_REDIRECT_URI } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
+import { generateCodeChallenge, generateCodeVerifier, generateState } from '@twirchat/shared/pkce'
 /**
  * Kick OAuth — desktop side (PKCE flow).
  *
@@ -29,7 +30,6 @@ import {
   type KickRefreshContext,
   type KickRefreshEntry,
 } from './kick-refresh'
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
 import { authUrlSchema, exchangedTokenSchema } from './response-schemas'
 import { successPage } from './server'
 

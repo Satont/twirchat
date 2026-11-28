@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 
+import { generateCodeChallenge, generateCodeVerifier } from '@twirchat/shared/pkce'
 import { z } from 'zod'
 
 import { memeAlertsRedirectUri } from '../src/auth/donations'
-import { generateCodeChallenge, generateCodeVerifier } from '../src/auth/pkce'
 import {
   callbackPath,
   createDonationOAuthFixture,
