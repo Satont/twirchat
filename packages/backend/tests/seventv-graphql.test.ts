@@ -6,75 +6,73 @@ import { getEmoteSetById, getUserByConnection } from '../src/seventv/client'
 
 const requestSchema = z.object({ query: z.string(), variables: z.record(z.string(), z.string()) })
 
-test.each(['headers', 'body', 'caller cancellation'])(
-  '7TV catalog requests abort during %s',
-  async (phase) => {
-    const deadline = new AbortController()
-    const caller = new AbortController()
-    const entered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<Response>()
-    const originalFetch = globalThis.fetch
-    const server = Bun.serve({
-      hostname: '127.0.0.1',
-      port: 0,
-      fetch() {
-        if (phase === 'headers') {
-          entered.resolve()
-          return release.promise
-        }
-        return new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('{'))
-            },
-          }),
-        )
-      },
-    })
-    const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal)
-    const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(
-      Object.assign(
-        async (url: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-          expect(url).toBe('https://7tv.io/v4/gql')
-          const response = await originalFetch(server.url, init)
-          if (phase !== 'headers') entered.resolve()
-          return response
-        },
-        { preconnect: originalFetch.preconnect },
-      ),
-    )
-    const result = Promise.allSettled([
-      phase === 'headers'
-        ? getEmoteSetById('set')
-        : getUserByConnection('KICK', 'channel', caller.signal),
-    ])
-    const watchdog = Promise.withResolvers<never>()
-    const timer = setTimeout(
-      () => watchdog.reject(new Error('Loopback request did not settle')),
-      2_000,
-    )
-    try {
-      await Promise.race([entered.promise, result, watchdog.promise])
-      // Assert the budget before aborting so a missing signal fails without waiting on the server.
-      expect(timeout.mock.calls).toEqual([[10_000]])
-      const cancellation = phase === 'caller cancellation'
-      const reason = new DOMException(
-        'Fixture stopped',
-        cancellation ? 'AbortError' : 'TimeoutError',
+test.each([
+  { phase: 'headers', byId: true, cancellation: false },
+  { phase: 'body', byId: false, cancellation: false },
+  { phase: 'body (connection lookup cancellation)', byId: false, cancellation: true },
+  { phase: 'body (set lookup cancellation)', byId: true, cancellation: true },
+])('7TV catalog requests abort during $phase', async ({ phase, byId, cancellation }) => {
+  const deadline = new AbortController()
+  const caller = new AbortController()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<Response>()
+  const originalFetch = globalThis.fetch
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch() {
+      if (phase === 'headers') {
+        entered.resolve()
+        return release.promise
+      }
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{'))
+          },
+        }),
       )
-      if (cancellation) caller.abort(reason)
-      else deadline.abort(reason)
-      const [settled] = await Promise.race([result, watchdog.promise])
-      expect(settled?.status === 'rejected' ? settled.reason : undefined).toBe(reason)
-    } finally {
-      clearTimeout(timer)
-      release.resolve(new Response(null, { status: 503 }))
-      timeout.mockRestore()
-      fetchMock.mockRestore()
-      await server.stop(true)
-    }
-  },
-)
+    },
+  })
+  const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal)
+  const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      async (url: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        expect(url).toBe('https://7tv.io/v4/gql')
+        const response = await originalFetch(server.url, init)
+        if (phase !== 'headers') entered.resolve()
+        return response
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
+  )
+  const result = Promise.allSettled([
+    byId
+      ? getEmoteSetById('set', caller.signal)
+      : getUserByConnection('KICK', 'channel', caller.signal),
+  ])
+  const watchdog = Promise.withResolvers<never>()
+  const timer = setTimeout(
+    () => watchdog.reject(new Error('Loopback request did not settle')),
+    2_000,
+  )
+  try {
+    await Promise.race([entered.promise, result, watchdog.promise])
+    // Assert the budget before aborting so a missing signal fails without waiting on the server.
+    expect(timeout.mock.calls).toEqual([[10_000]])
+    const reason = new DOMException('Fixture stopped', cancellation ? 'AbortError' : 'TimeoutError')
+    if (cancellation) caller.abort(reason)
+    else deadline.abort(reason)
+    const [settled] = await Promise.race([result, watchdog.promise])
+    expect(settled?.status === 'rejected' ? settled.reason : undefined).toBe(reason)
+  } finally {
+    clearTimeout(timer)
+    release.resolve(new Response(null, { status: 503 }))
+    timeout.mockRestore()
+    fetchMock.mockRestore()
+    await server.stop(true)
+  }
+})
 
 test('7TV catalog requests validate the same set shape without collapsing null and omission', async () => {
   const valid = { id: 'set', name: 'Set', emotes: { items: [] } }

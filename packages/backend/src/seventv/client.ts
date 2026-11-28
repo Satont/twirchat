@@ -126,8 +126,11 @@ ${EMOTE_SET_FIELDS}
 }
 `
 
-export async function getEmoteSetById(id: string): Promise<z.infer<typeof getEmoteSetByIdSchema>> {
-  return executeGraphQL(GET_EMOTE_SET_BY_ID_QUERY, { id }, getEmoteSetByIdSchema)
+export async function getEmoteSetById(
+  id: string,
+  signal?: AbortSignal,
+): Promise<z.infer<typeof getEmoteSetByIdSchema>> {
+  return executeGraphQL(GET_EMOTE_SET_BY_ID_QUERY, { id }, getEmoteSetByIdSchema, signal)
 }
 
 const emoteSetSchema = z.object({

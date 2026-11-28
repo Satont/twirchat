@@ -332,7 +332,7 @@ test('set switches retain existing updates until the latest lookup commits', asy
   const originalFetch = globalThis.fetch
   const stale = Promise.withResolvers<Response>()
   const latest = Promise.withResolvers<Response>()
-  const started: string[] = []
+  const started = new Map<string, AbortSignal | null | undefined>()
   const received: Array<{ client: string; message: BackendToDesktopMessage }> = []
   const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
     platform: Platform
@@ -354,7 +354,7 @@ test('set switches retain existing updates until the latest lookup commits', asy
             },
           },
         })
-      started.push(id)
+      started.set(id, init.signal)
       if (id === 'stale') return stale.promise
       if (id === 'latest') return latest.promise
       return new Response(null, { status: 503 })
@@ -371,7 +371,9 @@ test('set switches retain existing updates until the latest lookup commits', asy
     switchTo('failed')
     switchTo('stale')
     switchTo('latest')
-    expect(started).toEqual(['failed', 'stale', 'latest'])
+    expect([...started.keys()]).toEqual(['failed', 'stale', 'latest'])
+    expect(started.get('stale')?.aborted).toBe(true)
+    expect(started.get('latest')?.aborted).toBe(false)
     await manager.subscribeClient('joiner', [channel], () => true)
     manager.cleanupClient('returning')
     expect(unsubscribe).not.toHaveBeenCalled()
@@ -481,9 +483,13 @@ test('returning to the active set retires the pending lookup for the same future
     )
     messages.length = 0
     switchTo('next', events)
+    const retiredSignal = lookup.mock.calls[1]?.[1]?.signal
+    expect(retiredSignal?.aborted).toBe(false)
     switchTo('initial', events)
+    expect(retiredSignal?.aborted).toBe(true)
     switchTo('next', events)
     expect(lookup).toHaveBeenCalledTimes(3)
+    expect(lookup.mock.calls[2]?.[1]?.signal?.aborted).toBe(false)
     retired.resolve(result('next'))
     await Bun.sleep(0)
     expect(messages).toEqual([])
@@ -499,6 +505,40 @@ test('returning to the active set retires the pending lookup for the same future
     retired.resolve(result('next'))
     current.resolve(result('next'))
     manager.cleanupClient('viewer')
+    lookup.mockRestore()
+    connect.mockRestore()
+  }
+})
+
+test('a pending set read belongs to the channel until its final viewer leaves', async () => {
+  const events = new SevenTVEventClient()
+  const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager(events)
+  const pending = Promise.withResolvers<Response>()
+  const lookup = spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(connectionSnapshot('initial'))
+    .mockReturnValueOnce(pending.promise)
+  const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  try {
+    await manager.subscribeClient('first', [channel], () => true)
+    switchTo('next', events)
+    const signal = lookup.mock.calls[1]?.[1]?.signal
+    await manager.subscribeClient('second', [channel], () => true)
+    manager.cleanupClient('first')
+    expect(signal?.aborted).toBe(false)
+    manager.unsubscribeClient('second', channel.platform, channel.channelId)
+    expect(signal?.aborted).toBe(true)
+    expect(events.subscriptionCount).toBe(0)
+    pending.resolve(result('next'))
+    await Bun.sleep(0)
+    expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('initial')
+  } finally {
+    pending.resolve(result('next'))
+    manager.cleanupClient('first')
+    manager.cleanupClient('second')
     lookup.mockRestore()
     connect.mockRestore()
   }

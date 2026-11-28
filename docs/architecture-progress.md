@@ -266,6 +266,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The GraphQL transport owns a ten-second deadline for each catalog read, covering response headers and body. It composes that deadline with caller cancellation. The subscription manager still owns the separate reconnect budget shared across attempts and decides whether a result can publish.
 - **Safeguard:** Offline loopback tests stall headers and a partial response body in native Bun fetch. They verify that the transport deadline and caller cancellation terminate the read and preserve the abort reason.
 
+### Round 51 — Cancel 7TV set reads when their owner retires
+
+- **Decision:** Each pending set switch owns its provider request. A replacement target, a return to the active set, or the final viewer's departure retires that request and cancels its transport. Duplicate targets and partial viewer departures leave it running. The identity fence still rejects late results from providers that ignore cancellation.
+- **Safeguard:** Dispatch tests cover replacement, return to the active set, and final detach. The by-ID lookup is also tested with a real loopback response that stalls after headers.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

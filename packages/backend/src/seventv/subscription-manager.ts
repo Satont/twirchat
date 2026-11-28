@@ -32,7 +32,7 @@ interface ChannelSubscription {
   channelId: string
   clients: Set<string>
   emoteSet: CachedEmoteSet
-  switchRequest: { readonly target: string } | undefined
+  switchRequest: { readonly target: string; readonly controller: AbortController } | undefined
   revision: number
 }
 
@@ -296,10 +296,13 @@ export class SevenTVSubscriptionManager {
     const lookups = this.joinLookups.get(channel.key)
     if (lookups) lookups.retired = channel
     this.channels.delete(channel.key)
+    const request = channel.switchRequest
+    channel.switchRequest = undefined
     if (channel.emoteSet.id !== null)
       this.release(this.emoteSetSubscriptions, channel.emoteSet.id, channel, emoteSetEvents)
     if (channel.emoteSet.userId)
       this.release(this.userSubscriptions, channel.emoteSet.userId, channel, userEvents)
+    request?.controller.abort()
   }
 
   private async fetchEmoteSet(
@@ -406,8 +409,10 @@ export class SevenTVSubscriptionManager {
   private async fetchEmoteSetById(
     id: string,
     channel: ChannelSubscription,
+    signal: AbortSignal,
   ): Promise<CachedEmoteSet & { id: string }> {
-    const result = await getEmoteSetById(id)
+    const result = await getEmoteSetById(id, signal)
+    signal.throwIfAborted()
     const emoteSet = result.emoteSets?.emoteSet
     if (!emoteSet) throw new Error(`Emote set ${id} not found on 7TV`)
     return this.createSnapshot(emoteSet, channel.emoteSet)
@@ -661,20 +666,21 @@ export class SevenTVSubscriptionManager {
   }
 
   private async switchEmoteSet(channel: ChannelSubscription, id: string): Promise<void> {
-    if (channel.switchRequest?.target === id) return
+    const previous = channel.switchRequest
+    if (previous?.target === id || this.channels.get(channel.key) !== channel) return
+    const request =
+      channel.emoteSet.id === id ? undefined : { target: id, controller: new AbortController() }
     channel.revision++
-    if (channel.emoteSet.id === id) {
-      channel.switchRequest = undefined
-      return
-    }
-    const request = { target: id }
     channel.switchRequest = request
+    previous?.controller.abort()
+    if (!request || channel.switchRequest !== request) return
     const { key, platform, channelId } = channel
-    let emoteSet: Awaited<ReturnType<typeof this.fetchEmoteSetById>>
+    let emoteSet: Awaited<ReturnType<SevenTVSubscriptionManager['fetchEmoteSetById']>>
     try {
-      emoteSet = await this.fetchEmoteSetById(id, channel)
+      emoteSet = await this.fetchEmoteSetById(id, channel, request.controller.signal)
     } catch (error) {
-      if (channel.switchRequest === request) channel.switchRequest = undefined
+      if (channel.switchRequest !== request) return
+      channel.switchRequest = undefined
       log.error('Failed to fetch new emote set after active set change', {
         channelKey: key,
         error: String(error),
