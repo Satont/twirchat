@@ -142,9 +142,7 @@ test('real object dispatches update both platform caches and attribute chat noti
         fetchedAt: Date.now(),
         ttl: 60000,
       })
-      expect(
-        await manager.subscribeClient(channel.client, channel.platform, channel, () => true),
-      ).toBe(true)
+      await manager.subscribeClient(channel.client, [channel], () => true)
     }
     received.length = 0
     await client.connect()

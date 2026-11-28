@@ -167,7 +167,7 @@ export async function handleWsMessage(
     case 'seventv_subscribe': {
       const isCurrent = () => connectionManager.isCurrent(ws)
       try {
-        await sevenTVManager.subscribeClient(ws.data.clientSecret, msg.platform, msg, isCurrent)
+        await sevenTVManager.subscribeClient(ws.data.clientSecret, [msg], isCurrent)
       } catch (error) {
         if (!isCurrent()) return
         log.error('7TV subscribe error', { error: String(error) })
@@ -191,13 +191,10 @@ export async function handleWsMessage(
     }
 
     case 'seventv_resubscribe': {
-      // Handle reconnect - client sends list of channels to resubscribe
-      const isCurrent = () => connectionManager.isCurrent(ws)
       try {
-        for (const sub of msg.subscriptions) {
-          if (!isCurrent()) break
-          await sevenTVManager.subscribeClient(ws.data.clientSecret, sub.platform, sub, isCurrent)
-        }
+        await sevenTVManager.subscribeClient(ws.data.clientSecret, msg.subscriptions, () =>
+          connectionManager.isCurrent(ws),
+        )
       } catch (error) {
         log.error('7TV resubscribe error', { error: String(error) })
       }

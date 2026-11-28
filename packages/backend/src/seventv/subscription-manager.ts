@@ -22,6 +22,12 @@ function parseChannelKey(key: string): [Platform, string] {
   return [platform, key.slice(separator + 1)]
 }
 
+interface SubscriptionRequest {
+  platform: Platform
+  channelId: string
+  platformUserId?: string
+}
+
 interface ClientSubscription {
   platform: Platform
   channelId: string
@@ -35,6 +41,7 @@ interface EmoteSetSubscription {
 }
 
 export class SevenTVSubscriptionManager {
+  private pendingByClient = new Map<string, Map<string, symbol>>()
   private clientSubscriptions = new Map<string, Set<ClientSubscription>>() // ClientSecret -> subscriptions
   private emoteSetSubscriptions = new Map<string, EmoteSetSubscription>() // EmoteSetId -> subscription
   private userSubscriptions = new Map<string, Set<string>>()
@@ -50,11 +57,41 @@ export class SevenTVSubscriptionManager {
 
   async subscribeClient(
     clientSecret: string,
-    platform: Platform,
-    { channelId, platformUserId }: { channelId: string; platformUserId?: string },
+    subscriptions: readonly SubscriptionRequest[],
     isCurrent: () => boolean,
-  ): Promise<boolean> {
-    if (!isCurrent()) return false
+  ): Promise<void> {
+    if (!isCurrent() || subscriptions.length === 0) return
+    const pending = this.pendingByClient.get(clientSecret) ?? new Map<string, symbol>()
+    this.pendingByClient.set(clientSecret, pending)
+    const token = Symbol()
+    // Reserve the whole batch before any lookup yields to a later command.
+    const batch = subscriptions.map((subscription) => {
+      const key = `${subscription.platform}:${subscription.channelId}`
+      pending.set(key, token)
+      return { key, subscription }
+    })
+    try {
+      for (const { key, subscription } of batch) {
+        if (!isCurrent()) break
+        const isPending = () =>
+          isCurrent() && this.pendingByClient.get(clientSecret)?.get(key) === token
+        if (isPending()) await this.subscribeChannel(clientSecret, subscription, isPending)
+      }
+    } finally {
+      for (const { key } of batch) {
+        if (pending.get(key) === token) pending.delete(key)
+      }
+      if (pending.size === 0 && this.pendingByClient.get(clientSecret) === pending)
+        this.pendingByClient.delete(clientSecret)
+    }
+  }
+
+  private async subscribeChannel(
+    clientSecret: string,
+    { platform, channelId, platformUserId }: SubscriptionRequest,
+    isCurrent: () => boolean,
+  ): Promise<void> {
+    if (!isCurrent()) return
     const channelKey = `${platform}:${channelId}`
     log.info('Subscribing client to channel', {
       channelKey,
@@ -72,7 +109,7 @@ export class SevenTVSubscriptionManager {
           channelKey,
           clientSecret: clientSecret.slice(0, 8),
         })
-        return true
+        return
       }
     }
 
@@ -90,14 +127,14 @@ export class SevenTVSubscriptionManager {
     if (!cached || isExpired) {
       try {
         const fetched = await this.fetchEmoteSet(platform, channelId, platformUserId)
-        if (!isCurrent()) return false
+        if (!isCurrent()) return
         if (fetched) sevenTVCache.set(platform, channelId, fetched.emoteSet)
         userId = fetched?.userId ?? null
         if (userId) {
           this.channelKeyToUserId.set(channelKey, userId)
         }
       } catch (error) {
-        if (!isCurrent()) return false
+        if (!isCurrent()) return
         log.error('Failed to fetch emote set', {
           channelId,
           channelKey,
@@ -109,7 +146,7 @@ export class SevenTVSubscriptionManager {
           this.sendEmoteSetToClient(clientSecret, platform, channelId, cached)
         }
 
-        return false
+        return
       }
     }
 
@@ -117,7 +154,7 @@ export class SevenTVSubscriptionManager {
     const emoteSet = sevenTVCache.get(platform, channelId)
     if (!emoteSet) {
       log.error('No emote set found after fetch', { channelKey })
-      return false
+      return
     }
 
     // Register subscription
@@ -131,12 +168,13 @@ export class SevenTVSubscriptionManager {
 
     // Send emote set to client
     this.sendEmoteSetToClient(clientSecret, platform, channelId, emoteSet)
-
-    return true
   }
 
   unsubscribeClient(clientSecret: string, platform: Platform, channelId: string): void {
     const channelKey = `${platform}:${channelId}`
+    const pending = this.pendingByClient.get(clientSecret)
+    pending?.delete(channelKey)
+    if (pending?.size === 0) this.pendingByClient.delete(clientSecret)
     log.info('Unsubscribing client from channel', {
       channelKey,
       clientSecret: clientSecret.slice(0, 8),
@@ -185,6 +223,7 @@ export class SevenTVSubscriptionManager {
   }
 
   cleanupClient(clientSecret: string): void {
+    this.pendingByClient.delete(clientSecret)
     log.info('Cleaning up client subscriptions', {
       clientSecret: clientSecret.slice(0, 8),
     })

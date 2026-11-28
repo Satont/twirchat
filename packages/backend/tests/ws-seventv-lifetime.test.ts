@@ -12,6 +12,22 @@ function send(ws: WebSocket, message: DesktopToBackendMessage) {
   ws.send(JSON.stringify(message))
 }
 
+function nextMessage(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => ws.addEventListener('message', () => resolve(), { once: true }))
+}
+
+function ping(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    const pong = ({ data }: MessageEvent) => {
+      if (data !== '{"type":"pong"}') return
+      ws.removeEventListener('message', pong)
+      resolve()
+    }
+    ws.addEventListener('message', pong)
+    send(ws, { type: 'ping' })
+  })
+}
+
 const requestSchema = z.object({ variables: z.object({ platformId: z.string() }) })
 const response = (id: string) =>
   Response.json({
@@ -25,13 +41,14 @@ const response = (id: string) =>
     },
   })
 
-for (const overlap of [false, true]) {
-  test(`a ${overlap ? 'replaced' : 'closed'} socket cannot commit pending 7TV subscriptions`, async () => {
+for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'supersede']) {
+  test(`7TV pending subscriptions respect ${scenario} ordering`, async () => {
     const originalFetch = globalThis.fetch
     const touch = spyOn(ClientStore, 'touch').mockResolvedValue(undefined)
     const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
     const lookupStarted = Promise.withResolvers<void>()
     const lookup = Promise.withResolvers<Response>()
+    const latestLookup = Promise.withResolvers<Response>()
     const requests: string[] = []
     const requestsDone: Promise<void>[] = []
     const sockets = new Set<WebSocket>()
@@ -80,6 +97,10 @@ for (const overlap of [false, true]) {
       async (_input: string | URL | Request, init?: RequestInit) => {
         if (typeof init?.body !== 'string') throw new Error('Expected a 7TV lookup')
         const id = requestSchema.parse(JSON.parse(init.body)).variables.platformId
+        if (id === 'pending' && requests.includes('pending')) {
+          requests.push('latest')
+          return scenario === 'supersede' ? latestLookup.promise : response('latest')
+        }
         requests.push(id)
         if (id === 'pending') {
           lookupStarted.resolve()
@@ -100,9 +121,72 @@ for (const overlap of [false, true]) {
         subscriptions: [
           { platform: 'kick', channelId: 'pending' },
           { platform: 'kick', channelId: 'next' },
+          { platform: 'kick', channelId: 'unrelated' },
         ],
       })
       await lookupStarted.promise
+      if (scenario === 'unsubscribe' || scenario === 'resubscribe' || scenario === 'supersede') {
+        const olderCommands = Promise.all(requestsDone)
+        const subscribeAgain = scenario !== 'unsubscribe'
+        const messages: unknown[] = []
+        old.addEventListener('message', ({ data }) => {
+          if (typeof data !== 'string') return
+          const message: unknown = JSON.parse(data)
+          messages.push(message)
+        })
+        if (scenario !== 'supersede')
+          send(old, { type: 'seventv_unsubscribe', platform: 'kick', channelId: 'pending' })
+        send(old, { type: 'seventv_unsubscribe', platform: 'kick', channelId: 'next' })
+        if (subscribeAgain)
+          send(old, { type: 'seventv_subscribe', platform: 'kick', channelId: 'pending' })
+        if (scenario === 'resubscribe') await nextMessage(old)
+        else await ping(old)
+        lookup.resolve(response('obsolete'))
+        if (scenario === 'supersede') {
+          await olderCommands
+          expect(sevenTVCache.get('kick', 'pending')).toBeUndefined()
+          latestLookup.resolve(response('latest'))
+        }
+        await Promise.all(requestsDone)
+        await ping(old)
+        expect(requests).toEqual(
+          subscribeAgain
+            ? ['committed', 'pending', 'latest', 'unrelated']
+            : ['committed', 'pending', 'unrelated'],
+        )
+        expect(sevenTVCache.get('kick', 'pending')?.id).toBe(
+          subscribeAgain ? 'set-latest' : undefined,
+        )
+        expect(sevenTVCache.get('kick', 'next')).toBeUndefined()
+        const expectedChannels =
+          scenario === 'supersede'
+            ? ['unrelated', 'pending']
+            : subscribeAgain
+              ? ['pending', 'unrelated']
+              : ['unrelated']
+        expect(
+          messages.filter(
+            (message) => typeof message === 'object' && message !== null && 'channelId' in message,
+          ),
+        ).toEqual(
+          expectedChannels.map((channelId) => ({
+            type: 'seventv_emote_set',
+            platform: 'kick',
+            channelId,
+            emotes: [],
+          })),
+        )
+        if (subscribeAgain) {
+          send(old, { type: 'seventv_unsubscribe', platform: 'kick', channelId: 'pending' })
+          await ping(old)
+        }
+        expect(sevenTVManager.getStats()).toMatchObject({
+          connectedClients: 1,
+          emoteSetSubscriptions: 2,
+        })
+        return
+      }
+      const overlap = scenario === 'replace'
       if (!overlap) {
         old.close()
         await closed[0]?.promise
@@ -126,15 +210,7 @@ for (const overlap of [false, true]) {
         old.close()
         await closed[0]?.promise
       }
-      send(replacement, { type: 'ping' })
-      await new Promise<void>((resolve) => {
-        const pong = ({ data }: MessageEvent) => {
-          if (data !== '{"type":"pong"}') return
-          replacement.removeEventListener('message', pong)
-          resolve()
-        }
-        replacement.addEventListener('message', pong)
-      })
+      await ping(replacement)
       expect(requests).toEqual(['committed', 'pending', 'replacement'])
       expect(sevenTVCache.get('kick', 'pending')).toBeUndefined()
       expect(sevenTVManager.getStats()).toMatchObject({
@@ -146,6 +222,7 @@ for (const overlap of [false, true]) {
         { type: 'pong' },
       ])
     } finally {
+      latestLookup.resolve(response('latest'))
       lookup.resolve(response('pending'))
       await Promise.allSettled(requestsDone)
       for (const ws of sockets) ws.close()
