@@ -112,7 +112,7 @@ function accountWithTwitchToken(account: Account | null): Account | null {
 
 interface DesktopRuntime extends DesktopBackend {
   events: DesktopEvents
-  dispose(): void
+  dispose(): Promise<void>
   shutdownPlugins(): Promise<void>
 }
 
@@ -194,7 +194,7 @@ function boot(): DesktopRuntime {
   aggregator.registerAdapter(youtubeAdapter)
   aggregator.registerAdapter(vkPlayAdapter)
 
-  startOverlayServer()
+  const overlayServer = startOverlayServer()
 
   const watchedChannelManager = new WatchedChannelManager(
     (message) => providerRuntime.enrich(message),
@@ -772,8 +772,11 @@ function boot(): DesktopRuntime {
     events,
     plugins,
     shutdownPlugins,
-    dispose: () => {
+    dispose: async () => {
       disposed = true
+      const stopOverlay = overlayServer.stop().catch((error: unknown) => {
+        log.warn('OBS overlay server shutdown failed', { error: String(error) })
+      })
       void devServer?.stop().catch((error) => {
         log.warn('Desktop dev server shutdown failed', { error: String(error) })
       })
@@ -791,6 +794,7 @@ function boot(): DesktopRuntime {
       twitchEventSub.stop()
       twitchActivityRefresh.stop()
       backendConn.disconnect()
+      await stopOverlay
     },
   }
 }

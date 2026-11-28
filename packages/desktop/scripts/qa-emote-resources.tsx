@@ -1973,6 +1973,6 @@ try {
     await until(() => !nativeWindow(sink).isWindowOpen(), 'private focus sink closed')
   }
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

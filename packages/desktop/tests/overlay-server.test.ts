@@ -159,6 +159,37 @@ test('broadcasts built-in and live plugin chat on the overlay socket', async () 
     expect(normalizedChatMessageSchema.safeParse(pluginMessage).success).toBe(false)
   } finally {
     socket.close()
-    await server.stop(true)
+    await server.stop()
+  }
+})
+
+test('stopping the OBS overlay disconnects an open client and releases the port', async () => {
+  const server = startOverlayServer(0)
+  const url = `ws://127.0.0.1:${server.port}`
+  const socket = new WebSocket(url)
+  const opened = Promise.withResolvers<void>()
+  const closed = Promise.withResolvers<number>()
+  socket.addEventListener('open', () => opened.resolve(), { once: true })
+  socket.addEventListener('error', () => opened.reject(new Error('Overlay socket failed')), {
+    once: true,
+  })
+  socket.addEventListener('close', ({ code }) => closed.resolve(code), { once: true })
+  try {
+    await opened.promise
+    const stopping = server.stop()
+    expect(server.stop()).toBe(stopping)
+    await stopping
+    expect(await closed.promise).toBe(1001)
+    const restarted = startOverlayServer(server.port)
+    try {
+      expect(restarted.port).toBe(server.port)
+      const response = await fetch(`http://127.0.0.1:${restarted.port}/missing.file`)
+      expect(response.status).toBe(404)
+    } finally {
+      await restarted.stop()
+    }
+  } finally {
+    socket.close()
+    await server.stop()
   }
 })

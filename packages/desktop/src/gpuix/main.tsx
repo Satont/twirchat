@@ -128,7 +128,7 @@ if (!g.__twirchatWatchedSubscriptionsWired) {
 async function shutdownDesktop(): Promise<void> {
   const stopActivation = instance.kind === 'primary' ? instance.stopActivation() : undefined
   await Promise.allSettled([stopActivation, backend.shutdownPlugins?.()])
-  backend.dispose?.()
+  await backend.dispose()
 }
 
 const windows = mountDesktopWindows(

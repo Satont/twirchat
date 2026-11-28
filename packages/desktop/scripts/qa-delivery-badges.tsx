@@ -593,6 +593,6 @@ try {
 } finally {
   stopMessages()
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

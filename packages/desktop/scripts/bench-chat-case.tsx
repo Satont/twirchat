@@ -403,6 +403,6 @@ try {
   stopMessages()
   await manager.quit()
   await backend.shutdownPlugins?.()
-  backend.dispose?.()
+  await backend.dispose()
 }
 process.exit(0)

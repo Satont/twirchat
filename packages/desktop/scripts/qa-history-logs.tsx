@@ -431,7 +431,7 @@ try {
   initial.resolve(page([]))
   pendingRefresh?.resolve(page([]))
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
   for (const request of pendingImages) request.resolve(new Response(null, { status: 204 }))
   await imageServer.stop(true)
 }

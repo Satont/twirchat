@@ -220,7 +220,7 @@ try {
   throw error
 } finally {
   await manager.quit()
-  backend.dispose?.()
+  await backend.dispose()
   for (const request of pendingRequests) request.resolve(new Response(null, { status: 204 }))
   await server.stop(true)
 }
