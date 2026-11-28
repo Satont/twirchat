@@ -6,9 +6,9 @@ import {
   chatMessageKey,
   compileChatSearch,
   createMentionMatcher,
-  formatChatTranscript,
   type SearchDetails,
 } from '../src/gpuix/chat-tools'
+import { formatChatTranscript } from '../src/services/chat-transcript'
 
 const account: Account = {
   id: 'account-twitch',
@@ -237,6 +237,12 @@ test('chat transcripts keep visible order, authors, platforms and message conten
   expect(output[1]).toEndWith('[kick] Боб: second line')
   expect(output[0]).toMatch(/^\[[^\]]+\] /u)
   expect(formatChatTranscript([])).toBe('')
+  const pluginMessage = { ...first, platform: 'plugin:streamx' }
+  const pluginLine = formatChatTranscript([pluginMessage])
+  expect(pluginLine).toEndWith('[plugin:streamx] Alice Viewer: first line')
+  expect(formatChatTranscript([{ ...pluginMessage, timestamp: first.timestamp.getTime() }])).toBe(
+    pluginLine,
+  )
   expect(formatChatTranscript([chat({ timestamp: new Date(Number.NaN) })])).toStartWith(
     '[] [twitch]',
   )

@@ -82,6 +82,20 @@ fixtures.push(
   { directory: desktop, code: 'import type { Message } from "@twirchat/shared/types"' },
   { directory: `${gpuix}/components`, code: 'import { useBackend } from "../backend/context"' },
   { directory: `${gpuix}/components`, code: 'import { useT } from "@gpuix/hooks/use-translation"' },
+  { directory: `${gpuix}/backend`, code: 'import "@gpuix/backend/events"' },
+  { directory: `${gpuix}/backend`, code: 'import "@desktop/services/chat-transcript"' },
+  { directory: `${gpuix}/backend`, code: 'import "../chat-tools"', workspaceImports: 1 },
+  { directory: `${gpuix}/backend`, code: 'import("@gpuix/components/App")', workspaceImports: 1 },
+  {
+    directory: `${gpuix}/backend`,
+    code: 'type T = import("@desktop/gpuix/state/app").MainTab',
+    workspaceImports: 1,
+  },
+  {
+    directory: `${gpuix}/backend`,
+    code: 'export * from "../backend-tools/types"',
+    workspaceImports: 1,
+  },
   {
     directory: `${gpuix}/backend`,
     code: 'import { useT } from "../hooks/use-translation"',

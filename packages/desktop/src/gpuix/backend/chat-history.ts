@@ -6,11 +6,11 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { getDbPath } from '../../runtime-config'
+import { formatChatTranscript } from '../../services/chat-transcript'
 import { platformSchema } from '../../services/persisted-schemas'
 import type { UserChatHistoryPage } from '../../shared/rpc'
 import { getDb } from '../../store/db'
 import { MessageStore, type ChatHistoryQuery } from '../../store/message-store'
-import { formatChatTranscript } from '../chat-tools'
 import { createChatFileLogger } from './chat-logging'
 import type { ChatLoggingSettings } from './chat-logging-settings'
 

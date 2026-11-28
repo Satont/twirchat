@@ -20,8 +20,8 @@ import { APP_VERSION } from '../../build-info'
 import { t } from '../../i18n'
 import { getDbPath } from '../../runtime-config'
 import { exitAfterFlushingDiagnosticLogs } from '../../services/diagnostic-logging'
+import { prepareLinuxUpdateLocator } from '../../services/linux-update-runtime'
 import { getDb } from '../../store/db'
-import { prepareLinuxUpdateLocator } from '../linux-update-runtime'
 import type { DesktopEvents } from './events'
 
 const log = logger('updater')

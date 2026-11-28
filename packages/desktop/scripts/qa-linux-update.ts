@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 
-import { prepareLinuxUpdateLocator } from '../src/gpuix/linux-update-runtime'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
+import { prepareLinuxUpdateLocator } from '../src/services/linux-update-runtime'
 
 assertGuiQaEnvironment()
 const sourceUpdater = process.argv[2]

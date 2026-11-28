@@ -95,8 +95,8 @@ const workspaceImportBoundaries = {
       desktopFoundation: 'Desktop localization and state primitives must not import UI packages.',
       desktopGpuix:
         'Only GPUIX code can import its application modules. Use the owning desktop contract or service instead.',
-      localeHook:
-        'Use the desktop localization service; React translation hooks belong to GPUIX presentation.',
+      bridgePresentation:
+        'The desktop backend bridge cannot import GPUIX presentation. Use the owning desktop contract or service instead.',
     },
   },
   create(context) {
@@ -105,8 +105,8 @@ const workspaceImportBoundaries = {
     const importer = workspaceRelativePath(context.filename)
     const desktopSource = importer.startsWith('packages/desktop/src/')
     const desktopGpuix = importer.startsWith('packages/desktop/src/gpuix/')
-    const isGpuixPresentation =
-      desktopGpuix && !importer.startsWith('packages/desktop/src/gpuix/backend/')
+    const desktopBridge = importer.startsWith('packages/desktop/src/gpuix/backend/')
+    const isGpuixPresentation = desktopGpuix && !desktopBridge
     const desktopFoundation = /^packages\/desktop\/src\/(?:i18n|state)\//u.test(importer)
 
     return {
@@ -146,11 +146,11 @@ const workspaceImportBoundaries = {
           return
         }
         if (
-          desktopSource &&
-          !isGpuixPresentation &&
-          /^src\/gpuix\/hooks\/use-translation(?:\.[cm]?[jt]sx?)?$/u.test(desktopPath)
+          desktopBridge &&
+          /^src\/gpuix(?:\/|$)/u.test(desktopPath) &&
+          !/^src\/gpuix\/backend(?:\/|$)/u.test(desktopPath)
         ) {
-          context.report({ node: source, messageId: 'localeHook' })
+          context.report({ node: source, messageId: 'bridgePresentation' })
           return
         }
         if (!target || target === from) return

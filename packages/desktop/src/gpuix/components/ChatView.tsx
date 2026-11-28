@@ -23,6 +23,7 @@ import {
   hoverPauseDurationMs,
   DOUBLE_CLICK_PAUSE_MS,
 } from '../../services/chat-pause'
+import { formatChatTranscript } from '../../services/chat-transcript'
 import { isTwitchMembershipNoticeKind } from '../../services/twitch-system-message'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
@@ -47,7 +48,7 @@ import {
   pluginChatSearchMessage,
   timelineRowKey,
 } from '../chat-timeline'
-import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
+import { chatMessageKey, compileChatSearch } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../hooks/use-translation'
 import { parseHotkeyChoice } from '../hotkey-bindings'

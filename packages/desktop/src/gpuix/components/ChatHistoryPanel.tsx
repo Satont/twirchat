@@ -6,6 +6,7 @@ import type {
 } from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { formatChatTranscript } from '../../services/chat-transcript'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
 import {
   HISTORY_DISPLAY_LIMIT,
@@ -17,7 +18,7 @@ import {
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import type { ChatHistoryQuery } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
-import { chatMessageKey, formatChatTranscript } from '../chat-tools'
+import { chatMessageKey } from '../chat-tools'
 import { useT } from '../hooks/use-translation'
 import { resolveMentionAvatarStyle } from '../mention-avatar'
 import { settingsStore } from '../state/app'
