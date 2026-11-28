@@ -5,8 +5,7 @@ import type { Platform } from '@twirchat/shared'
 import { exchangeKickCode } from '../src/auth/kick'
 import { authRoutes } from '../src/routes/auth'
 import { getEmoteSetById, getUserByConnection } from '../src/seventv/client'
-import { isSevenTvEventEmoteValue } from '../src/seventv/emote'
-import { sevenTVEventSchema } from '../src/seventv/event-schemas'
+import { sevenTVEventEmoteValueSchema, sevenTVEventSchema } from '../src/seventv/event-schemas'
 import { desktopMessageSchema } from '../src/ws/message-schema'
 
 const originalFetch = globalThis.fetch
@@ -67,12 +66,12 @@ test('7TV events verify nested image files and retain typed event variants', () 
       host: { url: '//cdn.7tv.app', files: [{ name: '1x.webp', width: 32 }] },
     },
   }
-  expect(isSevenTvEventEmoteValue(value)).toBe(true)
+  expect(sevenTVEventEmoteValueSchema.safeParse(value).success).toBe(true)
   expect(
-    isSevenTvEventEmoteValue({
+    sevenTVEventEmoteValueSchema.safeParse({
       ...value,
       data: { ...value.data, host: { ...value.data.host, files: [{ name: 42 }] } },
-    }),
+    }).success,
   ).toBe(false)
   expect(
     sevenTVEventSchema.safeParse({

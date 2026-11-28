@@ -141,8 +141,10 @@ test('7TV object change fields validate emote contents for insert, remove and up
     { pushed: [{ ...pushed, value: null }] },
     { pushed: [{ ...pushed, value: { ...emote, data: { ...emote.data, animated: 'yes' } } }] },
     { pulled: [{ key: 'emotes', index: 694, type: 'object', old_value: null }] },
-    { updated: [{ key: 'emotes', type: 'object', old_value: emote, value: null }] },
+    { updated: [{ key: 'emotes', kind: 'field', type: 'object', old_value: emote, value: null }] },
     { updated: [{ key: 'emotes', type: 'object', old_value: null, value: emote }] },
+    { updated: [{ key: 'emotes', type: 'unsupported', old_value: emote, value: emote }] },
+    { updated: [{ key: 'name', value: 'New' }] },
   ]
   for (const change of malformed)
     expect(
@@ -273,6 +275,54 @@ test('real object dispatches update both platform caches and attribute chat noti
       manager.unsubscribeClient(channel.client, channel.platform, channel.channelId)
     connect.mockRestore()
     await server.stop(true)
+  }
+})
+
+test('mixed 7TV field changes rename the set and preserve exact emote aliases', async () => {
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager()
+  const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  const key = sevenTVChannelKey(channel.platform, channel.channelId)
+  const received: BackendToDesktopMessage[] = []
+  manager.sendToClient = (_, message) => received.push(message)
+  try {
+    sevenTVCache.set(key, { id: setId, name: 'Old', emotes: new Map() })
+    await manager.subscribeClient('viewer', [channel], () => true)
+    dispatch()
+    received.length = 0
+    sevenTVEventClient.onEvent?.(
+      sevenTVEventSchema.parse({
+        type: 'emote_set.update',
+        body: {
+          id: setId,
+          updated: [
+            { key: 'name', old_value: 'Old', value: 42 },
+            { key: 'name', kind: 'emote', old_value: 'Old', value: 'New' },
+            { key: 'emotes', kind: 'field', old_value: emote, value: { ...emote, name: 'Ragey' } },
+          ],
+        },
+      }),
+    )
+    expect(received).toMatchObject([
+      { type: 'seventv_system_message', action: 'set_renamed', oldName: 'Old', newName: 'New' },
+      { type: 'seventv_emote_updated', emoteId: emote.id, alias: 'Ragey' },
+      {
+        type: 'seventv_system_message',
+        action: 'updated',
+        oldAlias: 'RAGEY',
+        emote: { alias: 'Ragey' },
+      },
+    ])
+    const snapshot = sevenTVCache.get(key)
+    expect(snapshot?.name).toBe('New')
+    expect(snapshot?.emotes.has('RAGEY')).toBe(false)
+    expect(snapshot?.emotes.get('Ragey')?.alias).toBe('Ragey')
+  } finally {
+    manager.cleanupClient('viewer')
+    connect.mockRestore()
   }
 })
 

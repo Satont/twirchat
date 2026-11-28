@@ -46,20 +46,24 @@ export const emoteRemoveSchema = z.object({
   type: emoteChangeTypeSchema,
   old_value: sevenTVEventEmoteValueSchema,
 })
-export const emoteUpdateSchema = z.object({
-  key: z.literal('emotes'),
-  index: z.number().optional(),
-  type: emoteChangeTypeSchema.optional(),
-  old_value: sevenTVEventEmoteValueSchema,
-  value: sevenTVEventEmoteValueSchema,
-})
-export const fieldUpdateSchema = z.object({
-  key: z.string().refine((key) => key !== 'emotes'),
-  index: z.number().optional(),
-  type: z.string().optional(),
-  old_value: z.unknown(),
-  value: z.unknown(),
-})
+export const emoteUpdateSchema = z
+  .object({
+    key: z.literal('emotes'),
+    index: z.number().optional(),
+    type: emoteChangeTypeSchema.optional(),
+    old_value: sevenTVEventEmoteValueSchema,
+    value: sevenTVEventEmoteValueSchema,
+  })
+  .transform((update): typeof update & { kind: 'emote' } => ({ ...update, kind: 'emote' }))
+export const fieldUpdateSchema = z
+  .object({
+    key: z.string().refine((key) => key !== 'emotes'),
+    index: z.number().optional(),
+    type: z.string().optional(),
+    old_value: z.unknown(),
+    value: z.unknown(),
+  })
+  .transform((update): typeof update & { kind: 'field' } => ({ ...update, kind: 'field' }))
 export const emoteSetUpdateSchema = z.object({
   id: z.string(),
   actor: actorSchema,

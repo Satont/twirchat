@@ -3,10 +3,9 @@ import { describe, expect, it } from 'bun:test'
 import {
   createSevenTvEmote,
   createSevenTvEmoteFromEventValue,
-  isSevenTvEventEmoteUpdate,
   updateSetEmote,
 } from '../src/seventv/emote.ts'
-import type { SevenTVEventEmoteUpdate } from '../src/seventv/event-client.ts'
+import { emoteUpdateSchema } from '../src/seventv/event-schemas'
 
 describe('7TV alias casing', () => {
   it('preserves exact alias casing when building emitted emotes', () => {
@@ -66,7 +65,7 @@ describe('7TV alias casing', () => {
   })
 
   it('accepts realistic event update payloads without changing alias case', () => {
-    const update = {
+    const update = emoteUpdateSchema.parse({
       index: 0,
       key: 'emotes',
       old_value: {
@@ -92,9 +91,7 @@ describe('7TV alias casing', () => {
         id: 'emote-ww',
         name: 'WW',
       },
-    } satisfies SevenTVEventEmoteUpdate
-
-    expect(isSevenTvEventEmoteUpdate(update)).toBe(true)
+    })
 
     const emote = createSevenTvEmoteFromEventValue(update.value)
     expect(emote.alias).toBe('WW')

@@ -306,6 +306,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Reserve the exact platform and channel ID together before a join yields. Reuse that typed key for pending requests, live channels, detached joins, and cache access. Catalog snapshots retain provider IDs but no longer carry a redundant copy of the local channel identity.
 - **Safeguard:** Cross-platform dispatch tests pin isolation for the same channel ID, including case and colon preservation on the wire. Existing cache expiry, reconnect, and overlapping join tests continue to exercise snapshot ownership.
 
+### Round 59 — Decode hosted 7TV update variants at ingress
+
+- **Decision:** EventAPI decoding assigns an internal kind to each validated update. Emote updates never fall through to the generic field branch. The subscription manager dispatches on the decoded kind and no longer parses nested emote payloads a second time.
+- **Safeguard:** Mixed-field dispatch preserves set and alias renames, notification order, and exact casing. Tests cover forged tags, malformed emotes, and required generic update fields.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

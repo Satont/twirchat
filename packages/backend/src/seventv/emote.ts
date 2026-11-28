@@ -1,5 +1,4 @@
 import type { SevenTVEventImageFile, SevenTVEventEmoteValue } from './event-client.ts'
-import { sevenTVEventEmoteValueSchema } from './event-schemas'
 
 export interface SevenTvEmoteInput {
   alias: string
@@ -43,26 +42,6 @@ export function createSevenTvEmoteFromEventValue(value: SevenTVEventEmoteValue):
     name: value.name,
     zeroWidth: false,
   })
-}
-
-export function isSevenTvEventEmoteValue(value: unknown): value is SevenTVEventEmoteValue {
-  return sevenTVEventEmoteValueSchema.safeParse(value).success
-}
-
-export function isSevenTvEventEmoteUpdate(update: {
-  key: string
-  old_value: unknown
-  value: unknown
-}): update is {
-  key: 'emotes'
-  old_value: SevenTVEventEmoteValue
-  value: SevenTVEventEmoteValue
-} {
-  return (
-    update.key === 'emotes' &&
-    isSevenTvEventEmoteValue(update.value) &&
-    isSevenTvEventEmoteValue(update.old_value)
-  )
 }
 
 export function selectPreferredSevenTvImageUrl(

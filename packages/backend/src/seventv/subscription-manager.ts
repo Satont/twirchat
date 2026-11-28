@@ -9,7 +9,6 @@ import { getEmoteSetById, getUserByConnection } from './client'
 import {
   createSevenTvEmote,
   createSevenTvEmoteFromEventValue,
-  isSevenTvEventEmoteUpdate,
   removeSetEmote,
   selectPreferredSevenTvImageUrl,
   updateSetEmote,
@@ -578,7 +577,7 @@ export class SevenTVSubscriptionManager {
     }
 
     for (const update of body.updated ?? []) {
-      if (update.key === 'name' && typeof update.value === 'string') {
+      if (update.kind === 'field' && update.key === 'name' && typeof update.value === 'string') {
         const newName = update.value
         const oldName = typeof update.old_value === 'string' ? update.old_value : ''
 
@@ -605,7 +604,7 @@ export class SevenTVSubscriptionManager {
         }
       }
 
-      if (isSevenTvEventEmoteUpdate(update)) {
+      if (update.kind === 'emote') {
         const newValue = update.value
         const oldValue = update.old_value
 
