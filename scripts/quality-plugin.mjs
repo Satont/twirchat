@@ -1,3 +1,118 @@
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const workspaceRoot = fileURLToPath(new URL('../', import.meta.url))
+const workspaceName = /^(?:desktop|backend|shared)$/u
+const workspaceImport = /^@twirchat\/(desktop|backend|shared)(?:[/\\]|$)/u
+const externalGpuixPackages = new Set([
+  '@gpuix/react',
+  '@gpuix/native',
+  '@gpuix/native-darwin-arm64',
+  '@gpuix/native-linux-x64-gnu',
+  '@gpuix/native-win32-arm64-msvc',
+  '@gpuix/native-win32-x64-msvc',
+])
+
+function workspacePackage(filename) {
+  const [directory, name] = relative(workspaceRoot, filename).split(sep)
+  return directory === 'packages' && workspaceName.test(name ?? '') ? name : undefined
+}
+
+function workspacePackageForFile(filename) {
+  const path = relative(workspaceRoot, filename).split(sep).join('/')
+  if (path.startsWith('../')) return undefined
+  return (
+    /(?:^|\/)node_modules\/@twirchat\/(desktop|backend|shared)(?:\/|$)/u.exec(path)?.[1] ??
+    workspacePackage(filename)
+  )
+}
+
+function importSpecifier(node) {
+  if (node?.type === 'Literal' && typeof node.value === 'string') return node.value
+  if (node?.type === 'TemplateLiteral' && node.expressions.length === 0)
+    return node.quasis[0]?.value.cooked ?? undefined
+  return undefined
+}
+
+function importSource(node) {
+  if (node.type === 'CallExpression') return node.arguments[0]
+  if (node.type === 'TSImportEqualsDeclaration') {
+    if (node.moduleReference.type === 'TSExternalModuleReference')
+      return node.moduleReference.expression
+    return undefined
+  }
+  return node.source
+}
+
+function importedFile(filename, specifier) {
+  const path = specifier.replaceAll('\\', '/')
+  if (isAbsolute(path) || /^\.{1,2}(?:\/|$)/u.test(path)) return resolve(dirname(filename), path)
+  if (specifier.startsWith('file:')) {
+    try {
+      return fileURLToPath(specifier)
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+function packageForAlias(specifier) {
+  const packageName = workspaceImport.exec(specifier)?.[1]
+  if (packageName) return packageName
+  if (/^@backend(?:[/\\]|$)/u.test(specifier)) return 'backend'
+  if (/^@(?:desktop|views)(?:[/\\]|$)/u.test(specifier)) return 'desktop'
+  // The local @gpuix/* alias shares a scope with actual dependencies.
+  if (/^@gpuix[/\\]/u.test(specifier)) {
+    const dependency = specifier.split(/[/\\]/u, 2).join('/')
+    if (!externalGpuixPackages.has(dependency)) return 'desktop'
+  }
+  return undefined
+}
+
+/** @type {Parameters<import('oxlint/plugins-dev').RuleTester['run']>[1]} */
+const workspaceImportBoundaries = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      direction: '{{from}} cannot import {{target}}. Put cross-app contracts in @twirchat/shared.',
+      sharedEntry: 'Import shared code through @twirchat/shared rather than its filesystem path.',
+      aliasPath: 'Use a canonical workspace import without dot segments or backslashes.',
+    },
+  },
+  create(context) {
+    const from = workspacePackage(context.filename)
+    if (!from) return {}
+
+    return {
+      'ImportDeclaration, ExportNamedDeclaration[source], ExportAllDeclaration, ImportExpression, TSImportType, TSImportEqualsDeclaration, CallExpression[callee.name="require"]'(
+        node,
+      ) {
+        const source = importSource(node)
+        const specifier = importSpecifier(source)
+        if (specifier === undefined) return
+        const alias = packageForAlias(specifier)
+        if (
+          (alias || /^@gpuix[/\\]/u.test(specifier)) &&
+          /\\|(?:^|\/)\.{1,2}(?:\/|$)/u.test(specifier)
+        ) {
+          context.report({ node: source, messageId: 'aliasPath' })
+          return
+        }
+        const file = alias ? undefined : importedFile(context.filename, specifier)
+        const target = alias ?? (file ? workspacePackageForFile(file) : undefined)
+        if (!target || target === from) return
+        if (target !== 'shared') {
+          context.report({ node: source, messageId: 'direction', data: { from, target } })
+        } else if (file) {
+          context.report({ node: source, messageId: 'sharedEntry' })
+        }
+      },
+    }
+  },
+}
+
 /** @type {Parameters<import('oxlint/plugins-dev').RuleTester['run']>[1]} */
 const noTypeAssertions = {
   meta: {
@@ -103,6 +218,7 @@ const noUnsupportedAnchoredEvents = {
 export default {
   meta: { name: 'project-quality' },
   rules: {
+    'workspace-import-boundaries': workspaceImportBoundaries,
     'no-type-assertions': noTypeAssertions,
     'no-local-type-declarations': noLocalTypeDeclarations,
     'no-blocking-native-geometry': noBlockingNativeGeometry,

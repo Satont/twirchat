@@ -37,6 +37,7 @@
     "import/prefer-default-export": "off",
     "import/group-exports": "off",
     "no-useless-constructor": "off",
+    "project-quality/workspace-import-boundaries": "error",
     "project-quality/no-type-assertions": "error",
     "project-quality/no-local-type-declarations": "error",
     "typescript/no-explicit-any": "error",
