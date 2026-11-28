@@ -10,7 +10,6 @@ const SEVENTV_EVENT_API_URL = 'wss://events.7tv.io/v3'
 
 export type SevenTVEventMessage = z.infer<typeof schemas.sevenTVEventMessageSchema>
 export type SevenTVHello = z.infer<typeof schemas.sevenTVHelloSchema>
-export type UserUpdateEventNestedField = z.infer<typeof schemas.userUpdateNestedFieldSchema>
 export type UserUpdateEvent = z.infer<typeof schemas.userUpdateSchema>
 export type SevenTVEventImageFile = z.infer<typeof schemas.eventImageFileSchema>
 export type SevenTVEventEmoteData = z.infer<typeof schemas.sevenTVEventEmoteValueSchema.shape.data>

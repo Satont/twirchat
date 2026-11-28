@@ -153,6 +153,55 @@ test('7TV object change fields validate emote contents for insert, remove and up
     ).toBe(false)
 })
 
+test('7TV user updates decode the first usable connection set target', () => {
+  const decoded = sevenTVEventSchema.parse({
+    type: 'user.update',
+    body: {
+      id: 'fixture-user',
+      activeSetId: 'untrusted',
+      updated: [
+        { key: 'name', value: [null] },
+        { key: 'connections', value: null },
+        { key: 'connections', value: [{ key: 'emote_set_id', value: '' }] },
+        {
+          key: 'connections',
+          value: [
+            { key: 'emote_set_id', value: 42 },
+            { key: 'emote_set_id', value: 'First' },
+            { key: 'emote_set_id', value: 'Later' },
+          ],
+        },
+        { key: 'connections', value: [null] },
+      ],
+    },
+  })
+  expect(decoded).toEqual({
+    type: 'user.update',
+    body: { id: 'fixture-user', activeSetId: 'First' },
+  })
+})
+
+test('7TV user updates without a relevant field do not request a switch', () => {
+  const decoded = sevenTVEventSchema.parse({
+    type: 'user.update',
+    body: { id: 'fixture-user', activeSetId: 'untrusted' },
+  })
+  expect(decoded).toEqual({ type: 'user.update', body: { id: 'fixture-user' } })
+})
+
+test('7TV rejects a malformed connection array even after a valid target in that array', () => {
+  const parsed = sevenTVEventSchema.safeParse({
+    type: 'user.update',
+    body: {
+      id: 'fixture-user',
+      updated: [
+        { key: 'connections', value: [{ key: 'emote_set_id', value: 'target' }, { key: 'other' }] },
+      ],
+    },
+  })
+  expect(parsed.success).toBe(false)
+})
+
 async function until(check: () => boolean): Promise<void> {
   const deadline = performance.now() + 2000
   while (!check()) {

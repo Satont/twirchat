@@ -72,26 +72,41 @@ export const emoteSetUpdateSchema = z.object({
   updated: z.array(z.union([emoteUpdateSchema, fieldUpdateSchema])).optional(),
 })
 export const emoteSetDeleteSchema = z.object({ id: z.string(), actor: actorSchema })
-export const userUpdateNestedFieldSchema = z.object({
-  key: z.string(),
-  value: z.unknown(),
-  old_value: z.unknown().optional(),
-})
-export const userUpdateSchema = z.object({
-  id: z.string(),
-  updated: z
-    .array(
-      z.object({
-        key: z.string(),
-        index: z.number().nullish(),
-        nested: z.boolean().optional(),
-        type: z.string().optional(),
-        value: z.unknown().optional(),
-        old_value: z.unknown().optional(),
-      }),
-    )
-    .optional(),
-})
+const connectionFieldsSchema = z.array(z.object({ key: z.string(), value: z.unknown() }))
+export const userUpdateSchema = z
+  .object({
+    id: z.string(),
+    updated: z
+      .array(
+        z.object({
+          key: z.string(),
+          index: z.number().nullish(),
+          nested: z.boolean().optional(),
+          type: z.string().optional(),
+          value: z.unknown().optional(),
+          old_value: z.unknown().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .transform(({ id, updated }, context): { id: string; activeSetId?: string } => {
+    for (const [index, update] of (updated ?? []).entries()) {
+      if (update.key !== 'connections' || !Array.isArray(update.value)) continue
+      const fields = connectionFieldsSchema.safeParse(update.value)
+      if (!fields.success) {
+        for (const issue of fields.error.issues) {
+          context.addIssue({ ...issue, path: ['updated', index, 'value', ...issue.path] })
+        }
+        return z.NEVER
+      }
+      for (const { key, value } of fields.data) {
+        if (key === 'emote_set_id' && typeof value === 'string' && value) {
+          return { id, activeSetId: value }
+        }
+      }
+    }
+    return { id }
+  })
 export const sevenTVEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('emote_set.update'), body: emoteSetUpdateSchema }),
   z.object({ type: z.literal('emote_set.delete'), body: emoteSetDeleteSchema }),

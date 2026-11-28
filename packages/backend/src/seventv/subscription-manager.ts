@@ -1,6 +1,5 @@
 import type { Platform, BackendToDesktopMessage } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
-import { z } from 'zod'
 
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
 import { sevenTVCache, type CachedEmoteSet } from './cache'
@@ -667,21 +666,11 @@ export class SevenTVSubscriptionManager {
     }
   }
 
-  private async handleUserUpdateEvent(body: UserUpdateEvent): Promise<void> {
-    const channels = this.userSubscriptions.get(body.id)
+  private async handleUserUpdateEvent({ id, activeSetId }: UserUpdateEvent): Promise<void> {
+    if (activeSetId === undefined) return
+    const channels = this.userSubscriptions.get(id)
     if (!channels) return
-    for (const update of body.updated ?? []) {
-      if (update.key !== 'connections' || !Array.isArray(update.value)) continue
-      const fields = z.array(z.object({ key: z.string(), value: z.unknown() })).parse(update.value)
-      for (const field of fields) {
-        if (field.key !== 'emote_set_id' || typeof field.value !== 'string' || !field.value)
-          continue
-        const target = field.value
-        return Promise.all(
-          [...channels].map((channel) => this.switchEmoteSet(channel, target)),
-        ).then(() => undefined)
-      }
-    }
+    await Promise.all([...channels].map((channel) => this.switchEmoteSet(channel, activeSetId)))
   }
 
   private async switchEmoteSet(channel: ChannelSubscription, id: string): Promise<void> {

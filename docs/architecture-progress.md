@@ -311,6 +311,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** EventAPI decoding assigns an internal kind to each validated update. Emote updates never fall through to the generic field branch. The subscription manager dispatches on the decoded kind and no longer parses nested emote payloads a second time.
 - **Safeguard:** Mixed-field dispatch preserves set and alias renames, notification order, and exact casing. Tests cover forged tags, malformed emotes, and required generic update fields.
 
+### Round 60 — Decode hosted 7TV set-switch requests at ingress
+
+- **Decision:** Decode `user.update` into the user ID and its first usable active-set target. Validate each encountered connection array as a whole before selecting a target; later arrays are not inspected once a target is found. The subscription manager now handles routing and switch lifetime without parsing provider payloads. Malformed connection arrays are reported by the EventAPI decoder, even for users without current subscriptions.
+- **Safeguard:** Decoder tests cover ignored fields, malformed entries in the selected array, first-target precedence, and untrusted input targets. Existing dispatch tests cover switch coalescing, cancellation, and publication order.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
