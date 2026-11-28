@@ -55,6 +55,7 @@ interface WatchedEntry {
   sevenTvChannelId: string
   sevenTvPlatformUserId?: string
   cleanup?: () => void
+  disconnecting?: Promise<void>
 }
 
 export class WatchedChannelManager {
@@ -71,6 +72,8 @@ export class WatchedChannelManager {
   private entries = new Map<string, WatchedEntry>() // Keyed by WatchedChannel.id
   private activeIds = new Set<string>()
   private activationRevision = 0
+  private disposal: Promise<void> | undefined
+  private readonly stopping = new Set<Promise<void>>()
 
   private eventHandlers = new Set<(channelId: string, event: NormalizedEvent) => void>()
   private messageHandlers = new Set<WatchedChannelMessageHandler>()
@@ -85,7 +88,43 @@ export class WatchedChannelManager {
   // Public API
   // ----------------------------------------------------------------
 
+  get isDisposed(): boolean {
+    return this.disposal !== undefined
+  }
+
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal
+    const retired = [...this.entries]
+    this.entries.clear()
+    this.disposal = Promise.resolve().then(() => this.finishDisposal(retired))
+    this.activationRevision++
+    this.activeIds.clear()
+    this.paneAccounts.clear()
+    this.eventHandlers.clear()
+    this.messageHandlers.clear()
+    this.noticeHandlers.clear()
+    this.statusHandlers.clear()
+    this.moderationHandlers.clear()
+    this.roomStateHandlers.clear()
+    this.clearHandlers.clear()
+    this.activeChannelsHandlers.clear()
+    return this.disposal
+  }
+
+  private async finishDisposal(retired: readonly [string, WatchedEntry][]): Promise<void> {
+    const results = await Promise.allSettled([
+      ...this.stopping,
+      ...retired.map(([id, entry]) => this.disconnectEntry(id, entry)),
+    ])
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        log.error('Failed to release watched channel', { error: String(result.reason) })
+      }
+    }
+  }
+
   async setActiveChannels(ids: readonly string[]): Promise<void> {
+    if (this.isDisposed) return
     const channels = WatchedChannelStore.findAll()
     const requested = new Set(ids)
     this.activeIds = new Set(
@@ -132,32 +171,48 @@ export class WatchedChannelManager {
     await this.stopChannel(id)
   }
 
-  private async stopChannel(id: string): Promise<void> {
+  private stopChannel(id: string): Promise<void> {
     const entry = this.entries.get(id)
-    if (entry) {
-      this.entries.delete(id)
-      this.unbindAdapter(entry)
-      for (const senderId of entry.senderIds)
-        this.accountSender?.release(senderId, entry.watchedChannel)
-      sevenTVService
-        .unsubscribeFromChannel(
-          entry.watchedChannel.platform,
-          entry.sevenTvChannelId,
-          `watched:${id}`,
-        )
-        .catch((error) => {
-          log.error('Failed to unsubscribe from 7TV for watched channel', {
-            id,
-            platform: entry.watchedChannel.platform,
-            channelSlug: entry.watchedChannel.channelSlug,
-            error: String(error),
-            action: '7tv',
-          })
+    if (!entry) return Promise.resolve()
+    this.entries.delete(id)
+    const stopping = this.disconnectEntry(id, entry).finally(() => {
+      this.stopping.delete(stopping)
+    })
+    this.stopping.add(stopping)
+    return stopping
+  }
+
+  private async disconnectEntry(id: string, entry: WatchedEntry): Promise<void> {
+    this.unbindAdapter(entry)
+    for (const senderId of entry.senderIds)
+      this.accountSender?.release(senderId, entry.watchedChannel)
+    const unsubscribe = sevenTVService
+      .unsubscribeFromChannel(
+        entry.watchedChannel.platform,
+        entry.sevenTvChannelId,
+        `watched:${id}`,
+      )
+      .catch((error) => {
+        log.error('Failed to unsubscribe from 7TV for watched channel', {
+          id,
+          platform: entry.watchedChannel.platform,
+          channelSlug: entry.watchedChannel.channelSlug,
+          error: String(error),
+          action: '7tv',
         })
-      await entry.adapter.disconnect().catch((error) => {
-        log.error('Error disconnecting watched channel', { id, error: String(error) })
       })
-    }
+    const disconnect = this.disconnectAdapter(entry).catch((error) => {
+      log.error('Error disconnecting watched channel', { id, error: String(error) })
+    })
+    await Promise.all([unsubscribe, disconnect])
+  }
+
+  private disconnectAdapter(entry: WatchedEntry): Promise<void> {
+    return (entry.disconnecting ??= Promise.resolve()
+      .then(() => entry.adapter.disconnect())
+      .finally(() => {
+        entry.disconnecting = undefined
+      }))
   }
 
   /** Get all current watched channels */
@@ -247,7 +302,7 @@ export class WatchedChannelManager {
     await Promise.all(
       Array.from({ length: Math.min(4, matching.length) }, async () => {
         while (index < matching.length) {
-          if (signal?.aborted) return
+          if (signal?.aborted || this.isDisposed) return
           const entry = matching[index++]
           if (!entry) return
           try {
@@ -266,14 +321,16 @@ export class WatchedChannelManager {
   }
 
   reconnect(id: string, signal?: AbortSignal): Promise<void> {
+    if (this.isDisposed) return Promise.resolve()
     const next = (this.reconnectQueues.get(id) ?? Promise.resolve())
       .catch(() => {})
       .then(async () => {
         signal?.throwIfAborted()
+        if (this.isDisposed) return
         const entry = this.entries.get(id)
         if (!entry) throw new Error('This watched channel is no longer connected.')
         this.unbindAdapter(entry)
-        await entry.adapter.disconnect()
+        await this.disconnectAdapter(entry)
         signal?.throwIfAborted()
         if (this.entries.get(id) !== entry) return
         this.bindAdapter(entry)
@@ -324,6 +381,7 @@ export class WatchedChannelManager {
 
   /** Accounts chosen by the live panes of each chat; connections no pane uses are released. */
   setPaneAccounts(accounts: Record<string, readonly string[]>): void {
+    if (this.isDisposed) return
     const previous = this.paneAccounts
     this.paneAccounts = new Map(Object.entries(accounts))
     for (const [id, entry] of this.entries) {
@@ -453,6 +511,7 @@ export class WatchedChannelManager {
           : ch.platform === 'vkplay'
             ? new VkPlayAdapter()
             : new KickAdapter())
+    if (!this.activeIds.has(ch.id) || this.entries.has(ch.id)) return
 
     const entry: WatchedEntry = {
       adapter,

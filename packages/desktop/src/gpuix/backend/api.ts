@@ -1596,6 +1596,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     setActiveWatchedChannels: async ({ ids, paneAccounts }) => {
+      if (watchedChannelManager.isDisposed) return
       watchedChannelManager.setPaneAccounts(paneAccounts ?? {})
       const active = new Set(ids)
       for (const channel of watchedChannelManager.getAll())

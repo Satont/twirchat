@@ -80,7 +80,7 @@ declare global {
   var __twirchatTranslationsWired: boolean | undefined
   var __twirchatProviderFocusWired: boolean | undefined
   var __twirchatStreamerModeWired: boolean | undefined
-  var __twirchatWatchedSubscriptionsWired: boolean | undefined
+  var __twirchatStopWatchedSubscriptions: (() => void) | undefined
 }
 const g = globalThis
 
@@ -120,12 +120,10 @@ if (!g.__twirchatStreamerModeWired) {
   g.__twirchatStreamerModeWired = true
   wireStreamerMode(backend)
 }
-if (!g.__twirchatWatchedSubscriptionsWired) {
-  g.__twirchatWatchedSubscriptionsWired = true
-  wireActiveWatchedChannels(backend)
-}
+g.__twirchatStopWatchedSubscriptions ??= wireActiveWatchedChannels(backend)
 
 async function shutdownDesktop(): Promise<void> {
+  g.__twirchatStopWatchedSubscriptions?.()
   const stopActivation = instance.kind === 'primary' ? instance.stopActivation() : undefined
   await Promise.allSettled([stopActivation, backend.shutdownPlugins?.()])
   await backend.dispose()

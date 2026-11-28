@@ -253,6 +253,134 @@ test('closing a connecting channel removes its listeners and prevents late 7TV o
   ).toBe(false)
 })
 
+test('disposal retires pending activation and leaves the saved catalog intact', async () => {
+  const gate = Promise.withResolvers<void>()
+  const adapters: FixtureAdapter[] = []
+  const manager = new WatchedChannelManager(
+    (message) => message,
+    () => {
+      const adapter = new FixtureAdapter()
+      adapter.gate = gate.promise
+      adapters.push(adapter)
+      return adapter
+    },
+  )
+  const channels = await Promise.all(
+    Array.from({ length: 5 }, (_, index) => manager.addChannel('twitch', `dispose-${index}`)),
+  )
+  const ids = channels.map(({ id }) => id)
+  const received: string[] = []
+  manager.onMessage((_id, message) => received.push(message.id))
+  const activation = manager.setActiveChannels(ids)
+  try {
+    expect(adapters).toHaveLength(4)
+    const disposed = manager.dispose()
+    expect(manager.dispose()).toBe(disposed)
+    await disposed
+    expect(adapters.map(({ disconnects }) => disconnects)).toEqual([1, 1, 1, 1])
+    for (const adapter of adapters) adapter.receive('after-dispose')
+    gate.resolve()
+    await activation
+    await manager.setActiveChannels(ids)
+    expect(adapters).toHaveLength(4)
+    expect(received).toEqual([])
+    expect(manager.getActiveChannels()).toEqual([])
+    expect(manager.getAll().map(({ id }) => id)).toEqual(ids)
+    expect(
+      sevenTVService
+        .getSubscribedChannels()
+        .some(({ channelId }) => channelId.startsWith('dispose-')),
+    ).toBe(false)
+  } finally {
+    gate.resolve()
+    await Promise.all([activation, manager.dispose()])
+  }
+})
+
+for (const reconnect of [false, true]) {
+  test(`disposal joins an ongoing ${reconnect ? 'reconnect' : 'layout close'} disconnect`, async () => {
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    class GatedAdapter extends FixtureAdapter {
+      override async disconnect() {
+        await super.disconnect()
+        entered.resolve()
+        await release.promise
+      }
+    }
+    const adapter = new GatedAdapter()
+    const manager = new WatchedChannelManager(
+      (message) => message,
+      () => adapter,
+    )
+    const channel = await manager.addChannel('twitch', 'closing')
+    await manager.setActiveChannels([channel.id])
+    expect(
+      sevenTVService.getSubscribedChannels().some(({ channelId }) => channelId === 'closing'),
+    ).toBe(true)
+    const operation = reconnect ? manager.reconnect(channel.id) : manager.setActiveChannels([])
+    const outcome = Promise.allSettled([operation])
+    try {
+      await Promise.race([entered.promise, outcome])
+      const disposal = manager.dispose()
+      const settled = await Promise.race([
+        disposal.then(() => true),
+        Bun.sleep(0).then(() => false),
+      ])
+      expect(settled).toBe(false)
+      expect(adapter.disconnects).toBe(1)
+      expect(
+        sevenTVService.getSubscribedChannels().some(({ channelId }) => channelId === 'closing'),
+      ).toBe(false)
+      release.resolve()
+      await disposal
+      expect(await outcome).toEqual([{ status: 'fulfilled', value: undefined }])
+      expect(adapter.connects).toBe(1)
+      expect(adapter.disconnects).toBe(1)
+    } finally {
+      release.resolve()
+      await Promise.all([outcome, manager.dispose()])
+    }
+  })
+}
+
+test('disposal from inside a reconnect disconnect does not disconnect twice', async () => {
+  const requested = Promise.withResolvers<void>()
+  class ReentrantAdapter extends FixtureAdapter {
+    override disconnect() {
+      requested.resolve(manager.dispose())
+      return super.disconnect()
+    }
+  }
+  const adapter = new ReentrantAdapter()
+  const manager = new WatchedChannelManager(
+    (message) => message,
+    () => adapter,
+  )
+  const channel = await manager.addChannel('twitch', 'reentrant-close')
+  await manager.setActiveChannels([channel.id])
+  await Promise.all([manager.reconnect(channel.id), requested.promise])
+  expect(adapter.disconnects).toBe(1)
+  expect(adapter.connects).toBe(1)
+})
+
+test('disposal during adapter creation prevents the connection from starting', async () => {
+  const adapter = new FixtureAdapter()
+  const requested = Promise.withResolvers<void>()
+  const manager: WatchedChannelManager = new WatchedChannelManager(
+    (message) => message,
+    () => {
+      requested.resolve(manager.dispose())
+      return adapter
+    },
+  )
+  const channel = await manager.addChannel('twitch', 'dispose-at-creation')
+  await manager.setActiveChannels([channel.id])
+  await requested.promise
+  expect(adapter.connects).toBe(0)
+  expect(manager.getActiveChannels()).toEqual([])
+})
+
 test('7TV notices reach the watched chat subscribed with the event channel ID', async () => {
   const adapters: FixtureAdapter[] = []
   const manager = new WatchedChannelManager(

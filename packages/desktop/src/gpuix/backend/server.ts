@@ -795,6 +795,7 @@ function boot(): DesktopRuntime {
       void shutdownPlugins().catch((error) => {
         log.warn('Plugin shutdown failed', { error: String(error) })
       })
+      await watchedChannelManager.dispose()
       twitchHistory.dispose()
       twitchBadges.dispose()
       twitchSenders.dispose()
