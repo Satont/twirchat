@@ -271,6 +271,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Each pending set switch owns its provider request. A replacement target, a return to the active set, or the final viewer's departure retires that request and cancels its transport. Duplicate targets and partial viewer departures leave it running. The identity fence still rejects late results from providers that ignore cancellation.
 - **Safeguard:** Dispatch tests cover replacement, return to the active set, and final detach. The by-ID lookup is also tested with a real loopback response that stalls after headers.
 
+### Round 52 — Cancel 7TV GraphQL reads for retired desktop joins
+
+- **Decision:** Each client/channel reservation owns the pending lookup and its cancellation signal. Unsubscribe or a newer command cancels only the matching reservation; socket close or replacement cancels the old socket's pending work. Committed channel subscriptions still survive overlapping sockets, and a late close cannot cancel the replacement's lookup. Twitch identity resolution keeps its separate request lifetime; cancellation prevents a subsequent 7TV read.
+- **Safeguard:** Offline WebSocket tests verify cancellation before the provider responds, preserve unrelated batch entries, and check both abort-aware and late abort-ignoring results.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

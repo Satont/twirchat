@@ -43,7 +43,7 @@ interface JoinLookups {
 
 export class SevenTVSubscriptionManager {
   private joinLookups = new Map<string, JoinLookups>()
-  private pendingByClient = new Map<string, Map<string, symbol>>()
+  private pendingByClient = new Map<string, Map<string, AbortController>>()
   private clientSubscriptions = new Map<string, Set<ChannelSubscription>>()
   private channels = new Map<string, ChannelSubscription>()
   private emoteSetSubscriptions = new Map<string, Set<ChannelSubscription>>()
@@ -132,25 +132,35 @@ export class SevenTVSubscriptionManager {
     isCurrent: () => boolean,
   ): Promise<void> {
     if (!isCurrent() || subscriptions.length === 0) return
-    const pending = this.pendingByClient.get(clientSecret) ?? new Map<string, symbol>()
+    const pending = this.pendingByClient.get(clientSecret) ?? new Map<string, AbortController>()
     this.pendingByClient.set(clientSecret, pending)
-    const token = Symbol()
+    const reservations = new Map<string, AbortController>()
+    const superseded = new Set<AbortController>()
     // Reserve the whole batch before any lookup yields to a later command.
     const batch = subscriptions.map((subscription) => {
       const key = `${subscription.platform}:${subscription.channelId}`
-      pending.set(key, token)
-      return { key, subscription }
+      let reservation = reservations.get(key)
+      if (!reservation) {
+        const previous = pending.get(key)
+        if (previous) superseded.add(previous)
+        reservation = new AbortController()
+        reservations.set(key, reservation)
+        pending.set(key, reservation)
+      }
+      return { key, subscription, reservation }
     })
     try {
-      for (const { key, subscription } of batch) {
+      for (const previous of superseded) previous.abort()
+      for (const { key, subscription, reservation } of batch) {
         if (!isCurrent()) break
         const isPending = () =>
-          isCurrent() && this.pendingByClient.get(clientSecret)?.get(key) === token
-        if (isPending()) await this.subscribeChannel(clientSecret, subscription, isPending)
+          isCurrent() && this.pendingByClient.get(clientSecret)?.get(key) === reservation
+        if (isPending())
+          await this.subscribeChannel(clientSecret, subscription, isPending, reservation.signal)
       }
     } finally {
-      for (const { key } of batch) {
-        if (pending.get(key) === token) pending.delete(key)
+      for (const [key, reservation] of reservations) {
+        if (pending.get(key) === reservation) pending.delete(key)
       }
       if (pending.size === 0 && this.pendingByClient.get(clientSecret) === pending)
         this.pendingByClient.delete(clientSecret)
@@ -161,6 +171,7 @@ export class SevenTVSubscriptionManager {
     clientSecret: string,
     { platform, channelId, platformUserId }: SubscriptionRequest,
     isCurrent: () => boolean,
+    signal: AbortSignal,
   ): Promise<void> {
     if (!isCurrent()) return
     const channelKey = `${platform}:${channelId}`
@@ -191,7 +202,7 @@ export class SevenTVSubscriptionManager {
         return undefined
       }
       try {
-        const fetched = await this.fetchEmoteSet(platform, channelId, platformUserId)
+        const fetched = await this.fetchEmoteSet(platform, channelId, platformUserId, signal)
         if (!isCurrent()) return
         const current = this.channels.get(channelKey)
         if (current) {
@@ -258,6 +269,7 @@ export class SevenTVSubscriptionManager {
   unsubscribeClient(clientSecret: string, platform: Platform, channelId: string): void {
     const channelKey = `${platform}:${channelId}`
     const pending = this.pendingByClient.get(clientSecret)
+    const reservation = pending?.get(channelKey)
     pending?.delete(channelKey)
     if (pending?.size === 0) this.pendingByClient.delete(clientSecret)
     log.info('Unsubscribing client from channel', {
@@ -267,10 +279,17 @@ export class SevenTVSubscriptionManager {
 
     const channel = this.channels.get(channelKey)
     if (channel) this.detachClient(clientSecret, channel)
+    reservation?.abort()
+  }
+
+  cancelPendingClient(clientSecret: string): void {
+    const pending = this.pendingByClient.get(clientSecret)
+    this.pendingByClient.delete(clientSecret)
+    for (const reservation of pending?.values() ?? []) reservation.abort()
   }
 
   cleanupClient(clientSecret: string): void {
-    this.pendingByClient.delete(clientSecret)
+    this.cancelPendingClient(clientSecret)
     for (const channel of this.clientSubscriptions.get(clientSecret) ?? [])
       this.detachClient(clientSecret, channel)
   }

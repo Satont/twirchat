@@ -49,7 +49,10 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
     const lookupStarted = Promise.withResolvers<void>()
     const lookup = Promise.withResolvers<Response>()
     const latestLookup = Promise.withResolvers<Response>()
+    const replacementStarted = Promise.withResolvers<AbortSignal | null | undefined>()
+    const replacementLookup = Promise.withResolvers<Response>()
     const requests: string[] = []
+    let pendingSignal: AbortSignal | null | undefined
     const requestsDone: Promise<void>[] = []
     const sockets = new Set<WebSocket>()
     const opened = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
@@ -103,8 +106,22 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
         }
         requests.push(id)
         if (id === 'pending') {
+          pendingSignal = init.signal
           lookupStarted.resolve()
+          if (scenario === 'unsubscribe' && init.signal) {
+            const signal = init.signal
+            return Promise.race([
+              lookup.promise,
+              new Promise<Response>((_resolve, reject) =>
+                signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+              ),
+            ])
+          }
           return lookup.promise
+        }
+        if (id === 'replacement' && scenario === 'replace') {
+          replacementStarted.resolve(init.signal)
+          return replacementLookup.promise
         }
         return response(id)
       },
@@ -134,13 +151,15 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
           const message: unknown = JSON.parse(data)
           messages.push(message)
         })
+        send(old, { type: 'seventv_unsubscribe', platform: 'kick', channelId: 'next' })
         if (scenario !== 'supersede')
           send(old, { type: 'seventv_unsubscribe', platform: 'kick', channelId: 'pending' })
-        send(old, { type: 'seventv_unsubscribe', platform: 'kick', channelId: 'next' })
         if (subscribeAgain)
           send(old, { type: 'seventv_subscribe', platform: 'kick', channelId: 'pending' })
         if (scenario === 'resubscribe') await nextMessage(old)
         else await ping(old)
+        expect(pendingSignal?.aborted).toBe(true)
+        if (scenario === 'unsubscribe') await olderCommands
         lookup.resolve(response('obsolete'))
         if (scenario === 'supersede') {
           await olderCommands
@@ -199,17 +218,21 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
           messages.push(message)
         }
       })
+      const replacementMessage = nextMessage(replacement)
       send(replacement, { type: 'seventv_subscribe', platform: 'kick', channelId: 'replacement' })
-      await new Promise<void>((resolve) =>
-        replacement.addEventListener('message', () => resolve(), { once: true }),
-      )
-      if (overlap) expect(old.readyState).toBe(WebSocket.OPEN)
-      lookup.resolve(response('pending'))
-      await Promise.all(requestsDone)
       if (overlap) {
+        const signal = await replacementStarted.promise
+        expect(old.readyState).toBe(WebSocket.OPEN)
+        expect(pendingSignal?.aborted).toBe(true)
         old.close()
         await closed[0]?.promise
+        expect(signal?.aborted).toBe(false)
+        replacementLookup.resolve(response('replacement'))
       }
+      await replacementMessage
+      expect(pendingSignal?.aborted).toBe(true)
+      lookup.resolve(response('pending'))
+      await Promise.all(requestsDone)
       await ping(replacement)
       expect(requests).toEqual(['committed', 'pending', 'replacement'])
       expect(sevenTVCache.get('kick', 'pending')).toBeUndefined()
@@ -222,6 +245,7 @@ for (const scenario of ['close', 'replace', 'unsubscribe', 'resubscribe', 'super
         { type: 'pong' },
       ])
     } finally {
+      replacementLookup.resolve(response('replacement'))
       latestLookup.resolve(response('latest'))
       lookup.resolve(response('pending'))
       await Promise.allSettled(requestsDone)

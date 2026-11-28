@@ -41,6 +41,7 @@ export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   youtubeChatRelay.cleanupClient(ws.data.clientSecret)
   donationShareRelay.removeClient(ws.data.clientSecret)
   connectionManager.register(ws)
+  sevenTVManager.cancelPendingClient(ws.data.clientSecret)
   await ClientStore.touch(ws.data.clientSecret)
 }
 
