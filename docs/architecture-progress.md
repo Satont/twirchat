@@ -261,6 +261,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Both runtime operations share one catalog field selection and one response decoder. Keep the operation names, variables, and null/omission behavior. Remove the unused parallel SDL, query copies, generated types, and codegen dependencies rather than adding generation or sidecar files to the build.
 - **Safeguard:** The client contract test checks the two request envelopes and rejects an incomplete catalog on either path. The production binary still bundles the client without loading query files at runtime.
 
+### Round 50 — Bound both hosted 7TV GraphQL operations
+
+- **Decision:** The GraphQL transport owns a ten-second deadline for each catalog read, covering response headers and body. It composes that deadline with caller cancellation. The subscription manager still owns the separate reconnect budget shared across attempts and decides whether a result can publish.
+- **Safeguard:** Offline loopback tests stall headers and a partial response body in native Bun fetch. They verify that the transport deadline and caller cancellation terminate the read and preserve the abort reason.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

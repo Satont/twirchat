@@ -1,5 +1,7 @@
 import { z } from 'zod'
+
 const SEVENTV_GQL_ENDPOINT = 'https://7tv.io/v4/gql'
+const SEVENTV_REQUEST_TIMEOUT_MS = 10_000
 
 const EMOTE_SET_FIELDS = `
 id
@@ -60,6 +62,9 @@ async function executeGraphQL<T>(
   resultSchema: z.ZodType<T>,
   signal?: AbortSignal,
 ): Promise<T> {
+  const timeout = AbortSignal.timeout(SEVENTV_REQUEST_TIMEOUT_MS)
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
+  requestSignal.throwIfAborted()
   const response = await fetch(SEVENTV_GQL_ENDPOINT, {
     body: JSON.stringify({
       query,
@@ -69,7 +74,7 @@ async function executeGraphQL<T>(
       'Content-Type': 'application/json',
     },
     method: 'POST',
-    signal,
+    signal: requestSignal,
   })
 
   if (!response.ok) {
