@@ -5,6 +5,7 @@ import type { SevenTVEmote } from './emote.ts'
 export interface CachedEmoteSet {
   id: string
   userId?: string
+  platformUserId?: string
   name: string
   channelId: string
   platform: Platform

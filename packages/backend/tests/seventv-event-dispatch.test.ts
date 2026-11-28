@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import { sevenTVCache } from '../src/seventv/cache'
 import { SevenTVEventClient, sevenTVEventClient } from '../src/seventv/event-client'
-import { sevenTVEventSchema } from '../src/seventv/event-schemas'
+import { sevenTVEventMessageSchema, sevenTVEventSchema } from '../src/seventv/event-schemas'
 import { SevenTVSubscriptionManager } from '../src/seventv/subscription-manager'
 
 const originalWebSocket = globalThis.WebSocket
@@ -58,6 +58,36 @@ const dispatch = () =>
     }),
   )
 const set = (id: string) => ({ id, name: id, emotes: { items: [] } })
+
+const connectionSnapshot = (id: string, aliases: string[] = []) =>
+  Response.json({
+    data: {
+      users: {
+        userByConnection: {
+          id: 'fixture-user',
+          style: {
+            activeEmoteSet: {
+              ...set(id),
+              emotes: {
+                items: aliases.map((alias) => ({
+                  id: alias,
+                  alias,
+                  flags: { zeroWidth: false },
+                  emote: {
+                    id: alias,
+                    defaultName: alias,
+                    aspectRatio: 1,
+                    flags: { animated: false },
+                    images: [],
+                  },
+                })),
+              },
+            },
+          },
+        },
+      },
+    },
+  })
 const result = (id: string) => Response.json({ data: { emoteSets: { emoteSet: set(id) } } })
 const switchTo = (id: string) =>
   sevenTVEventClient.onEvent?.(
@@ -389,6 +419,112 @@ test('set switches retain existing updates until the latest lookup commits', asy
     globalThis.fetch = originalFetch
     unsubscribe.mockRestore()
     connect.mockRestore()
+  }
+})
+
+const hello = (socket: Bun.ServerWebSocket, id: string) =>
+  socket.send(
+    JSON.stringify({
+      op: 1,
+      d: { heartbeat_interval: 45000, session_id: id, subscription_limit: 500 },
+    }),
+  )
+
+test('reconnect refreshes retained viewers quietly and does not overwrite a newer dispatch', async () => {
+  const opened = Array.from({ length: 3 }, () => Promise.withResolvers<Bun.ServerWebSocket>())
+  let connections = 0
+  const commands: string[] = []
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch(request, listener) {
+      return listener.upgrade(request, { data: undefined })
+        ? undefined
+        : new Response('WebSocket upgrade required', { status: 400 })
+    },
+    websocket: {
+      open: (socket) => opened[connections++]?.resolve(socket),
+      message(_socket, raw) {
+        commands.push(raw.toString())
+      },
+    },
+  })
+  const events = new SevenTVEventClient(`ws://127.0.0.1:${server.port}`)
+  const manager = new SevenTVSubscriptionManager(events)
+  const channel = {
+    platform: 'twitch',
+    channelId: 'dispatch-twitch',
+    platformUserId: '42',
+  } satisfies {
+    platform: Platform
+    channelId: string
+    platformUserId: string
+  }
+  const messages: BackendToDesktopMessage[] = []
+  manager.sendToClient = (_viewer, message) => messages.push(message)
+  const stale = Promise.withResolvers<Response>()
+  let lookups = 0
+  const lookup = spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        expect(input).toBe('https://7tv.io/v4/gql')
+        if (typeof init?.body !== 'string') throw new Error('Expected a 7TV lookup')
+        const query = z.object({ variables: z.object({ platformId: z.literal('42') }) })
+        query.parse(JSON.parse(init.body))
+        lookups++
+        if (lookups === 1) return connectionSnapshot('before-outage')
+        if (lookups === 2) return connectionSnapshot(setId)
+        if (lookups === 3) return stale.promise
+        return connectionSnapshot(setId, ['missed-during-outage', emote.name])
+      },
+      { preconnect: fetch.preconnect },
+    ),
+  )
+  try {
+    await manager.subscribeClient('viewer', [channel], () => true)
+    const [first, second, third] = opened
+    if (!first || !second || !third) throw new Error('Missing local EventAPI sessions')
+    const firstSocket = await first.promise
+    hello(firstSocket, 'first')
+    await until(() => commands.length === 3)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    messages.length = 0
+    firstSocket.close(1012)
+    const secondSocket = await second.promise
+    hello(secondSocket, 'second')
+    await until(() => commands.length >= 10 && messages.length > 0)
+    expect(messages.map(({ type }) => type)).toEqual(['seventv_emote_set'])
+    expect(sevenTVCache.get('twitch', channel.channelId)?.id).toBe(setId)
+    expect(
+      commands.slice(-4).map((raw) => sevenTVEventMessageSchema.parse(JSON.parse(raw))),
+    ).toEqual([
+      { op: 36, d: { type: 'emote_set.update', condition: { object_id: 'before-outage' } } },
+      { op: 36, d: { type: 'emote_set.delete', condition: { object_id: 'before-outage' } } },
+      { op: 35, d: { type: 'emote_set.update', condition: { object_id: setId } } },
+      { op: 35, d: { type: 'emote_set.delete', condition: { object_id: setId } } },
+    ])
+    secondSocket.close(1012)
+    hello(await third.promise, 'third')
+    await until(() => lookup.mock.calls.length === 3)
+    events.onEvent?.(
+      sevenTVEventSchema.parse({ type: 'emote_set.update', body: { id: setId, pushed: [pushed] } }),
+    )
+    messages.length = 0
+    stale.resolve(connectionSnapshot('stale'))
+    await until(() => messages.length > 0)
+    expect(lookup).toHaveBeenCalledTimes(4)
+    expect(messages.map(({ type }) => type)).toEqual(['seventv_emote_set'])
+    expect(sevenTVCache.get('twitch', channel.channelId)?.id).toBe(setId)
+    expect([...(sevenTVCache.get('twitch', channel.channelId)?.emotes.keys() ?? [])]).toEqual([
+      'missed-during-outage',
+      emote.name,
+    ])
+  } finally {
+    events.disconnect()
+    stale.resolve(connectionSnapshot('aborted'))
+    manager.cleanupClient('viewer')
+    lookup.mockRestore()
+    await server.stop(true)
   }
 })
 

@@ -31,6 +31,7 @@ export class SevenTVEventClient {
   private heartbeatTimer: Timer | null = null
   private reconnectTimer: Timer | null = null
   private receivedHello = false
+  private hasConnected = false
   private heartbeatInterval = 0
   private lastHeartbeat = 0
   private isConnecting = false
@@ -42,7 +43,7 @@ export class SevenTVEventClient {
   private subscriptions = new Map<string, { type: string; condition: Record<string, string> }>()
 
   onEvent: SevenTVEventHandler | null = null
-  onConnected: (() => void) | null = null
+  onConnected: ((reconnected: boolean) => void) | null = null
   onDisconnected: (() => void) | null = null
 
   constructor(
@@ -217,6 +218,9 @@ export class SevenTVEventClient {
       subscriptionLimit: hello.subscription_limit,
     })
 
+    if (this.receivedHello) return
+    const reconnected = this.hasConnected
+    this.hasConnected = true
     this.clearHelloTimer()
     this.receivedHello = true
     this.heartbeatInterval = hello.heartbeat_interval
@@ -231,7 +235,7 @@ export class SevenTVEventClient {
     }
 
     this.reconnectAttempts = 0
-    this.onConnected?.()
+    this.onConnected?.(reconnected)
   }
 
   private startHeartbeat(): void {

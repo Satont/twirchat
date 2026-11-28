@@ -55,6 +55,7 @@ export async function executeGraphQL<T = unknown>(
   query: string,
   variables: Record<string, unknown>,
   resultSchema: z.ZodType<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(SEVENTV_GQL_ENDPOINT, {
     body: JSON.stringify({
@@ -65,6 +66,7 @@ export async function executeGraphQL<T = unknown>(
       'Content-Type': 'application/json',
     },
     method: 'POST',
+    signal,
   })
 
   if (!response.ok) {
@@ -93,6 +95,7 @@ export async function executeGraphQL<T = unknown>(
 export async function getUserByConnection(
   platform: 'TWITCH' | 'KICK',
   platformId: string,
+  signal?: AbortSignal,
 ): Promise<z.infer<typeof getUserByConnectionSchema>> {
   return executeGraphQL(
     GET_USER_BY_CONNECTION_QUERY,
@@ -101,6 +104,7 @@ export async function getUserByConnection(
       platformId,
     },
     getUserByConnectionSchema,
+    signal,
   )
 }
 
