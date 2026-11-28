@@ -167,6 +167,46 @@ test('invalid player templates fail before save and startup failures give config
     f.actions.openChannelPlayer({ platform: 'kick', channelSlug: 'fixture', mode: 'streamlink' }),
   ).rejects.toThrow('Install it or check Player settings')
 })
+test('cancelled OAuth follow-up cannot select or reconnect after an awaited disconnect', async () => {
+  const selected = account('twitch')
+  const begun = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const cancellation = new AbortController()
+  const calls: string[] = []
+  const sessions = createAccountSessions({
+    find: () => selected,
+    active: () => selected,
+    select: () => {
+      calls.push('select')
+      return selected
+    },
+    remove: () => {},
+    disconnect: async () => {
+      begun.resolve()
+      await release.promise
+    },
+    refreshIdentity: () => {
+      calls.push('refresh')
+    },
+    connectOwn: async () => {
+      calls.push('connect')
+    },
+    reconnectWatched: async () => {
+      calls.push('watched')
+    },
+    changed: () => calls.push('changed'),
+  })
+  const result = Promise.allSettled([
+    sessions.select('twitch', selected.id, true, cancellation.signal),
+  ])
+  await begun.promise
+  const reason = new Error('OAuth listener stopped')
+  cancellation.abort(reason)
+  release.resolve()
+  expect(await result).toEqual([{ status: 'rejected', reason }])
+  expect(calls).toEqual([])
+})
+
 test('own reconnect shares account switch serialization and does not reconnect watched adapters', async () => {
   let selected = account('twitch')
   const other = { ...selected, id: 'other', username: 'second' }

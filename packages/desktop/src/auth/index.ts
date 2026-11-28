@@ -1,7 +1,6 @@
 export {
   finishDesktopSignIn,
   startAuthServer,
-  stopAuthServer,
   setAuthServerRpcSender,
   setOnAuthSuccessCallback,
 } from './server'

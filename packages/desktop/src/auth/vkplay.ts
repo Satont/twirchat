@@ -56,10 +56,14 @@ export function getVkPlayAuthUrl(): string {
   return url.toString()
 }
 
-export async function handleVkPlayToken(params: URLSearchParams): Promise<{
+export async function handleVkPlayToken(
+  params: URLSearchParams,
+  signal?: AbortSignal,
+): Promise<{
   channelSlug: string
   user: { platform: Platform; username: string; displayName: string }
 }> {
+  signal?.throwIfAborted()
   const error = params.get('error')
   if (error) {
     throw new Error(`VK Play Live OAuth error: ${error} — ${params.get('error_description') ?? ''}`)
@@ -88,13 +92,16 @@ export async function handleVkPlayToken(params: URLSearchParams): Promise<{
       Origin: 'https://live.vkvideo.ru',
       'User-Agent': 'TwirChat',
     },
-    signal: AbortSignal.timeout(15000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
+      : AbortSignal.timeout(15000),
   })
   if (!userRes.ok) throw new Error(`VK Play Live user request failed (HTTP ${userRes.status})`)
   const profile = currentUserSchema.parse(await userRes.json()).data
   const channelSlug = currentUserChannel(profile)
   const displayName = profile.user.nick
 
+  signal?.throwIfAborted()
   AccountStore.upsert({
     accessToken,
     avatarUrl: profile.user.avatar_url,

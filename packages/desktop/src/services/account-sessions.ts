@@ -14,7 +14,7 @@ export interface AccountSessionDependencies {
   removeSession?(account: Account): Promise<void>
   disconnect(platform: Platform): Promise<void>
   refreshIdentity(platform: Platform): Promise<void> | void
-  connectOwn(platform: Platform, account: Account | null): Promise<void>
+  connectOwn(platform: Platform, account: Account | null, signal?: AbortSignal): Promise<void>
   reconnectWatched(platform: Platform): Promise<void>
   changed(platform: Platform, identityChanged: boolean): void
 }
@@ -45,10 +45,13 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     platform: Platform,
     accountId: string | null,
     force: boolean,
+    signal?: AbortSignal,
   ): Promise<void> {
+    signal?.throwIfAborted()
     resolve(platform, accountId)
     if (!force && (dependencies.active(platform)?.id ?? null) === accountId) return
     await dependencies.disconnect(platform)
+    signal?.throwIfAborted()
     const account = dependencies.select(platform, accountId)
     if (accountId === null) log.info('Active account deactivated', { platform })
     const failures: string[] = []
@@ -58,26 +61,33 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
       } catch (error) {
         failures.push(String(error))
       }
+      signal?.throwIfAborted()
       const connected = await Promise.allSettled([
-        dependencies.connectOwn(platform, account),
+        dependencies.connectOwn(platform, account, signal),
         dependencies.reconnectWatched(platform),
       ])
       for (const result of connected)
         if (result.status === 'rejected') failures.push(String(result.reason))
     } finally {
-      dependencies.changed(platform, true)
+      if (!signal?.aborted) dependencies.changed(platform, true)
     }
+    signal?.throwIfAborted()
     if (failures.length)
       throw new Error(t('notices.accounts.reconnectFailed', { failures: failures.join('; ') }))
   }
   return {
-    select(platform: Platform, accountId: string | null, force = false): Promise<void> {
+    select(
+      platform: Platform,
+      accountId: string | null,
+      force = false,
+      signal?: AbortSignal,
+    ): Promise<void> {
       try {
         resolve(platform, accountId)
       } catch (error) {
         return Promise.reject(error)
       }
-      return enqueue(platform, () => transition(platform, accountId, force))
+      return enqueue(platform, () => transition(platform, accountId, force, signal))
     },
     reconnectOwn(platform: Platform): Promise<void> {
       return enqueue(platform, async () => {

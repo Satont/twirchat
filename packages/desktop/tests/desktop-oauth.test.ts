@@ -13,7 +13,7 @@ import {
 } from '@twirchat/shared/constants'
 
 import { prepareKickAuth } from '../src/auth/kick'
-import { handleAuthCallback } from '../src/auth/server'
+import { handleAuthCallback, setOnAuthSuccessCallback, startAuthServer } from '../src/auth/server'
 import {
   connectTwitchDevice,
   refreshTwitchToken,
@@ -446,6 +446,109 @@ test('VK Play loopback GET relays the fragment to the POST callback', async () =
   await expectSuccessPage(await handleAuthCallback(callback), 'VK Play Live')
   expect(AccountStore.findByPlatform('vkplay')?.id).toBe('vkplay:42')
   expect(ChannelStore.findByPlatform('vkplay')).toEqual(['streamer'])
+})
+
+function startPendingVkPlayCallback(graceMs: number) {
+  const listener = startAuthServer({ port: 0, graceMs })
+  const reachedProvider = Promise.withResolvers<AbortSignal | null | undefined>()
+  const profile = Promise.withResolvers<Response>()
+  mockFetch(async (url, init) => {
+    if (url !== `${VKPLAY_DEV_API_BASE}/v1/current_user`) throw new Error(`Unexpected URL ${url}`)
+    reachedProvider.resolve(init?.signal)
+    // Leave this pending even if the signal aborts, to model a late provider result.
+    return profile.promise
+  })
+  const url = new URL(VKPLAY_REDIRECT_URI)
+  url.port = String(listener.port)
+  const state = new URL(getVkPlayAuthUrl()).searchParams.get('state')
+  if (!state) throw new Error('Expected VK Play OAuth state.')
+  const browser = new AbortController()
+  const response = Promise.allSettled([
+    originalFetch(url, {
+      method: 'POST',
+      signal: browser.signal,
+      body: new URLSearchParams({
+        access_token: 'vk-access',
+        expire_time: String(Math.floor(Date.now() / 1000) + 3600),
+        state,
+        token_type: 'Bearer',
+      }),
+    }),
+  ])
+  const releaseProfile = () =>
+    profile.resolve(
+      Response.json({
+        data: { channel: { url: 'streamer' }, user: { id: 42, nick: 'Streamer' } },
+      }),
+    )
+  return { listener, reachedProvider, releaseProfile, browser, response }
+}
+
+test('OAuth shutdown drains an accepted callback even after the browser disconnects', async () => {
+  const callback = startPendingVkPlayCallback(2000)
+  try {
+    await Promise.race([callback.reachedProvider.promise, callback.response])
+    callback.browser.abort()
+    expect(await callback.response).toMatchObject([{ status: 'rejected' }])
+    const stopping = callback.listener.stop()
+    expect(callback.listener.stop()).toBe(stopping)
+    expect(
+      await Promise.race([stopping.then(() => 'stopped'), Bun.sleep(10).then(() => 'pending')]),
+    ).toBe('pending')
+    callback.releaseProfile()
+    await stopping
+    expect(AccountStore.findByPlatform('vkplay')?.id).toBe('vkplay:42')
+    expect(ChannelStore.findByPlatform('vkplay')).toEqual(['streamer'])
+  } finally {
+    callback.releaseProfile()
+    await callback.listener.stop()
+  }
+})
+
+test('OAuth shutdown releases the port at the deadline and fences a late credential save', async () => {
+  const callback = startPendingVkPlayCallback(0)
+  try {
+    const signal = await Promise.race([callback.reachedProvider.promise, callback.response])
+    expect(signal).toBeInstanceOf(AbortSignal)
+    await callback.listener.stop()
+    expect(signal instanceof AbortSignal && signal.aborted).toBe(true)
+    expect(await callback.response).toMatchObject([{ status: 'rejected' }])
+    const rebound = startAuthServer({ port: callback.listener.port })
+    await rebound.stop()
+    callback.releaseProfile()
+    await Bun.sleep(0)
+    expect(AccountStore.findByPlatform('vkplay')).toBeNull()
+    expect(ChannelStore.findByPlatform('vkplay')).toEqual([])
+  } finally {
+    callback.releaseProfile()
+    await callback.listener.stop()
+  }
+})
+
+test('OAuth shutdown preserves credentials committed before delayed account follow-up', async () => {
+  const entered = Promise.withResolvers<AbortSignal | undefined>()
+  const release = Promise.withResolvers<void>()
+  const callback = startPendingVkPlayCallback(0)
+  setOnAuthSuccessCallback(async (_platform, _channel, _account, signal) => {
+    entered.resolve(signal)
+    await release.promise
+  })
+  try {
+    await Promise.race([callback.reachedProvider.promise, callback.response])
+    callback.releaseProfile()
+    const signal = await Promise.race([entered.promise, callback.response])
+    expect(signal).toBeInstanceOf(AbortSignal)
+    await callback.listener.stop()
+    expect(signal instanceof AbortSignal && signal.aborted).toBe(true)
+    expect(await callback.response).toMatchObject([{ status: 'rejected' }])
+    expect(AccountStore.findByPlatform('vkplay')?.id).toBe('vkplay:42')
+    expect(ChannelStore.findByPlatform('vkplay')).toEqual(['streamer'])
+  } finally {
+    callback.releaseProfile()
+    release.resolve()
+    setOnAuthSuccessCallback(null)
+    await callback.listener.stop()
+  }
 })
 
 test('desktop OAuth loopback escapes callback failures and keeps unknown routes unhandled', async () => {

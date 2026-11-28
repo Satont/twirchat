@@ -341,12 +341,13 @@ function boot(): DesktopRuntime {
       providerRuntime.refreshAccounts()
       if (platform === 'twitch') refreshTwitchEvents()
     },
-    connectOwn: async (platform, account) => {
+    connectOwn: async (platform, account, signal) => {
       if (!account) return
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) return
       ChannelStore.save(platform, account.username)
       await adapter.connect(account.username)
+      signal?.throwIfAborted()
       const status = currentStatuses.get(platform)
       if (status?.status === 'error')
         throw new Error(status.error ?? t('runtime.server.accountChatConnectFailed'))
@@ -405,11 +406,12 @@ function boot(): DesktopRuntime {
   const twitchValidationTimer = setInterval(checkTwitchSessions, 60 * 60 * 1000)
 
   // OAuth saves and selects atomically, then rejoins through the manual-switch queue.
-  setOnAuthSuccessCallback(async (platform, _channelSlug, accountId) => {
+  setOnAuthSuccessCallback(async (platform, _channelSlug, accountId, signal) => {
     if (!accountId) return
     try {
-      await accountSessions.select(platform, accountId, true)
+      await accountSessions.select(platform, accountId, true, signal)
     } catch (error) {
+      if (signal?.aborted) return
       log.error('Account saved but reconnection failed', { platform, error: String(error) })
       events.emit('auth_error', { platform, error: String(error) })
     }
@@ -437,7 +439,7 @@ function boot(): DesktopRuntime {
     channel_emote_updated: forward('channel_emote_updated'),
   })
 
-  startAuthServer()
+  const authServer = startAuthServer()
 
   const channelActions = createChannelActions({
     activeAccounts: () => AccountStore.findAllActive(),
@@ -773,6 +775,9 @@ function boot(): DesktopRuntime {
     plugins,
     shutdownPlugins,
     dispose: async () => {
+      await authServer.stop().catch((error: unknown) => {
+        log.warn('OAuth server shutdown failed', { error: String(error) })
+      })
       disposed = true
       const stopOverlay = overlayServer.stop().catch((error: unknown) => {
         log.warn('OBS overlay server shutdown failed', { error: String(error) })

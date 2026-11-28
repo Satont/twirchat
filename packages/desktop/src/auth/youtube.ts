@@ -33,15 +33,20 @@ export function getYouTubeAuthUrl(): string {
   )
 }
 
-export async function handleYouTubeCallback(url: URL) {
+export async function handleYouTubeCallback(url: URL, signal?: AbortSignal) {
+  signal?.throwIfAborted()
   const { code, codeVerifier } = sessions.consume(url)
-  const exchangeRes = await postOAuthForm(YOUTUBE_TOKEN_URL, {
-    ...getYouTubeDesktopCredentials(),
-    grant_type: 'authorization_code',
-    code,
-    code_verifier: codeVerifier,
-    redirect_uri: YOUTUBE_REDIRECT_URI,
-  })
+  const exchangeRes = await postOAuthForm(
+    YOUTUBE_TOKEN_URL,
+    {
+      ...getYouTubeDesktopCredentials(),
+      grant_type: 'authorization_code',
+      code,
+      code_verifier: codeVerifier,
+      redirect_uri: YOUTUBE_REDIRECT_URI,
+    },
+    signal,
+  )
   if (!exchangeRes.ok)
     throw new Error(t('runtime.auth.youtubeExchangeFailed', { status: exchangeRes.status }))
   const tokens = oauthTokenSchema.parse(await exchangeRes.json())
@@ -51,7 +56,9 @@ export async function handleYouTubeCallback(url: URL) {
     {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
       redirect: 'error',
-      signal: AbortSignal.timeout(15000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
+        : AbortSignal.timeout(15000),
     },
   )
 
@@ -93,7 +100,9 @@ export async function handleYouTubeCallback(url: URL) {
     const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
       redirect: 'error',
-      signal: AbortSignal.timeout(15000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
+        : AbortSignal.timeout(15000),
     })
 
     if (!infoRes.ok) {
@@ -118,6 +127,7 @@ export async function handleYouTubeCallback(url: URL) {
 
   const username = customUrl ?? userId
 
+  signal?.throwIfAborted()
   AccountStore.upsert({
     accessToken: tokens.access_token,
     avatarUrl,

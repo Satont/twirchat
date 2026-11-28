@@ -105,10 +105,14 @@ export async function getKickAuthUrl(codeChallenge: string, state: string): Prom
  * Validates state, exchanges code for tokens via the backend, fetches
  * user info from Kick API, and persists the account in SQLite.
  */
-export async function handleKickCallback(url: URL): Promise<{
+export async function handleKickCallback(
+  url: URL,
+  signal?: AbortSignal,
+): Promise<{
   user: { platform: 'kick'; username: string; displayName: string }
   channelSlug: string
 }> {
+  signal?.throwIfAborted()
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
   const error = url.searchParams.get('error')
@@ -142,6 +146,7 @@ export async function handleKickCallback(url: URL): Promise<{
     } satisfies KickExchangeRequest),
     headers: { 'Content-Type': 'application/json' },
     method: 'POST',
+    signal,
   })
 
   if (!exchangeRes.ok) {
@@ -154,6 +159,7 @@ export async function handleKickCallback(url: URL): Promise<{
   // Fetch user info from Kick API
   const userRes = await fetch('https://api.kick.com/public/v1/users', {
     headers: { Authorization: `Bearer ${tokens.accessToken}` },
+    signal,
   })
 
   if (!userRes.ok) {
@@ -183,6 +189,7 @@ export async function handleKickCallback(url: URL): Promise<{
 
   const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
 
+  signal?.throwIfAborted()
   AccountStore.upsert({
     accessToken: tokens.accessToken,
     avatarUrl: user.profile_picture,
