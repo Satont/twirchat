@@ -781,6 +781,96 @@ describe('adapter identity changes', () => {
   })
 })
 
+test('YouTube disconnect in the same turn retires startup before discovery', async () => {
+  save('youtube', 'first')
+  const discovered: string[] = []
+  const adapter = new YouTubeAdapter({
+    resolveLiveChat: async ({ channelId }) => {
+      discovered.push(channelId)
+      return { channelId, videoId: 'video', liveChatId: 'chat' }
+    },
+    createSession: () => ({
+      start: async () => {},
+      stop: () => {},
+      getResumeToken: () => undefined,
+    }),
+  })
+  const starting = adapter.connect('first')
+  await adapter.disconnect()
+  await starting
+  expect(discovered).toEqual([])
+})
+
+test('retired YouTube startup cannot refresh the replacement account', async () => {
+  save('youtube', 'first', true, 1)
+  const replacement = save('youtube', 'second', false)
+  const requests: string[] = []
+  globalThis.fetch = Object.assign(
+    async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.body instanceof URLSearchParams) requests.push(init.body.toString())
+      return Response.json({ access_token: 'unexpected', expires_in: 3600 })
+    },
+    { preconnect: originalFetch.preconnect },
+  )
+  const discovered: string[] = []
+  const adapter = new YouTubeAdapter({
+    resolveLiveChat: async ({ channelId, credentials }) => {
+      if ('accessToken' in credentials) discovered.push(credentials.accessToken)
+      return { channelId, videoId: 'video', liveChatId: 'chat' }
+    },
+    createSession: () => ({
+      start: async () => {},
+      stop: () => {},
+      getResumeToken: () => undefined,
+    }),
+  })
+  const startingReplacement = Promise.withResolvers<PromiseSettledResult<void>[]>()
+  adapter.on('status', ({ status, channelLogin }) => {
+    if (status !== 'connecting' || channelLogin !== 'first') return
+    queueMicrotask(() => {
+      AccountStore.setActive('youtube', replacement.id)
+      startingReplacement.resolve(Promise.allSettled([adapter.connect('second')]))
+    })
+  })
+  try {
+    await adapter.connect('first')
+    expect(await startingReplacement.promise).toEqual([{ status: 'fulfilled', value: undefined }])
+    expect(discovered).toEqual(['token-second'])
+    expect(requests).toEqual([])
+  } finally {
+    await adapter.disconnect()
+  }
+})
+
+test('YouTube retires a relay subscription if its initial status disconnects the adapter', async () => {
+  const outcome: string[] = []
+  const adapter = new YouTubeAdapter({
+    relay: {
+      subscribe(_options, handler) {
+        outcome.push('subscribe')
+        handler({
+          type: 'status',
+          subscriptionId: 'fixture',
+          status: 'connecting',
+          error: 'offline',
+        })
+        return () => outcome.push('unsubscribe')
+      },
+    },
+  })
+  const stops: Promise<void>[] = []
+  adapter.on('status', ({ error }) => {
+    if (error === 'offline') stops.push(adapter.disconnect())
+  })
+  try {
+    await adapter.connect('first')
+    await Promise.all(stops)
+    expect(outcome).toEqual(['subscribe', 'unsubscribe'])
+  } finally {
+    await adapter.disconnect()
+  }
+})
+
 test('YouTube OAuth streams after discovery and rejects stale callbacks on switch', async () => {
   save('youtube', 'first')
   const streams: Parameters<typeof createYouTubeGrpcSession>[0][] = []
