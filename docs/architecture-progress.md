@@ -71,6 +71,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Migration:** Retarget all presentation and QA imports to `backend-context.ts` and type consumers to `backend/contract.ts`. The event map remains a desktop bridge contract, not a hosted protocol. Store and event implementations are unchanged.
 - **Safeguard:** The bridge cannot directly import React, React DOM, or the known external GPUIX packages. Local bridge aliases remain allowed. Isolated HMR QA passed before and after the move, retaining the backend across eight remounts. The relocation does not change measured hot-path behavior.
 
+### Round 12 — Give the donation bridge its own capability
+
+- **Decision:** Compose `DonationsApi` into `DesktopApi` without changing its flat request names. Keep credentials, connection state, event publication, and lifecycle with their existing owners. Extract only the bridge that connects donation settings to those owners.
+- **Safeguard:** Focused tests cover delegation, the event-loop turn before mutations, the updated sharing snapshot, and OAuth availability when no donation service is installed. The 18 existing donation tests passed before migration; they and the two new bridge tests passed afterward. Isolated donation settings QA passed on both revisions. No donation event delivery or chat hot path changed.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                       |

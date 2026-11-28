@@ -3,14 +3,6 @@ import {
   type PlatformCommandResult,
   type RoomState,
 } from '@twirchat/shared/channel-tools'
-import type {
-  ConnectDonationProvider,
-  DonationConnections,
-  DonationOAuthAvailability,
-  DonationProvider,
-  DonationSharing,
-  ShareableDonationProvider,
-} from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type {
@@ -64,8 +56,6 @@ import {
   prepareKickAuth,
   requestTwitchDeviceCode,
 } from '../../auth'
-import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
-import { getDonationOAuthAvailability } from '../../auth/donations'
 import {
   currentTwitchAccessToken,
   twitchAccessTokenIfAvailable,
@@ -204,6 +194,7 @@ import {
   type ChatHistoryQuery,
 } from './chat-history'
 import type { ChatLoggingSettings } from './chat-logging-settings'
+import { createDonationsApi, type DonationsApi } from './donations-api'
 import type { DesktopEvents } from './events'
 import * as imageUploader from './image-uploader'
 import { createLayoutApi, type LayoutApi } from './layout-api'
@@ -255,18 +246,8 @@ interface AuthRequest {
   windowScope: string
 }
 
-export interface DesktopApi extends LayoutApi, StreamerModeApi {
+export interface DesktopApi extends DonationsApi, LayoutApi, StreamerModeApi {
   obsRemote: typeof obsRemoteApi
-  donationAlertsOAuthAvailable: boolean
-  getDonationConnections(): Promise<DonationConnections>
-  getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
-  connectDonationProvider(params: ConnectDonationProvider): Promise<void>
-  disconnectDonationProvider(params: { provider: DonationProvider }): Promise<void>
-  getDonationSharing(): Promise<DonationSharing>
-  setDonationSharing(params: {
-    provider: ShareableDonationProvider
-    enabled: boolean
-  }): Promise<DonationSharing>
   reconnectChat(params: { watchedChannelId?: string; platform?: Platform }): Promise<void>
   reloadChatEmotes(params: {
     platform: Platform
@@ -912,11 +893,6 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   const { aggregator, watchedChannelManager, currentStatuses } = ctx
   const updater = ctx.updater ?? createUpdater(ctx.events)
-  function donations(): DonationService {
-    if (!ctx.donations) throw new Error('Donation integrations are unavailable.')
-    return ctx.donations
-  }
-
   let twitchAuth:
     | {
         controller: AbortController
@@ -1201,23 +1177,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setActiveChannel(params)
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
-    donationAlertsOAuthAvailable: getDonationAlertsDesktopClientId() !== null,
-    getDonationConnections: async () => donations().getConnections(),
-    getDonationOAuthAvailability,
-    connectDonationProvider: async (params) => {
-      await Bun.sleep(0)
-      donations().connect(params)
-    },
-    disconnectDonationProvider: async ({ provider }) => {
-      await Bun.sleep(0)
-      donations().disconnect(provider)
-    },
-    getDonationSharing: async () => donations().getSharing(),
-    setDonationSharing: async ({ provider, enabled }) => {
-      await Bun.sleep(0)
-      donations().setSharing(provider, enabled)
-      return donations().getSharing()
-    },
+    ...createDonationsApi(ctx.donations),
     saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
     connectTwirImageUploader: imageUploader.connectTwirImageUploader,
     disconnectTwirImageUploader: imageUploader.disconnectTwirImageUploader,
