@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Platform } from '@twirchat/shared/types'
-import { createYouTubeGrpcSession } from '@twirchat/shared/youtube'
+import { createYouTubeChatNormalizer, createYouTubeGrpcSession } from '@twirchat/shared/youtube'
+import type { YouTubeChatRelayEvent } from '@twirchat/shared/youtube-chat'
+import { LiveChatMessageSnippet_TypeWrapper_Type } from '@twirchat/shared/youtube/gen/stream_list'
 import { z } from 'zod'
 
 import { refreshKickToken } from '../src/auth/kick'
@@ -911,6 +913,86 @@ test('YouTube OAuth streams after discovery and rejects stale callbacks on switc
   expect(statuses.filter((value) => value === 'connected')).toHaveLength(1)
   await adapter.disconnect()
 })
+
+for (const source of ['relay', 'oauth']) {
+  test(`YouTube ${source} stops delivering a batch when a listener reconnects`, async () => {
+    if (source === 'oauth') save('youtube', 'account')
+    const streams: Parameters<typeof createYouTubeGrpcSession>[0][] = []
+    const relayHandlers: Array<(event: YouTubeChatRelayEvent) => void> = []
+    const adapter = new YouTubeAdapter({
+      relay: {
+        subscribe(_options, handler) {
+          relayHandlers.push(handler)
+          return () => {}
+        },
+      },
+      resolveLiveChat: async ({ channelId }) => ({
+        channelId,
+        videoId: 'video',
+        liveChatId: 'chat',
+      }),
+      createSession(options) {
+        streams.push(options)
+        return { start: async () => {}, stop() {}, getResumeToken: () => undefined }
+      },
+    })
+    const { TEXT_MESSAGE_EVENT, SUPER_CHAT_EVENT, MESSAGE_DELETED_EVENT } =
+      LiveChatMessageSnippet_TypeWrapper_Type
+    const raw = {
+      items: [
+        {
+          id: 'first',
+          snippet: { type: TEXT_MESSAGE_EVENT, textMessageDetails: { messageText: 'first' } },
+        },
+        {
+          id: 'next',
+          snippet: { type: TEXT_MESSAGE_EVENT, textMessageDetails: { messageText: 'next' } },
+        },
+        { id: 'paid', snippet: { type: SUPER_CHAT_EVENT, superChatDetails: { amountMicros: 1 } } },
+        {
+          id: 'delete',
+          snippet: {
+            type: MESSAGE_DELETED_EVENT,
+            messageDeletedDetails: { deletedMessageId: 'first' },
+          },
+        },
+      ],
+    }
+    function deliver(index: number, channelId: string) {
+      if (source === 'oauth') required(streams[index]).onBatch(raw)
+      else
+        required(relayHandlers[index])({
+          type: 'batch',
+          subscriptionId: 'fixture',
+          batch: createYouTubeChatNormalizer({ channelId }).normalize(raw),
+        })
+    }
+    const replacements: Promise<void>[] = []
+    const received: string[] = []
+    adapter.on('message', ({ channelId, text }) => {
+      received.push(`${channelId}:${text}`)
+      if (channelId === 'old' && text === 'first') replacements.push(adapter.connect('new'))
+    })
+    adapter.on('event', ({ type }) => received.push(type))
+    adapter.on('moderation', ({ channelId, action }) => received.push(`${channelId}:${action}`))
+    try {
+      await adapter.connect('old')
+      deliver(0, 'old')
+      await Promise.all(replacements)
+      deliver(0, 'old')
+      deliver(1, 'new')
+      expect(received).toEqual([
+        'old:first',
+        'new:first',
+        'new:next',
+        'superchat',
+        'new:delete_message',
+      ])
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+}
 
 test('watched YouTube channel ids preserve exact case through persistence and removal', () => {
   const id = 'UCAbCdEfGhIjKlMnOpQrStUv'

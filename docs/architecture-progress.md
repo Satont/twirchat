@@ -191,6 +191,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** A stream keeps its existing epoch through each synchronous callback. If a status listener retires it, the data handler skips delivery; if a batch listener retires it, the old batch cannot stop a replacement or report a stale terminal status. Cursor capture still precedes callbacks so an immediate replacement resumes at the same boundary.
 - **Safeguard:** Tests independently restart the session from each callback during a terminal batch and verify that the replacement uses the saved cursor and accepts data. The desktop chat benchmark injects normalized messages after the adapter/transport boundary and does not execute this stream handler. Adapter-level delivery within a normalized batch remains a separate investigation.
 
+### Round 36 — Retire YouTube adapter delivery between batch items
+
+- **Decision:** Both desktop YouTube transports pass their connection revision to the same delivery loop. A synchronous listener can retire the connection; the current item finishes notifying listeners, but subsequent messages, events, and moderation do not escape the old connection. The selected-account query still runs at batch entry, not between items.
+- **Safeguard:** Relay and OAuth fixtures reconnect from the first message and verify that only the replacement can deliver the rest of a batch. The existing native chat benchmark injects messages after this adapter, so it does not exercise this change.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

@@ -57,17 +57,21 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       ...(error ? { error } : {}),
     })
   }
-  private deliver(batch: YouTubeChatBatch): void {
-    for (const message of batch.messages)
-      this.emit('message', {
-        ...message,
-        channelId: this.channelId,
-        timestamp: new Date(message.timestamp),
-      })
-    for (const event of batch.events)
+  private deliver(batch: YouTubeChatBatch, revision: number): void {
+    const { channelId } = this
+    // Listeners can synchronously retire this connection between items.
+    for (const message of batch.messages) {
+      if (revision !== this.identityRevision) return
+      this.emit('message', { ...message, channelId, timestamp: new Date(message.timestamp) })
+    }
+    for (const event of batch.events) {
+      if (revision !== this.identityRevision) return
       this.emit('event', { ...event, timestamp: new Date(event.timestamp) })
-    for (const moderation of batch.moderation)
-      this.emit('moderation', { ...moderation, channelId: this.channelId })
+    }
+    for (const moderation of batch.moderation) {
+      if (revision !== this.identityRevision) return
+      this.emit('moderation', { ...moderation, channelId })
+    }
   }
   async connect(channelId: string): Promise<void> {
     const revision = ++this.identityRevision
@@ -89,7 +93,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         const unsubscribe = chatRelay.subscribe({ channelId }, (event) => {
           if (!current()) return
           if (event.type === 'ready') this.liveChatId = event.liveChatId
-          else if (event.type === 'batch') this.deliver(event.batch)
+          else if (event.type === 'batch') this.deliver(event.batch, revision)
           else this.emitStatus(event.status, event.error)
         })
         if (current()) this.unsubscribe = unsubscribe
@@ -130,7 +134,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         liveChatId: resolved.liveChatId,
         getCredentials,
         onBatch: (batch) => {
-          if (current()) this.deliver(normalizer.normalize(batch))
+          if (current()) this.deliver(normalizer.normalize(batch), revision)
         },
         onStatus: (status, error) => {
           if (current()) this.emitStatus(status, error)
