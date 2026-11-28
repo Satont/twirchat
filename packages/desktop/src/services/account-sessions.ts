@@ -22,6 +22,35 @@ export interface AccountSessionDependencies {
 /** One identity transition at a time per platform, without changing watched records or layouts. */
 export function createAccountSessions(dependencies: AccountSessionDependencies) {
   const queues = new Map<Platform, Promise<void>>()
+  const startupAttempts = new Map<Platform, symbol>()
+  let startupStopped = false
+
+  function disconnect(platform: Platform): Promise<void> {
+    startupAttempts.delete(platform)
+    return dependencies.disconnect(platform)
+  }
+
+  async function connectAtStartup(
+    account: Pick<Account, 'platform' | 'id' | 'username'>,
+    { connect, onConnected }: { connect: () => Promise<void>; onConnected: () => void },
+  ): Promise<void> {
+    if (startupStopped) return
+    const { platform, id, username } = account
+    const attempt = Symbol()
+    startupAttempts.set(platform, attempt)
+    const isCurrent = () => {
+      if (startupAttempts.get(platform) !== attempt) return false
+      const active = dependencies.active(platform)
+      return active?.id === id && active.username === username
+    }
+    try {
+      await connect()
+      if (isCurrent()) onConnected()
+    } finally {
+      if (startupAttempts.get(platform) === attempt) startupAttempts.delete(platform)
+    }
+  }
+
   function enqueue(platform: Platform, operation: () => Promise<void>): Promise<void> {
     const pending = (queues.get(platform) ?? Promise.resolve()).catch(() => {}).then(operation)
     queues.set(platform, pending)
@@ -50,7 +79,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     signal?.throwIfAborted()
     resolve(platform, accountId)
     if (!force && (dependencies.active(platform)?.id ?? null) === accountId) return
-    await dependencies.disconnect(platform)
+    await disconnect(platform)
     signal?.throwIfAborted()
     const account = dependencies.select(platform, accountId)
     if (accountId === null) log.info('Active account deactivated', { platform })
@@ -76,6 +105,11 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
       throw new Error(t('notices.accounts.reconnectFailed', { failures: failures.join('; ') }))
   }
   return {
+    connectAtStartup,
+    stopStartupConnections(): void {
+      startupStopped = true
+      startupAttempts.clear()
+    },
     select(
       platform: Platform,
       accountId: string | null,
@@ -91,7 +125,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     },
     reconnectOwn(platform: Platform): Promise<void> {
       return enqueue(platform, async () => {
-        await dependencies.disconnect(platform)
+        await disconnect(platform)
         await dependencies.refreshIdentity(platform)
         await dependencies.connectOwn(platform, dependencies.active(platform))
       })

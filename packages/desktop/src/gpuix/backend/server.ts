@@ -747,9 +747,11 @@ function boot(): DesktopRuntime {
     const channelSlug = account.username
     providerRuntime.setJoined(`own:${account.platform}`, account.platform, channelSlug)
     ChannelStore.save(account.platform, channelSlug)
-    adapter
-      .connect(channelSlug)
-      .then(() => subscribeSevenTvFor(account.platform, channelSlug, aggregator))
+    accountSessions
+      .connectAtStartup(account, {
+        connect: () => adapter.connect(channelSlug),
+        onConnected: () => subscribeSevenTvFor(account.platform, channelSlug, aggregator),
+      })
       .catch((error) => {
         log.error("Auto-connect to account's channel failed", {
           platform: account.platform,
@@ -776,6 +778,7 @@ function boot(): DesktopRuntime {
     plugins,
     shutdownPlugins,
     dispose: async () => {
+      accountSessions.stopStartupConnections()
       await authServer.stop().catch((error: unknown) => {
         log.warn('OAuth server shutdown failed', { error: String(error) })
       })
