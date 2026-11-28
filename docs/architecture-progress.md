@@ -186,6 +186,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** A remote close, a missing Hello, a heartbeat timeout, and an upstream reconnect opcode retire the socket through the same retry path. The existing jittered backoff is installed before disconnect notification; neither new demand nor a callback can open a second connection while the retry is pending. Desired subscriptions are unchanged and replay on a valid Hello.
 - **Safeguard:** Isolated loopback cases verify the retry delay and one replay after both a heartbeat timeout and an upstream reconnect request. Existing close-code handling and the reset-on-Hello policy are unchanged. Backfill is not part of this transport change.
 
+### Round 35 — Fence YouTube gRPC data continuations
+
+- **Decision:** A stream keeps its existing epoch through each synchronous callback. If a status listener retires it, the data handler skips delivery; if a batch listener retires it, the old batch cannot stop a replacement or report a stale terminal status. Cursor capture still precedes callbacks so an immediate replacement resumes at the same boundary.
+- **Safeguard:** Tests independently restart the session from each callback during a terminal batch and verify that the replacement uses the saved cursor and accepts data. The desktop chat benchmark injects normalized messages after the adapter/transport boundary and does not execute this stream handler. Adapter-level delivery within a normalized batch remains a separate investigation.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

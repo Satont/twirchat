@@ -20,6 +20,7 @@ import {
   type LiveChatMessageListRequest,
   LiveChatMessageListResponse,
   LiveChatMessage,
+  LiveChatMessageSnippet_TypeWrapper_Type,
   V3DataLiveChatMessageServiceClient,
   V3DataLiveChatMessageServiceService,
 } from '@twirchat/shared/youtube/gen/stream_list'
@@ -279,6 +280,55 @@ describe('official YouTube streaming', () => {
         if (restart) required(client.calls[1]).stream.emit('data', response([], 'replacement'))
         expect(batches).toHaveLength(restart ? 1 : 0)
         expect(session.getResumeToken()).toBe(restart ? 'replacement' : undefined)
+      } finally {
+        session.stop()
+      }
+    })
+  }
+
+  for (const replaceFrom of ['status', 'batch']) {
+    test(`a ${replaceFrom} callback can replace the stream during its final batch`, async () => {
+      const client = fakeClient()
+      const batches: Array<string | undefined> = []
+      const states: string[] = []
+      const replacement: Promise<void>[] = []
+      const session = createYouTubeGrpcSession({
+        liveChatId: 'chat',
+        clientFactory: client.factory,
+        getCredentials: () => ({ apiKey: 'fixture' }),
+        onBatch(batch) {
+          batches.push(batch.nextPageToken)
+          if (replaceFrom === 'batch' && batch.nextPageToken === 'ending') restart()
+        },
+        onStatus(state) {
+          states.push(state)
+          if (replaceFrom === 'status' && state === 'connected' && replacement.length === 0)
+            restart()
+        },
+      })
+      function restart() {
+        session.stop()
+        replacement.push(session.start())
+      }
+      try {
+        await session.start()
+        const first = required(client.calls[0])
+        first.stream.emit(
+          'data',
+          response(
+            [item('end', { type: LiveChatMessageSnippet_TypeWrapper_Type.CHAT_ENDED_EVENT })],
+            'ending',
+          ),
+        )
+        await Promise.all(replacement)
+        expect(client.calls).toHaveLength(2)
+        expect(client.calls[1]?.request).toMatchObject({ pageToken: 'ending' })
+        first.stream.emit('data', response([], 'stale'))
+        required(client.calls[1]).stream.emit('data', response([], 'live'))
+        expect(batches).toEqual(replaceFrom === 'status' ? ['live'] : ['ending', 'live'])
+        expect(states).toEqual(['connecting', 'connected', 'connecting', 'connected'])
+        expect(session.getResumeToken()).toBe('live')
+        expect(client.closed).toBe(1)
       } finally {
         session.stop()
       }
