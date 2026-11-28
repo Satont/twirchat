@@ -17,7 +17,6 @@ import {
 import { chatRulesStore } from '../src/gpuix/state/chat-rules'
 import {
   chatTabsStore,
-  closeChatTab,
   createChatFeedTab,
   createEmptyChatTab,
   restoreClosedChatTab,
@@ -25,12 +24,12 @@ import {
   validateChatTabs,
 } from '../src/gpuix/state/chat-tabs'
 import { registerChatWindow } from '../src/gpuix/state/chat-windows'
+import { closeChatTab } from '../src/gpuix/state/layout'
 import {
   cloneLayoutForWindow,
   cleanupWindowLayoutFocus,
   requestLayoutPanelFocus,
   focusLayoutPanel,
-  layoutStore,
   loadLayout,
   registerLayoutPanelFocus,
   removePanel,
@@ -39,6 +38,7 @@ import {
   setPanelSources,
   updateSplitFlexes,
 } from '../src/gpuix/state/layout'
+import { layoutStore } from '../src/gpuix/state/layout-state'
 import { getDb, initDb } from '../src/store/db'
 import { PluginWatchedChannelsStore } from '../src/store/plugin-watched-channels-store'
 import { WatchedChannelsLayoutStore } from '../src/store/watched-channels-layout-store'

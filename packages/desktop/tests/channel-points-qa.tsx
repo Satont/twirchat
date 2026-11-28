@@ -39,6 +39,7 @@ const { setLanguage } = await import('../src/gpuix/i18n')
 const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
 const { wireTwitchActivities } = await import('../src/gpuix/state/twitch-activities')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
@@ -301,11 +302,11 @@ app.settingsStore.set({
   showTimestamp: true,
 })
 if (rewardFeed) setLanguage('ru')
-app.accountsStore.set([
+accountState.accountsStore.set([
   primary,
   { ...primary, id: 'kick', platform: 'kick', platformUserId: '4001' },
 ])
-app.savedAccountsStore.set([primary, alternate])
+accountState.savedAccountsStore.set([primary, alternate])
 app.watchedChannelsStore.set([channel, kick])
 app.watchedStatusesStore.set(
   new Map(

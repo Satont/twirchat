@@ -3,7 +3,7 @@ import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useMemo, useState } from 'react'
 
 import { useT } from '../i18n'
-import { accountsStore } from '../state/app'
+import { accountsStore } from '../state/accounts'
 import { avatarRevisionStore, avatarUrlForUser, ensureAvatarForUser } from '../state/caches'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { whisperContactsStore, whispersStore } from '../state/twitch-activities'

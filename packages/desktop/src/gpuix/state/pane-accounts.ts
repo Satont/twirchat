@@ -11,7 +11,7 @@ import {
   type DesktopWatchedChannel,
 } from '../../watched-channels/plugin-channel-types'
 import { resolveChatAccount } from '../chat-account'
-import { allPanels, layoutStore, type LayoutState } from './layout'
+import { allPanels, layoutStore, type LayoutState } from './layout-state'
 import { liveLayoutTabIds } from './watched-subscriptions'
 
 /** The account a pane chose for itself, if any. */

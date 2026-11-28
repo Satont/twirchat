@@ -6,8 +6,8 @@ import { panelWatchedSources } from '../../views/main/utils/layout-tree'
 import type { DesktopBackend } from '../backend/server'
 import { chatMessageKey } from '../chat-tools'
 import { compileMessageRules } from '../message-rules'
+import { accountsStore } from './accounts'
 import {
-  accountsStore,
   activeTabStore,
   activeWatchedTabStore,
   tabChannelIdsStore,
@@ -16,7 +16,7 @@ import {
 import { chatRulesStore } from './chat-rules'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
-import { allPanels, layoutStore } from './layout'
+import { allPanels, layoutStore } from './layout-state'
 import { getMessageSimilarity, messageSimilarityStore } from './message-similarity'
 import { persistentResource } from './persistent-resources'
 import { streamerModeStore } from './streamer-mode'

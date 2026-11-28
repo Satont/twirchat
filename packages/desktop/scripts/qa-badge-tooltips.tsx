@@ -26,6 +26,7 @@ const { createStore, useStore } = await import('../src/gpuix/state/create-store'
 const { initCosmeticCaches } = await import('../src/gpuix/state/cosmetics')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { getDbPath } = await import('../src/runtime-config')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
@@ -136,7 +137,7 @@ backend.api.getUserCosmetics = async () => {
 backend.api.getUserProfile = async () => ({ id: 'qa-author', errors: [] })
 initCosmeticCaches(backend.api)
 app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
-app.accountsStore.set([
+accountState.accountsStore.set([
   {
     id: 'qa-kick',
     platform: 'kick',

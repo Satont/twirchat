@@ -13,7 +13,8 @@ import {
   observeHomePluginFeed,
   selectedHomePluginChannels,
 } from './home-plugin-channels'
-import { layoutStore, loadLayout } from './layout'
+import { loadLayout } from './layout'
+import { layoutStore } from './layout-state'
 
 export interface WatchedReferenceSnapshot {
   ready: boolean

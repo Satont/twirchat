@@ -8,14 +8,11 @@ const { assertGuiQaEnvironment } = await import('../src/services/gui-qa')
 assertGuiQaEnvironment()
 
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
-const {
-  watchedChannelsStore,
-  watchedStatusesStore,
-  layoutStore,
-  activeWatchedTabStore,
-  accountsStore,
-} = await import('../src/state/app')
-const { DesktopWindowManager } = await import('../src/window-manager')
+const { watchedChannelsStore, watchedStatusesStore, activeWatchedTabStore } =
+  await import('../src/gpuix/state/app')
+const { accountsStore } = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
+const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 
 const channel = {
   id: 'qa-first-msg',

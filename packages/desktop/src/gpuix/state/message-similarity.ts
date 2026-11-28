@@ -8,7 +8,7 @@ import {
   type MessageSimilaritySettings,
 } from '../../services/message-similarity'
 import type { DesktopBackend } from '../backend/server'
-import { accountsStore } from './app'
+import { accountsStore } from './accounts'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 import { createPreferenceStore, type PreferenceStore } from './preferences'

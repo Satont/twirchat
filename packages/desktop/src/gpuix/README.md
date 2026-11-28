@@ -62,10 +62,10 @@ in-process facade with exactly the same shape as the Wails gateway:
 `src/gpuix/state/` — observable stores on `useSyncExternalStore`
 (`create-store.ts`), replacing Pinia:
 
-- `app.ts` — settings/accounts/statuses/messages/watched/tabs/emotes/
-  stream-status polling/moderation outcomes/notices + `wireBackendToStores()`
-  - `loadInitialData()` (ports `App.vue`'s boot sequence).
-- `layout.ts` — per-tab watched-channel split layouts (ports `stores/layout.ts`).
+- `app.ts` — backend event projection, chat buffers, stream status polling, and shared UI state.
+- `accounts.ts` — persistent active and saved account snapshots used by views and classifiers.
+- `initial-data.ts` — startup orchestration and retries above the state modules.
+- `layout-state.ts` — per-tab layout snapshots and pane traversal; `layout.ts` owns layout writes and commands.
 - `caches.ts` — avatar + mention-color session caches.
 - `focus.ts` / `hotkeys.ts` — global hotkeys (Ctrl+K, Ctrl+Tab…) with the
   "skip when a text editor is focused" rule.

@@ -17,7 +17,9 @@ const { BackendContext } = await import(base + 'backend/context.ts')
 const { ChannelTabBar } = await import(base + 'components/ChannelTabBar.tsx')
 const { useStore } = await import(base + 'state/create-store.ts')
 const app = await import(base + 'state/app.ts')
+const accountState = await import('../src/gpuix/state/accounts')
 const tabs = await import(base + 'state/chat-tabs.ts')
+const { closeChatTab } = await import('../src/gpuix/state/layout')
 const watched = ['a', 'b', 'c'].map((id) => ({
   id,
   platform: 'twitch',
@@ -65,7 +67,7 @@ function Harness() {
     watchedLiveStatuses: new Map(),
     onSelectTab: (id) => app.activeWatchedTabStore.set(id),
     onAddChannel: () => {},
-    onRemoveChannel: (id) => void tabs.closeChatTab(backend, id),
+    onRemoveChannel: (id) => void closeChatTab(backend, id),
   })
 }
 const renderer = createRenderer()
@@ -182,7 +184,7 @@ try {
   const restoredAndDuplicated = app.tabChannelIdsStore.get().length
   const screenshot = await captureGuiQaDisplay('native-tabs')
   const { WatchedView } = await import(base + 'components/WatchedView.tsx')
-  const { layoutStore } = await import(base + 'state/layout.ts')
+  const { layoutStore } = await import('../src/gpuix/state/layout-state')
   const paneLayout = {
     version: 2,
     root: {
@@ -333,7 +335,7 @@ try {
     showBadges: false,
     chatTheme: 'compact',
   })
-  app.accountsStore.set([])
+  accountState.accountsStore.set([])
   app.watchedChannelsStore.set([channel])
   app.tabChannelIdsStore.set(['qa-search'])
   app.activeWatchedTabStore.set('qa-search')

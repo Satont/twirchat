@@ -21,7 +21,8 @@ import { useBackend } from '../backend/context'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
 import { useT } from '../i18n'
 import { nativeWindow } from '../native-window'
-import { accountsStore, savedAccountsStore, showNotice, watchedChannelsStore } from '../state/app'
+import { accountsStore, savedAccountsStore } from '../state/accounts'
+import { showNotice, watchedChannelsStore } from '../state/app'
 import type { ChatTabView } from '../state/chat-tabs'
 import {
   chatTabsStore,
@@ -32,7 +33,7 @@ import {
   setChatTabLocked,
 } from '../state/chat-tabs'
 import { useStore, useStoreSelector } from '../state/create-store'
-import { layoutStore } from '../state/layout'
+import { layoutStore } from '../state/layout-state'
 import { useOverlayClose } from '../state/overlays'
 import { tabSenderAccounts } from '../state/pane-accounts'
 import { tabUnreadStore, type TabUnread } from '../state/tab-unread'

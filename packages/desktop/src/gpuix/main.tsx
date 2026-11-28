@@ -22,12 +22,7 @@ import { ChatWindow } from './components/ChatWindow'
 import { t } from './i18n'
 import { loadActionBindings } from './state/action-bindings'
 import { wireProviderChannelFocus } from './state/active-pane'
-import {
-  activeWatchedTabStore,
-  loadInitialData,
-  wireBackendToStores,
-  showNotice,
-} from './state/app'
+import { activeWatchedTabStore, wireBackendToStores, showNotice } from './state/app'
 import { initAvatarCache } from './state/caches'
 import { wireChannelState } from './state/channel-state'
 import { loadChatPausePreferences } from './state/chat-pause'
@@ -38,6 +33,7 @@ import {
   notificationPreferences,
   wireHighlightNotifications,
 } from './state/highlight-notifications'
+import { loadInitialData } from './state/initial-data'
 import { loadMessageSimilaritySettings } from './state/message-similarity'
 import { loadStreamerMode, wireStreamerMode } from './state/streamer-mode'
 import { wireTabUnread } from './state/tab-unread'
@@ -157,7 +153,8 @@ const debugPayloadSchema = z.object({
 })
 globalThis.__twirchatDevHook = async (action, payload) => {
   const p = debugPayloadSchema.parse(payload ?? {})
-  const { layoutStore, splitPanel } = await import('./state/layout')
+  const { splitPanel } = await import('./state/layout')
+  const { layoutStore } = await import('./state/layout-state')
   if (action === 'dump-layout') {
     const tabId = p.tabId ?? activeWatchedTabStore.get()
     return layoutStore.get().get(tabId) ?? null

@@ -34,7 +34,8 @@ const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const app = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const accountState = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
@@ -79,7 +80,7 @@ const layout: WatchedChannelsLayout = {
   },
 }
 app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false, chatTheme: 'compact' })
-app.accountsStore.set([])
+accountState.accountsStore.set([])
 app.watchedChannelsStore.set(channels)
 app.watchedStatusesStore.set(
   new Map(

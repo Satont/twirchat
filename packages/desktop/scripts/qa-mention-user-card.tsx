@@ -26,6 +26,7 @@ const { createStore, useStore } = await import('../src/gpuix/state/create-store'
 const { initCosmeticCaches } = await import('../src/gpuix/state/cosmetics')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
@@ -168,7 +169,7 @@ backend.api.getUserCardMetadata = async ({ platform, platformUserId }) => ({
   subAge: { status: 'unavailable', months: null },
 })
 app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false })
-app.accountsStore.set([
+accountState.accountsStore.set([
   {
     id: 'qa-kick',
     platform: 'kick',

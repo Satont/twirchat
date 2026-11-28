@@ -13,8 +13,9 @@ const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot'
 process.env.TWIRCHAT_GPUIX_START_MAIN_TAB = 'events'
 await import('../src/gpuix/main')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const { getDesktopBackend } = await import('../src/gpuix/backend/server')
-const { layoutStore, allPanels } = await import('../src/gpuix/state/layout')
+const { layoutStore, allPanels } = await import('../src/gpuix/state/layout-state')
 const { actionBindingsStore } = await import('../src/gpuix/state/action-bindings')
 const { windowPresentationPreferences } = await import('../src/gpuix/state/window-presentation')
 const { closeTopOverlay } = await import('../src/gpuix/state/overlays')
@@ -164,7 +165,7 @@ async function captureThemedChat() {
     createdAt: 0,
     updatedAt: 0,
   } satisfies Account
-  app.accountsStore.set([account])
+  accountState.accountsStore.set([account])
   try {
     const messages = [
       { name: 'juniper', color: '#e894c8', text: 'Made it just in time!' },
@@ -198,7 +199,7 @@ async function captureThemedChat() {
     )
     await captureThemePreview('theme-custom-chat')
   } finally {
-    app.accountsStore.set([])
+    accountState.accountsStore.set([])
     app.homeMessagesStore.set([])
   }
 }
@@ -297,7 +298,11 @@ try {
   )
   main = mounts.get('main').renderer
   await focusNativeQaWindow('TwirChat')
-  assert.deepEqual(app.accountsStore.get(), [], 'Private QA must not load real credentials.')
+  assert.deepEqual(
+    accountState.accountsStore.get(),
+    [],
+    'Private QA must not load real credentials.',
+  )
   const homePanes = allPanels(layoutStore.get().get('home')?.layout ?? null)
   assert.equal(homePanes.length, 1)
   const [homePane] = homePanes

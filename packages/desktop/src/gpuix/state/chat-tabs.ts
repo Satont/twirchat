@@ -29,7 +29,7 @@ import {
 } from './app'
 import { chatRulesPreferences, chatRulesStore } from './chat-rules'
 import { createStore, type Store } from './create-store'
-import { layoutStore, saveLayoutNow, type LayoutState } from './layout'
+import { layoutStore, type LayoutState } from './layout-state'
 import { persistentResource } from './persistent-resources'
 import { setMainTab } from './settings-session'
 import { clearTabUnread } from './tab-unread'
@@ -568,14 +568,9 @@ function controller(api: ChatTabApi) {
 }
 export const initializeChatTabs = (backend: { api: ChatTabApi }) =>
   controller(backend.api).initialize()
-export const closeChatTab = async (
-  backend: { api: ChatTabApi },
-  id: string,
-  layoutAlreadyFlushed = false,
-) => {
-  if (!layoutAlreadyFlushed) await saveLayoutNow(backend, id)
-  return controller(backend.api).close(id)
-}
+// The caller must flush layout changes before closing the tab.
+export const closeTabWithSavedLayout = (backend: { api: ChatTabApi }, id: string) =>
+  controller(backend.api).close(id)
 export const restoreClosedChatTab = (backend: { api: ChatTabApi }, id?: string) =>
   controller(backend.api).restore(id)
 export const createEmptyChatTab = (backend: { api: ChatTabApi }) =>

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { useT } from '../i18n'
-import { accountsStore } from '../state/app'
+import { accountsStore } from '../state/accounts'
 import { avatarRevisionStore, avatarUrlForUser, ensureAvatarForUser } from '../state/caches'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'

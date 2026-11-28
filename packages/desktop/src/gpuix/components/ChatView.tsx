@@ -56,10 +56,10 @@ import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
 import { nativeWindow } from '../native-window'
 import { PaneAccountContext } from '../pane-account-context'
+import { accountsStore, savedAccountsStore } from '../state/accounts'
 import { useHotkeyContext, useHotkeyRoute, dispatchCustomHotkey } from '../state/action-bindings'
 import { activePaneByWindowStore, getActivePane, setActivePane } from '../state/active-pane'
 import {
-  accountsStore,
   activeTabStore,
   aliasesStore,
   applyModerationOutcome,
@@ -68,7 +68,6 @@ import {
   clearModerationSanction,
   homeMessagesStore,
   moderationViewStore,
-  savedAccountsStore,
   settingsStore,
   streamStatusStore,
   watchedMessagesStore,
@@ -114,7 +113,8 @@ import {
   type HomePluginRow,
 } from '../state/home-plugin-channels'
 import { invokeHotkeyUiAction } from '../state/hotkeys'
-import { allPanels, layoutStore, focusLayoutPanel } from '../state/layout'
+import { focusLayoutPanel } from '../state/layout'
+import { allPanels, layoutStore } from '../state/layout-state'
 import { messageSimilarityStore, messageSimilarityReaderStore } from '../state/message-similarity'
 import { useOverlayClose } from '../state/overlays'
 import { resolvePaneAccount } from '../state/pane-accounts'

@@ -33,12 +33,8 @@ import { registerChatWindow, registerChatWindowManager } from './state/chat-wind
 import { DesktopWindowsContext, type DesktopWindows } from './state/desktop-windows'
 import { notificationPreferences } from './state/highlight-notifications'
 import { handleGlobalKeyDown } from './state/hotkeys'
-import {
-  cloneLayoutForWindow,
-  saveLayoutNow,
-  layoutStore,
-  cleanupWindowLayoutFocus,
-} from './state/layout'
+import { cloneLayoutForWindow, saveLayoutNow, cleanupWindowLayoutFocus } from './state/layout'
+import { layoutStore } from './state/layout-state'
 import { createSystemTray } from './state/system-tray'
 import { updateWindowActivity, clearWindowActivity } from './state/window-activity'
 import { WindowScaleProvider } from './state/window-scale'

@@ -5,7 +5,8 @@ import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import { createDesktopEvents } from '../src/gpuix/backend/events'
 import type { DesktopBackend } from '../src/gpuix/backend/server'
 import { DEFAULT_CHAT_RULES } from '../src/gpuix/message-rules'
-import { accountsStore, watchedChannelsStore, watchedStatusesStore } from '../src/gpuix/state/app'
+import { accountsStore } from '../src/gpuix/state/accounts'
+import { watchedChannelsStore, watchedStatusesStore } from '../src/gpuix/state/app'
 import { chatRulesStore } from '../src/gpuix/state/chat-rules'
 import {
   DEFAULT_NOTIFICATIONS,

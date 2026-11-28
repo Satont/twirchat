@@ -10,7 +10,8 @@ const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const app = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const accountState = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { actionBindingsStore } = await import('../src/gpuix/state/action-bindings')
 const { chatPauseStore } = await import('../src/gpuix/state/chat-pause')
 const { messageSimilarityStore, getMessageSimilarity } =
@@ -63,7 +64,7 @@ const backend = {
   },
 }
 app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false })
-app.accountsStore.set([
+accountState.accountsStore.set([
   {
     id: 'qa-own',
     platform: 'kick',

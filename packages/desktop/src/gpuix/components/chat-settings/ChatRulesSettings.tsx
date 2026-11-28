@@ -15,7 +15,8 @@ import {
   type SavedFilter,
   type TextRule,
 } from '../../message-rules'
-import { accountsStore, homeMessagesStore, watchedMessagesStore } from '../../state/app'
+import { accountsStore } from '../../state/accounts'
+import { homeMessagesStore, watchedMessagesStore } from '../../state/app'
 import { chatRulesPreferences, chatRulesStore } from '../../state/chat-rules'
 import { useStore } from '../../state/create-store'
 import { useTextInputFocusTracking } from '../../state/focus'

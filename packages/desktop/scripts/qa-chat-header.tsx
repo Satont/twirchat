@@ -13,14 +13,14 @@ const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { setLanguage } = await import('../src/gpuix/i18n')
 const {
-  accountsStore,
   settingsStore,
   streamStatusStore,
   watchedChannelsStore,
   watchedStatusesStore,
   wireBackendToStores,
 } = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const { accountsStore } = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { wireTwitchActivities } = await import('../src/gpuix/state/twitch-activities')
 const { darkTheme } = await import('../src/gpuix/theme')
 const { ThemeContext } = await import('../src/gpuix/theme-context')

@@ -32,10 +32,7 @@ import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import { setHomePluginChannel } from '../state/home-plugin-channels'
 import {
-  allPanels,
   assignChannel,
-  layoutRevisionStore,
-  layoutStore,
   loadLayout,
   removePanel,
   restoreHomePanel,
@@ -47,6 +44,7 @@ import {
   focusLayoutPanel,
   setPanelSources,
 } from '../state/layout'
+import { allPanels, layoutRevisionStore, layoutStore } from '../state/layout-state'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { AddChannelForm } from './AddChannelForm'

@@ -15,10 +15,10 @@ import { registerBundledFonts } from '../fonts'
 import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
 import { useT } from '../i18n'
+import { accountsStore } from '../state/accounts'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
 import { getActivePane } from '../state/active-pane'
 import {
-  accountsStore,
   activeTabStore,
   activeWatchedTabStore,
   noticeStore,
@@ -31,7 +31,6 @@ import {
 } from '../state/app'
 import {
   chatTabsStore,
-  closeChatTab,
   openChannelChatTab,
   tabsForChannels,
   createEmptyChatTab,
@@ -41,7 +40,9 @@ import {
 import { useStore } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import { registerHotkeyActions } from '../state/hotkeys'
-import { allPanels, layoutStore, loadLayout, splitPanel, reopenClosedSplit } from '../state/layout'
+import { closeChatTab } from '../state/layout'
+import { loadLayout, splitPanel, reopenClosedSplit } from '../state/layout'
+import { allPanels, layoutStore } from '../state/layout-state'
 import { messageSimilarityPreferences } from '../state/message-similarity'
 import { setMainTab } from '../state/settings-session'
 import { saveStreamerMode } from '../state/streamer-mode'

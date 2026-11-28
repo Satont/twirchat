@@ -68,12 +68,13 @@ import { runUiTask } from '../hooks/run-ui-task'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
 import { t as translate, useT } from '../i18n'
 import { nativeWindow, type NativeTextAction } from '../native-window'
+import { savedAccountsStore } from '../state/accounts'
 import {
   registerSupplementalHotkeys,
   useHotkeyContext,
   useHotkeyRoute,
 } from '../state/action-bindings'
-import { aliasesStore, savedAccountsStore, showNotice, streamStatusStore } from '../state/app'
+import { aliasesStore, showNotice, streamStatusStore } from '../state/app'
 import { emoteStore } from '../state/app'
 import {
   autoTranslationLanguagesStore,

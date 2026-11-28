@@ -12,7 +12,8 @@ const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const app = await import('../src/gpuix/state/app')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const accountState = await import('../src/gpuix/state/accounts')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN, CHAT_FONT_SIZE_SAVE_DELAY_MS } =
   await import('../src/gpuix/state/chat-font-size')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
@@ -175,7 +176,7 @@ async function returnToTail() {
 
 try {
   app.settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false, showBadges: false })
-  app.accountsStore.set([])
+  accountState.accountsStore.set([])
   app.watchedChannelsStore.set([channel])
   app.watchedStatusesStore.set(
     new Map([['qa', { platform: 'kick', status: 'connected', mode: 'authenticated' }]]),

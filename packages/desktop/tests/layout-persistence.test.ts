@@ -7,13 +7,13 @@ import { chatTabsStore } from '../src/gpuix/state/chat-tabs'
 import {
   assignChannel,
   dockLayoutPanel,
-  layoutStore,
   loadLayout,
   removePanel,
   saveLayoutNow,
   splitPanel,
   updateSplitFlexes,
 } from '../src/gpuix/state/layout'
+import { layoutStore } from '../src/gpuix/state/layout-state'
 import { findNodeById } from '../src/views/main/utils/layout-tree'
 import { literal, required } from './fixture-values'
 
@@ -140,7 +140,10 @@ test('hot module reload retains the pending resize queue alongside persistent st
   const remounted: typeof import('../src/gpuix/state/layout') = await import(
     `../src/gpuix/state/layout.ts?qa-reload=${crypto.randomUUID()}`
   )
-  expect(remounted.layoutStore).toBe(layoutStore)
+  const remountedState: typeof import('../src/gpuix/state/layout-state') = await import(
+    `../src/gpuix/state/layout-state.ts?qa-reload=${crypto.randomUUID()}`
+  )
+  expect(remountedState.layoutStore).toBe(layoutStore)
   await remounted.loadLayout(f.backend, f.tabId)
   expect(f.weights()).toEqual([70, 30])
 })

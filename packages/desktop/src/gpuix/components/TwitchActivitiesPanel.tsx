@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT, type MessageKey } from '../i18n'
-import { accountsStore } from '../state/app'
+import { accountsStore } from '../state/accounts'
 import { useStore, useStoreSelector } from '../state/create-store'
 import {
   EMPTY_ACTIVITIES,

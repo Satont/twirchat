@@ -12,8 +12,8 @@ import type { DesktopApi } from '../backend/api'
 import { chatMessageKey, compileChatSearch, type SearchDetails } from '../chat-tools'
 import { t } from '../i18n'
 import { compileMessageRules } from '../message-rules'
+import { accountsStore } from './accounts'
 import {
-  accountsStore,
   activeWatchedTabStore,
   aliasesStore,
   channelStatusStore,
@@ -28,7 +28,7 @@ import { chatRulesStore } from './chat-rules'
 import { chatWindowsStore, isMainChatWindowOpen, activateChatSearchWindow } from './chat-windows'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
-import { allPanels, layoutStore } from './layout'
+import { allPanels, layoutStore } from './layout-state'
 import { getMessageSimilarity } from './message-similarity'
 import { persistentResource } from './persistent-resources'
 import { requestLeaveSettings, setMainTab } from './settings-session'

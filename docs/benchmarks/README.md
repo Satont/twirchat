@@ -141,6 +141,8 @@ Both use the unchanged default command and development mode. At 50 channels / fo
 5000 target messages/s, actual throughput increased from 2691 to 4992 messages/s while RSS peak
 fell from 1891 to 1134 MiB. The comparison also records the scenario that did not improve.
 
+[2026-11-28 state dependencies](2026-11-28-state-dependencies/report.md) compares the full development matrix and production repetitions before and after removing the desktop state dependency cycle.
+
 [2026-11-03 report](2026-11-03/report.md), [CSV](2026-11-03/results.csv),
 [JSON](2026-11-03/results.json) and [source provenance](2026-11-03/provenance.json) preserve the
 completed 15-case run, including per-case samples and logs. Those are historical results from a

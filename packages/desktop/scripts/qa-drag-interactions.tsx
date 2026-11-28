@@ -23,9 +23,10 @@ import type { NativeWindowControls } from '../src/gpuix/native-window'
 const { ChannelTabBar } = await import('../src/gpuix/components/ChannelTabBar')
 const { WatchedView } = await import('../src/gpuix/components/WatchedView')
 const app = await import('../src/gpuix/state/app')
+const accountState = await import('../src/gpuix/state/accounts')
 const tabs = await import('../src/gpuix/state/chat-tabs')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
-const { layoutStore } = await import('../src/gpuix/state/layout')
+const { layoutStore } = await import('../src/gpuix/state/layout-state')
 const { windowActivityStore } = await import('../src/gpuix/state/window-activity')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
@@ -104,7 +105,7 @@ backend.api.removeWatchedChannelsLayout = async ({ tabId: id }) => {
 }
 backend.api.getChannelEmotes = async () => []
 app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
-app.accountsStore.set([])
+accountState.accountsStore.set([])
 app.watchedChannelsStore.set(channels)
 app.watchedStatusesStore.set(
   new Map(
