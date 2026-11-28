@@ -17,9 +17,6 @@ src/
 │   ├── store.ts             # Data access layer (ClientStore, AccountStore)
 │   └── migrations.ts        # Schema migrations
 ├── auth/
-│   ├── pkce.ts              # PKCE helpers
-│   ├── twitch.ts            # Twitch OAuth
-│   ├── youtube.ts           # YouTube OAuth
 │   ├── kick.ts              # Kick OAuth + callback
 │   ├── kick-webhook.ts      # Kick webhook handler
 │   └── kick-subscriptions.ts # Kick EventSub management
@@ -130,7 +127,8 @@ log.error('Auth failed', { platform, error: String(err) })
 
 **OAuth Flows**
 
-- PKCE for all platforms (Twitch, YouTube, Kick)
+- Hosted Kick and MemeAlerts use PKCE primitives from `@twirchat/shared/pkce`.
+- Twitch and YouTube user authorization runs in the desktop application.
 - Tokens stored encrypted (desktop) or in DB (backend)
 - Refresh tokens used for long-lived access
 

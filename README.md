@@ -143,6 +143,7 @@ Install extensions from a local manifest or HTTPS URL in **Settings → Plugins*
 
 ## Development and self-hosting
 
+- [Architecture map](docs/architecture.md) for runtime boundaries, state ownership, and the refactoring backlog.
 - [Build and release guide](docs/releasing.md) for desktop builds, release packaging, and deploying the backend with Docker Compose and PostgreSQL.
 - [Backend documentation](packages/backend/README.md) for configuration and local development.
 - [Chat benchmarks](docs/benchmarks/README.md) for reproducing desktop CPU, GPU, and memory measurements.
