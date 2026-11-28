@@ -510,6 +510,7 @@ export interface DesktopApiContext {
   channelActions?: ChannelActions
   accountSessions?: AccountSessions
   providerRuntime?: ProviderRuntime
+  twitchActivitySnapshots?: ReturnType<typeof createTwitchActivitySnapshots>
   twitchActivityRefresh?: TwitchActivityRefreshClient
   twitchEventSub?: TwitchEventSubAccounts
   aggregator: ChatAggregator
@@ -522,7 +523,6 @@ export interface DesktopApiContext {
   openBrowser: (url: string) => void
 }
 
-const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
 let webSessionRevision = 0
 
 const twitchActivities = createTwitchActivitiesService()
@@ -547,7 +547,11 @@ async function twitchRequest<T>(action: string, run: () => Promise<T>): Promise<
   }
 }
 
-async function prepareTwitchActivitiesRequest(eventSubAccountId?: string, usePoints = false) {
+async function prepareTwitchActivitiesRequest({
+  eventSubAccountId,
+  usePoints = false,
+  checkRunning,
+}: { eventSubAccountId?: string; usePoints?: boolean; checkRunning?: () => void } = {}) {
   const getAccount = () =>
     eventSubAccountId
       ? AccountStore.findById(eventSubAccountId)
@@ -556,6 +560,7 @@ async function prepareTwitchActivitiesRequest(eventSubAccountId?: string, usePoi
   if (account?.platform !== 'twitch' || !AccountStore.getTokens(account.id)?.accessToken)
     throw new Error(t('runtime.api.connectTwitchFirst'))
   const accessToken = await currentTwitchAccessToken(account.id)
+  checkRunning?.()
   const [token, webSession, pointsSession] = await Promise.all([
     twitchUserCredentials(accessToken),
     eventSubAccountId ? undefined : TwitchWebSessionStore.get(),
@@ -593,7 +598,7 @@ async function twitchActivity<T>(
   eventSubAccountId?: string,
   usePoints = false,
 ): Promise<T> {
-  const request = await prepareTwitchActivitiesRequest(eventSubAccountId, usePoints)
+  const request = await prepareTwitchActivitiesRequest({ eventSubAccountId, usePoints })
   return request.run(operation)
 }
 
@@ -612,19 +617,27 @@ export function unsubscribeTwitchActivities(accountId: string, ids: string[]) {
   return twitchActivity((credentials) => twitchActivities.unsubscribe(credentials, ids), accountId)
 }
 
-export async function requestTwitchActivitiesSnapshot(params: {
-  channelSlug: string
-  sections?: TwitchActivitySnapshotPart[]
-}): Promise<TwitchActivitiesSnapshot> {
-  const sessionRevision = webSessionRevision
-  const usesPoints =
-    !params.sections ||
-    params.sections.some((part) => part === 'rewards' || part === 'pointsBalance')
-  const { credentials, run } = await prepareTwitchActivitiesRequest(undefined, usesPoints)
-  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${sessionRevision}`
-  return activitySnapshots.request(key, params.sections, () =>
-    run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
-  )
+export function createTwitchActivitySnapshots() {
+  const broker = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+  async function request(params: {
+    channelSlug: string
+    sections?: TwitchActivitySnapshotPart[]
+  }): Promise<TwitchActivitiesSnapshot> {
+    broker.checkRunning()
+    const sessionRevision = webSessionRevision
+    const usesPoints =
+      !params.sections ||
+      params.sections.some((part) => part === 'rewards' || part === 'pointsBalance')
+    const { credentials, run } = await prepareTwitchActivitiesRequest({
+      usePoints: usesPoints,
+      checkRunning: broker.checkRunning,
+    })
+    const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${sessionRevision}`
+    return broker.request(key, params.sections, () =>
+      run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
+    )
+  }
+  return { request, stop: broker.stop }
 }
 
 export async function planTwitchActivitySnapshot(
@@ -1028,7 +1041,9 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getPotatCommands: createPotatCommandsClient(),
     getSupibotCommands: createSupibotCommandsClient(),
     getTwitchActivities: async (params) => {
-      const snapshot = await requestTwitchActivitiesSnapshot(params)
+      if (!ctx.twitchActivitySnapshots)
+        throw new Error('Twitch activity snapshots are not configured.')
+      const snapshot = await ctx.twitchActivitySnapshots.request(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)
       return snapshot
     },

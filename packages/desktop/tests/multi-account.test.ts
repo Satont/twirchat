@@ -12,10 +12,7 @@ import { z } from 'zod'
 
 import { refreshKickToken } from '../src/auth/kick'
 import { checkTwitchSession, refreshTwitchToken } from '../src/auth/twitch'
-import {
-  requestTwitchActivitiesSnapshot,
-  subscribeTwitchActivities,
-} from '../src/gpuix/backend/api'
+import { createTwitchActivitySnapshots, subscribeTwitchActivities } from '../src/gpuix/backend/api'
 import { KickAdapter, type KickSocket } from '../src/platforms/kick/adapter'
 import { kickRetryClock } from '../src/platforms/kick/retry'
 import { YouTubeAdapter } from '../src/platforms/youtube/adapter'
@@ -542,6 +539,58 @@ describe('account-scoped Twitch web sessions', () => {
     expect(await old).toBeNull()
     expect(await store.status()).toEqual({ configured: false })
   })
+  test('snapshot stop before credential preparation resumes prevents token validation', async () => {
+    save('twitch', 'snapshot-same-turn')
+    let calls = 0
+    globalThis.fetch = Object.assign(
+      async () => {
+        calls++
+        throw new Error('Unexpected provider request')
+      },
+      { preconnect: fetch.preconnect },
+    )
+    const snapshots = createTwitchActivitySnapshots()
+    const pending = snapshots.request({ channelSlug: 'channel', sections: [] })
+    snapshots.stop()
+    await expect(pending).rejects.toThrow('stopped')
+    expect(calls).toBe(0)
+  })
+
+  test('snapshot stop prevents pending credential preparation from starting a provider read', async () => {
+    save('twitch', 'snapshot-stop')
+    const validationStarted = gate<void>()
+    const validation = gate<Response>()
+    const calls: string[] = []
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        const url = new URL(input instanceof Request ? input.url : input)
+        calls.push(url.pathname)
+        if (url.pathname !== '/oauth2/validate') throw new Error('Unexpected snapshot read')
+        validationStarted.resolve()
+        return validation.promise
+      },
+      { preconnect: fetch.preconnect },
+    )
+    const snapshots = createTwitchActivitySnapshots()
+    const pending = snapshots.request({ channelSlug: 'channel', sections: [] })
+    await validationStarted.promise
+    snapshots.stop()
+    validation.resolve(
+      Response.json({
+        client_id: 'public-client',
+        user_id: '1',
+        login: 'user1',
+        expires_in: 3600,
+        scopes: [],
+      }),
+    )
+    await expect(pending).rejects.toThrow('stopped')
+    await expect(snapshots.request({ channelSlug: 'late', sections: [] })).rejects.toThrow(
+      'stopped',
+    )
+    expect(calls).toEqual(['/oauth2/validate'])
+  })
+
   test('an old account activity response is rejected after the active identity changes', async () => {
     save('twitch', '1')
     const second = save('twitch', '2', false)
@@ -564,7 +613,10 @@ describe('account-scoped Twitch web sessions', () => {
       },
       { preconnect: fetch.preconnect },
     )
-    const pending = requestTwitchActivitiesSnapshot({ channelSlug: 'channel', sections: [] })
+    const pending = createTwitchActivitySnapshots().request({
+      channelSlug: 'channel',
+      sections: [],
+    })
     await lookupStarted.promise
     AccountStore.setActive('twitch', second.id)
     delayed.resolve(Response.json({ data: [{ id: '100' }] }))

@@ -89,7 +89,7 @@ import {
   planTwitchActivitySnapshot,
   subscribeTwitchActivities,
   unsubscribeTwitchActivities,
-  requestTwitchActivitiesSnapshot,
+  createTwitchActivitySnapshots,
   type DesktopApi,
 } from './api'
 import { flushChatLogs, recordChatMessage } from './chat-history'
@@ -304,9 +304,10 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
       })
     },
   })
+  const twitchActivitySnapshots = createTwitchActivitySnapshots()
   const twitchActivityRefresh = new TwitchActivityRefreshClient({
     plan: (channelSlug) => planTwitchActivitySnapshot(channelSlug, twitchEventSubConnected),
-    snapshot: (channelSlug, sections) => requestTwitchActivitiesSnapshot({ channelSlug, sections }),
+    snapshot: (channelSlug, sections) => twitchActivitySnapshots.request({ channelSlug, sections }),
     publish: (update) => events.emit('twitch_activity_snapshot', update),
     capability: (capability) => events.emit('twitch_activity_capability', capability),
   })
@@ -546,6 +547,7 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
     channelActions,
     accountSessions,
     providerRuntime,
+    twitchActivitySnapshots,
     twitchActivityRefresh,
     twitchEventSub,
     aggregator,
@@ -781,6 +783,7 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
     dispose: async () => {
       try {
         twitchActivityRefresh.stop()
+        twitchActivitySnapshots.stop()
         twitchEventSub.stop()
         accountSessions.stopStartupConnections()
         await authServer.stop().catch((error: unknown) => {

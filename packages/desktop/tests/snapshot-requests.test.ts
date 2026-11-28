@@ -21,6 +21,42 @@ test('coalesces same-channel snapshots, including subsets of an in-flight full s
   expect(await Promise.all([first, second])).toEqual([42, 42])
 })
 
+test('stopping rejects queued and larger requests without waiting for an active snapshot', async () => {
+  const broker = createSnapshotRequests<string>(1)
+  const held = Promise.withResolvers<string>()
+  let starts = 0
+  const run = async () => {
+    starts++
+    return 'unexpected snapshot'
+  }
+  const first = broker.request('one', ['polls'], () => held.promise)
+  const subset = broker.request('one', ['polls'], run)
+  await Promise.resolve()
+  const queued = broker.request('two', undefined, run)
+  const larger = broker.request('one', undefined, run)
+  const cancelled = Promise.allSettled([queued, larger])
+  broker.stop()
+  broker.stop()
+  try {
+    expect(await cancelled).toEqual([
+      { status: 'rejected', reason: expect.any(Error) },
+      { status: 'rejected', reason: expect.any(Error) },
+    ])
+    await expect(broker.request('late', undefined, run)).rejects.toThrow('stopped')
+  } finally {
+    held.resolve('finished')
+  }
+  expect(await Promise.all([first, subset])).toEqual(['finished', 'finished'])
+  expect(starts).toBe(0)
+}, 1000)
+
+test('stopping in the admission turn prevents a scheduled snapshot from starting', async () => {
+  const broker = createSnapshotRequests<string>(1)
+  const pending = broker.request('channel', undefined, async () => 'unexpected snapshot')
+  broker.stop()
+  await expect(pending).rejects.toThrow('stopped')
+})
+
 test('bounds total requests and serializes a larger request behind a partial channel snapshot', async () => {
   const broker = createSnapshotRequests(2)
   let active = 0

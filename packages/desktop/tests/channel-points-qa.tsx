@@ -29,7 +29,7 @@ const { useGpuixRequired } = await import('@gpuix/react')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { BackendConnection } = await import('../src/backend-connection')
 const { ChatAggregator } = await import('../src/chat/aggregator')
-const { createDesktopApi, planTwitchActivitySnapshot, requestTwitchActivitiesSnapshot } =
+const { createDesktopApi, planTwitchActivitySnapshot, createTwitchActivitySnapshots } =
   await import('../src/gpuix/backend/api')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
@@ -241,11 +241,11 @@ if (deviceAuth) {
   AccountStore.setActive('twitch', primary.id)
   globalThis.fetch = Object.assign(mockTwitch, { preconnect: originalFetch.preconnect })
 }
+const activitySnapshots = createTwitchActivitySnapshots()
 const activityRefresh = deviceAuth
   ? new TwitchActivityRefreshClient({
       plan: (slug) => planTwitchActivitySnapshot(slug, false),
-      snapshot: (channelSlug, sections) =>
-        requestTwitchActivitiesSnapshot({ channelSlug, sections }),
+      snapshot: (channelSlug, sections) => activitySnapshots.request({ channelSlug, sections }),
       publish: (update) => events.emit('twitch_activity_snapshot', update),
       capability: (capability) => events.emit('twitch_activity_capability', capability),
     })
@@ -256,6 +256,7 @@ const api = createDesktopApi({
   backendConn: new BackendConnection('isolated-channel-points'),
   watchedChannelManager: new WatchedChannelManager(),
   currentStatuses: new Map(),
+  twitchActivitySnapshots: activitySnapshots,
   twitchActivityRefresh: activityRefresh,
   openBrowser(url) {
     assert(deviceAuth && url === activationUrl, 'Only the simulated Twitch activation page opens.')

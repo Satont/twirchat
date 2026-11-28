@@ -221,6 +221,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The provider runtime checks the same author-cache identity and lifetime before starting and after awaiting a personal-set read. Replaced or evicted work releases its concurrency slot without calling the provider. Reads already underway can settle, but cannot publish or change the retired entry's retry deadline.
 - **Safeguard:** With all provider slots occupied, queue an old personal set and its replacement, then release the slots. Only the replacement reaches the provider. A synchronous subscriber reacting to a new author entry joins its pending read instead of issuing a duplicate.
 
+### Round 42 — Give Twitch activity snapshots a runtime owner
+
+- **Decision:** The desktop backend owns the one activity snapshot broker shared by UI reads and fallback polling. Disposal stops the poller, then retires broker admission and rejects queued snapshots and larger same-channel waiters. Already-started reads can settle; an existing subset still shares the active result. Credential preparation already underway can finish but cannot admit a retired snapshot.
+- **Safeguard:** Tests hold an active read open during shutdown, verify that queued and larger requests reject immediately, and check both same-turn retirement and admission after credential preparation. The account-switch identity fence and the live concurrency limit are unchanged.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
