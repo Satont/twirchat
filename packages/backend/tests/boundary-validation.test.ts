@@ -93,8 +93,8 @@ test('GraphQL nullable lookups represent a missing user or emote set without inv
       Response.json({ data: { users: { userByConnection: null }, emoteSets: { emoteSet: null } } }),
     { preconnect: originalFetch.preconnect },
   )
-  expect((await getUserByConnection('TWITCH', '42')).users.userByConnection).toBeNull()
-  expect((await getEmoteSetById('set')).emoteSets.emoteSet).toBeNull()
+  expect(await getUserByConnection('TWITCH', '42')).toBeNull()
+  expect(await getEmoteSetById('set')).toBeNull()
 })
 
 test('desktop protocol preserves full platform IDs without widening feature subsets', () => {

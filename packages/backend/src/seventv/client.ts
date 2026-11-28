@@ -3,6 +3,11 @@ import { z } from 'zod'
 
 const SEVENTV_REQUEST_TIMEOUT_MS = 10_000
 
+interface SevenTVUserCatalog {
+  id: string
+  activeEmoteSet: SevenTVGraphQLEmoteSet | null | undefined
+}
+
 const EMOTE_SET_FIELDS = `
 id
 name
@@ -104,8 +109,8 @@ export async function getUserByConnection(
   platform: 'TWITCH' | 'KICK',
   platformId: string,
   signal?: AbortSignal,
-): Promise<z.infer<typeof getUserByConnectionSchema>> {
-  return executeGraphQL(
+): Promise<SevenTVUserCatalog | null | undefined> {
+  const result = await executeGraphQL(
     GET_USER_BY_CONNECTION_QUERY,
     {
       platform,
@@ -114,6 +119,9 @@ export async function getUserByConnection(
     getUserByConnectionSchema,
     signal,
   )
+  const user = result.users.userByConnection
+  if (user === null || user === undefined) return user
+  return { id: user.id, activeEmoteSet: user.style.activeEmoteSet }
 }
 
 const GET_EMOTE_SET_BY_ID_QUERY = `
@@ -129,8 +137,14 @@ ${EMOTE_SET_FIELDS}
 export async function getEmoteSetById(
   id: string,
   signal?: AbortSignal,
-): Promise<z.infer<typeof getEmoteSetByIdSchema>> {
-  return executeGraphQL(GET_EMOTE_SET_BY_ID_QUERY, { id }, getEmoteSetByIdSchema, signal)
+): Promise<SevenTVGraphQLEmoteSet | null | undefined> {
+  const result = await executeGraphQL(
+    GET_EMOTE_SET_BY_ID_QUERY,
+    { id },
+    getEmoteSetByIdSchema,
+    signal,
+  )
+  return result.emoteSets.emoteSet
 }
 
 const emoteSetSchema = z.object({
@@ -163,6 +177,8 @@ const emoteSetSchema = z.object({
     ),
   }),
 })
+
+export type SevenTVGraphQLEmoteSet = z.infer<typeof emoteSetSchema>
 
 const getUserByConnectionSchema = z.object({
   users: z.object({

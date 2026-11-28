@@ -4,7 +4,7 @@ import { logger } from '@twirchat/shared/logger'
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
 import { sevenTVCache, type CachedEmoteSet } from './cache'
 import { sevenTVChannelKey, type SevenTVChannelKey } from './channel-key'
-import { getEmoteSetById, getUserByConnection } from './client'
+import { getEmoteSetById, getUserByConnection, type SevenTVGraphQLEmoteSet } from './client'
 import {
   createSevenTvEmote,
   createSevenTvEmoteFromEventValue,
@@ -365,14 +365,12 @@ export class SevenTVSubscriptionManager {
     }
 
     signal.throwIfAborted()
-    const result = await getUserByConnection(sevenTVPlatform, sevenTVPlatformId, signal)
-
-    const user = result.users?.userByConnection
+    const user = await getUserByConnection(sevenTVPlatform, sevenTVPlatformId, signal)
     if (!user) {
       throw new Error(`User not found on 7TV for ${platform}:${sevenTVPlatformId}`)
     }
 
-    const emoteSet = user.style.activeEmoteSet
+    const emoteSet = user.activeEmoteSet
     if (emoteSet === undefined) {
       throw new Error('No active emote set found')
     }
@@ -384,19 +382,15 @@ export class SevenTVSubscriptionManager {
   }
 
   private createSnapshot(
-    emoteSet: NonNullable<Awaited<ReturnType<typeof getEmoteSetById>>['emoteSets']['emoteSet']>,
+    emoteSet: SevenTVGraphQLEmoteSet,
     identity: Pick<CachedEmoteSet, 'userId' | 'platformUserId'>,
   ): CachedEmoteSet & { id: string }
   private createSnapshot(
-    emoteSet: NonNullable<
-      Awaited<ReturnType<typeof getEmoteSetById>>['emoteSets']['emoteSet']
-    > | null,
+    emoteSet: SevenTVGraphQLEmoteSet | null,
     identity: Pick<CachedEmoteSet, 'userId' | 'platformUserId'>,
   ): CachedEmoteSet
   private createSnapshot(
-    emoteSet: NonNullable<
-      Awaited<ReturnType<typeof getEmoteSetById>>['emoteSets']['emoteSet']
-    > | null,
+    emoteSet: SevenTVGraphQLEmoteSet | null,
     { userId, platformUserId }: Pick<CachedEmoteSet, 'userId' | 'platformUserId'>,
   ): CachedEmoteSet {
     const emotes = new Map<string, SevenTVEmote>()
@@ -429,9 +423,8 @@ export class SevenTVSubscriptionManager {
     channel: ChannelSubscription,
     signal: AbortSignal,
   ): Promise<CachedEmoteSet & { id: string }> {
-    const result = await getEmoteSetById(id, signal)
+    const emoteSet = await getEmoteSetById(id, signal)
     signal.throwIfAborted()
-    const emoteSet = result.emoteSets?.emoteSet
     if (!emoteSet) throw new Error(`Emote set ${id} not found on 7TV`)
     return this.createSnapshot(emoteSet, channel.emoteSet)
   }

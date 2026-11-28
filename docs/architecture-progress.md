@@ -326,6 +326,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Use the shared GraphQL URL for hosted catalog reads, desktop cosmetics requests, and the relay's exact origin/path match. Keep REST and WebSocket routes separate. Remove the unused HTTPS EventAPI constant; the hosted WebSocket default is unchanged.
 - **Safeguard:** Pin the deployed destination and relay normalization with fixtures, including empty delimiters. Existing relay tests guard the allowed request bodies and verify that desktop cosmetics use the hosted relay.
 
+### Round 63 — Keep GraphQL result wrappers at the hosted 7TV boundary
+
+- **Decision:** The GraphQL client returns a validated set or a user's catalog projection, not a provider response envelope. The subscription manager owns identity, cache snapshots, and switch behavior. The upstream queries, schemas, and cancellation policy are unchanged.
+- **Safeguard:** Lookup tests cover explicit null, omitted results, malformed sets, and cancellation. Dispatch tests continue to distinguish a confirmed inactive set from an incomplete provider response.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

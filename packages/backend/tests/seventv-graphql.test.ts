@@ -79,7 +79,7 @@ test('7TV catalog requests validate the same set shape without collapsing null a
   const invalid = { ...valid, emotes: { items: [{ id: 'incomplete' }] } }
   const connection = (style: { activeEmoteSet?: typeof valid | typeof invalid | null }) =>
     Response.json({ data: { users: { userByConnection: { id: 'user', style } } } })
-  const byId = (emoteSet: typeof valid | typeof invalid) =>
+  const byId = (emoteSet?: typeof valid | typeof invalid | null) =>
     Response.json({ data: { emoteSets: { emoteSet } } })
   const fetchMock = spyOn(globalThis, 'fetch')
     .mockResolvedValueOnce(connection({ activeEmoteSet: valid }))
@@ -88,10 +88,13 @@ test('7TV catalog requests validate the same set shape without collapsing null a
     .mockResolvedValueOnce(connection({}))
     .mockResolvedValueOnce(connection({ activeEmoteSet: invalid }))
     .mockResolvedValueOnce(byId(invalid))
+    .mockResolvedValueOnce(byId(null))
+    .mockResolvedValueOnce(byId())
+    .mockResolvedValueOnce(Response.json({ data: { users: {} } }))
   try {
     const user = await getUserByConnection('KICK', 'channel')
-    expect(user.users.userByConnection?.style.activeEmoteSet).toEqual(valid)
-    expect((await getEmoteSetById('set')).emoteSets.emoteSet).toEqual(valid)
+    expect(user).toEqual({ id: 'user', activeEmoteSet: valid })
+    expect(await getEmoteSetById('set')).toEqual(valid)
     const requests = fetchMock.mock.calls.map(([url, init]) => {
       expect(url).toBe('https://7tv.io/v4/gql')
       expect(init?.method).toBe('POST')
@@ -108,11 +111,14 @@ test('7TV catalog requests validate the same set shape without collapsing null a
     ])
 
     const inactive = await getUserByConnection('KICK', 'channel')
-    expect(inactive.users.userByConnection?.style.activeEmoteSet).toBeNull()
+    expect(inactive?.activeEmoteSet).toBeNull()
     const incomplete = await getUserByConnection('KICK', 'channel')
-    expect(incomplete.users.userByConnection?.style.activeEmoteSet).toBeUndefined()
+    expect(incomplete).toEqual({ id: 'user', activeEmoteSet: undefined })
     await expect(getUserByConnection('KICK', 'channel')).rejects.toBeInstanceOf(z.ZodError)
     await expect(getEmoteSetById('set')).rejects.toBeInstanceOf(z.ZodError)
+    expect(await getEmoteSetById('set')).toBeNull()
+    expect(await getEmoteSetById('set')).toBeUndefined()
+    expect(await getUserByConnection('KICK', 'channel')).toBeUndefined()
   } finally {
     fetchMock.mockRestore()
   }
