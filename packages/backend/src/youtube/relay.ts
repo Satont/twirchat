@@ -96,7 +96,7 @@ export class YouTubeChatRelay {
       this.reject(client, subscriptionId, 'Invalid YouTube subscription request')
       return
     }
-    const apiKey = this.options.apiKey?.trim()
+    const apiKey = this.options.apiKey
     if (this.stopped || !apiKey) {
       this.reject(client, subscriptionId, 'YouTube anonymous chat is unavailable on this server')
       return
@@ -117,7 +117,7 @@ export class YouTubeChatRelay {
     this.subscriptions++
     this.send(sub, { type: 'status', subscriptionId, status: 'connecting' })
     try {
-      const chat = await this.resolve(request)
+      const chat = await this.resolve(request, apiKey)
       if (this.clients.get(client)?.get(subscriptionId) !== sub) return
       let stream = this.streams.get(chat.liveChatId)
       if (!stream) {
@@ -181,13 +181,7 @@ export class YouTubeChatRelay {
     }
   }
 
-  private apiKey(): string {
-    const key = this.options.apiKey?.trim()
-    if (!key) throw new Error('YouTube anonymous chat is unavailable on this server')
-    return key
-  }
-
-  private resolve(request: Request): Promise<ResolvedChat> {
+  private resolve(request: Request, apiKey: string): Promise<ResolvedChat> {
     const key = JSON.stringify([request.channelId, request.videoId])
     const now = this.options.now?.() ?? Date.now()
     for (const [cacheKey, entry] of this.resolutions) {
@@ -200,7 +194,7 @@ export class YouTubeChatRelay {
     const promise = (this.options.resolve ?? resolveYouTubeLiveChat)({
       channelId: request.channelId,
       videoId: request.videoId,
-      credentials: { apiKey: this.apiKey() },
+      credentials: { apiKey },
     })
     const entry: { expires: number; promise: Promise<ResolvedChat>; chat?: ResolvedChat } = {
       expires: Infinity,

@@ -291,6 +291,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Keep one production runbook and one production Compose model. The old documentation entry points link to the runbook; the compatibility Compose include and standalone Caddy example remain available. Local setup points to the startup schema and distinguishes current desktop OAuth from legacy hosted routes.
 - **Safeguard:** CI resolves both production Compose entry points against the same example environment and compares the effective models without starting services.
 
+### Round 56 — Normalize the hosted YouTube key at startup
+
+- **Decision:** The environment parser trims the optional YouTube API key and treats blank values as absent. HTTP channel resolution and the anonymous chat relay use that single value. The relay passes the same checked key to metadata resolution and the upstream stream without parsing it again.
+- **Safeguard:** Isolated startup tests cover omitted, blank, whitespace-only, and padded keys. Relay tests continue to cover missing credentials and shared-stream behavior.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

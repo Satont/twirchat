@@ -35,7 +35,7 @@ const envSchema = z.object({
   TWITCH_CLIENT_SECRET: z.string().min(1, 'TWITCH_CLIENT_SECRET is required'),
   // Optional — enables channel resolution and the shared anonymous gRPC chat relay.
   // Get one at https://console.cloud.google.com/ → Credentials → API key.
-  YOUTUBE_API_KEY: z.string().optional(),
+  YOUTUBE_API_KEY: optionalValue,
   MEMEALERTS_CLIENT_ID: optionalValue,
   MEMEALERTS_CLIENT_SECRET: optionalValue,
   MEMEALERTS_REDIRECT_URI: optionalValue.pipe(memeAlertsRedirectUri.optional()),
