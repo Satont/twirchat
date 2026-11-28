@@ -296,6 +296,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The environment parser trims the optional YouTube API key and treats blank values as absent. HTTP channel resolution and the anonymous chat relay use that single value. The relay passes the same checked key to metadata resolution and the upstream stream without parsing it again.
 - **Safeguard:** Isolated startup tests cover omitted, blank, whitespace-only, and padded keys. Relay tests continue to cover missing credentials and shared-stream behavior.
 
+### Round 57 — Derive hosted platform validation from the shared catalog
+
+- **Decision:** The shared platform catalog defines the platform IDs and the `Platform` union. One backend schema validates the full set at WebSocket, account route, and PostgreSQL row boundaries. Feature-specific subsets keep their own policies. Existing desktop type imports still erase at runtime; desktop runtime validators and historical migrations are unchanged.
+- **Safeguard:** HTTP and WebSocket tests pin accepted IDs, case-sensitive rejection, and the narrower OAuth and donation subsets.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

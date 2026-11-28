@@ -1,10 +1,11 @@
 import { OVERLAY_SERVER_PORT } from './constants'
+import type { Platform } from './platform'
 
 // ============================================================
 // Общие типы платформ
 // ============================================================
 
-export type Platform = 'twitch' | 'youtube' | 'kick' | 'vkplay'
+export type { Platform } from './platform'
 
 export type ChatSendReceipt =
   | { channelId: string; messageId?: string; held?: never }
@@ -462,7 +463,7 @@ export interface PlatformStatusInfo {
 
 export interface WatchedChannel {
   id: string
-  platform: 'twitch' | 'kick' | 'youtube' | 'vkplay'
+  platform: Platform
   channelSlug: string
   displayName: string
   createdAt: number

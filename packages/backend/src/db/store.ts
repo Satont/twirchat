@@ -2,9 +2,8 @@ import { randomUUID } from 'node:crypto'
 
 import type { Platform } from '@twirchat/shared'
 import { sql, type SQL } from 'bun'
-import { z } from 'zod'
 
-const platformSchema = z.enum(['twitch', 'kick', 'youtube', 'vkplay'])
+import { platformSchema } from '../platform-schema'
 
 export interface DesktopClient {
   secret: string
