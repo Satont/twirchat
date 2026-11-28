@@ -1,6 +1,7 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 
 import type { BackendToDesktopMessage, Platform } from '@twirchat/shared'
+import { z } from 'zod'
 
 import { sevenTVCache } from '../src/seventv/cache'
 import { SevenTVEventClient, sevenTVEventClient } from '../src/seventv/event-client'
@@ -48,6 +49,26 @@ const emote = {
 }
 const actor = { id: 'editor', display_name: ' Editor ', username: 'editor' }
 const pushed = { key: 'emotes', index: 694, type: 'object', value: emote }
+
+const dispatch = () =>
+  sevenTVEventClient.onEvent?.(
+    sevenTVEventSchema.parse({
+      type: 'emote_set.update',
+      body: { id: setId, pushed: [pushed] },
+    }),
+  )
+const set = (id: string) => ({ id, name: id, emotes: { items: [] } })
+const result = (id: string) => Response.json({ data: { emoteSets: { emoteSet: set(id) } } })
+const switchTo = (id: string) =>
+  sevenTVEventClient.onEvent?.(
+    sevenTVEventSchema.parse({
+      type: 'user.update',
+      body: {
+        id: 'fixture-user',
+        updated: [{ key: 'connections', value: [{ key: 'emote_set_id', value: id }] }],
+      },
+    }),
+  )
 
 afterEach(() => {
   globalThis.WebSocket = originalWebSocket
@@ -122,6 +143,7 @@ test('real object dispatches update both platform caches and attribute chat noti
       super(`ws://127.0.0.1:${server.port}`)
     }
   }
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
   const manager = new SevenTVSubscriptionManager()
   const client = new SevenTVEventClient()
   client.onEvent = sevenTVEventClient.onEvent
@@ -213,6 +235,210 @@ test('real object dispatches update both platform caches and attribute chat noti
     client.disconnect()
     for (const channel of channels)
       manager.unsubscribeClient(channel.client, channel.platform, channel.channelId)
+    connect.mockRestore()
     await server.stop(true)
+  }
+})
+
+test('a shared set keeps routing to each channel until its last viewer leaves', async () => {
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
+  const unsubscribe = spyOn(sevenTVEventClient, 'unsubscribe')
+  const manager = new SevenTVSubscriptionManager()
+  const first = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  const second = { platform: 'twitch', channelId: 'dispatch-twitch' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  const received: string[] = []
+  manager.sendToClient = (client, message) => {
+    if (message.type === 'seventv_emote_added') received.push(`${client}:${message.channelId}`)
+  }
+  try {
+    for (const { platform, channelId } of [first, second]) {
+      sevenTVCache.set(platform, channelId, {
+        id: setId,
+        name: 'Shared',
+        platform,
+        channelId,
+        emotes: new Map(),
+        fetchedAt: Date.now(),
+        ttl: 60000,
+      })
+    }
+    await manager.subscribeClient('both', [first, second], () => true)
+    await manager.subscribeClient('remaining', [first], () => true)
+    manager.unsubscribeClient('both', first.platform, first.channelId)
+    dispatch()
+    expect(received.toSorted()).toEqual(['both:dispatch-twitch', 'remaining:dispatch-kick'])
+    expect(unsubscribe).not.toHaveBeenCalled()
+    manager.cleanupClient('remaining')
+    expect(unsubscribe).not.toHaveBeenCalled()
+    received.length = 0
+    dispatch()
+    expect(received).toEqual(['both:dispatch-twitch'])
+    manager.cleanupClient('both')
+    expect(unsubscribe.mock.calls).toEqual([
+      ['emote_set.update', { object_id: setId }],
+      ['emote_set.delete', { object_id: setId }],
+    ])
+  } finally {
+    manager.cleanupClient('both')
+    manager.cleanupClient('remaining')
+    unsubscribe.mockRestore()
+    connect.mockRestore()
+  }
+})
+
+test('set switches retain existing updates until the latest lookup commits', async () => {
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
+  const unsubscribe = spyOn(sevenTVEventClient, 'unsubscribe')
+  const manager = new SevenTVSubscriptionManager()
+  const originalFetch = globalThis.fetch
+  const stale = Promise.withResolvers<Response>()
+  const latest = Promise.withResolvers<Response>()
+  const started: string[] = []
+  const received: Array<{ client: string; message: BackendToDesktopMessage }> = []
+  const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  const lookup = z.object({ variables: z.object({ id: z.string().optional() }) })
+  globalThis.fetch = Object.assign(
+    async (_input: string | URL | Request, init?: RequestInit) => {
+      if (typeof init?.body !== 'string') throw new Error('Expected a 7TV lookup')
+      const { id } = lookup.parse(JSON.parse(init.body)).variables
+      if (!id)
+        return Response.json({
+          data: {
+            users: {
+              userByConnection: {
+                id: 'fixture-user',
+                style: { activeEmoteSet: set('initial') },
+              },
+            },
+          },
+        })
+      started.push(id)
+      if (id === 'stale') return stale.promise
+      if (id === 'latest') return latest.promise
+      return new Response(null, { status: 503 })
+    },
+    { preconnect: originalFetch.preconnect },
+  )
+  manager.sendToClient = (client, message) => received.push({ client, message })
+  try {
+    await manager.subscribeClient('first', [channel], () => true)
+    manager.cleanupClient('first')
+    await manager.subscribeClient('returning', [channel], () => true)
+    received.length = 0
+    unsubscribe.mockClear()
+    switchTo('failed')
+    switchTo('stale')
+    switchTo('latest')
+    expect(started).toEqual(['failed', 'stale', 'latest'])
+    await manager.subscribeClient('joiner', [channel], () => true)
+    manager.cleanupClient('returning')
+    expect(unsubscribe).not.toHaveBeenCalled()
+    received.length = 0
+    sevenTVEventClient.onEvent?.(
+      sevenTVEventSchema.parse({
+        type: 'emote_set.update',
+        body: { id: 'initial', pushed: [pushed] },
+      }),
+    )
+    expect(
+      received
+        .filter(({ message }) => message.type === 'seventv_emote_added')
+        .map(({ client }) => client),
+    ).toEqual(['joiner'])
+    latest.resolve(result('latest'))
+    await until(() =>
+      received.some(
+        ({ message }) =>
+          message.type === 'seventv_system_message' && message.action === 'set_changed',
+      ),
+    )
+    stale.resolve(result('stale'))
+    await Bun.sleep(0)
+    expect(sevenTVCache.get('kick', channel.channelId)?.id).toBe('latest')
+    expect(
+      received.filter(
+        ({ message }) =>
+          message.type === 'seventv_system_message' && message.action === 'set_changed',
+      ),
+    ).toEqual([
+      {
+        client: 'joiner',
+        message: {
+          type: 'seventv_system_message',
+          action: 'set_changed',
+          platform: 'kick',
+          channelId: channel.channelId,
+          setName: 'latest',
+        },
+      },
+    ])
+    expect(manager.getStats()).toMatchObject({ connectedClients: 1, emoteSetSubscriptions: 1 })
+  } finally {
+    stale.resolve(result('stale'))
+    latest.resolve(result('latest'))
+    for (const client of ['first', 'returning', 'joiner']) manager.cleanupClient(client)
+    globalThis.fetch = originalFetch
+    unsubscribe.mockRestore()
+    connect.mockRestore()
+  }
+})
+
+test('an expired active set refreshes for all viewers when another joins', async () => {
+  const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager()
+  const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  const received: string[] = []
+  const lookup = spyOn(globalThis, 'fetch').mockResolvedValue(
+    Response.json({
+      data: {
+        users: {
+          userByConnection: {
+            id: 'fixture-user',
+            style: {
+              activeEmoteSet: { id: 'refreshed', name: 'Refreshed', emotes: { items: [] } },
+            },
+          },
+        },
+      },
+    }),
+  )
+  manager.sendToClient = (client, message) => {
+    if (message.type === 'seventv_emote_set') received.push(client)
+  }
+  try {
+    const snapshot = {
+      id: setId,
+      name: 'Expired',
+      platform: channel.platform,
+      channelId: channel.channelId,
+      emotes: new Map(),
+      fetchedAt: Date.now(),
+      ttl: 60000,
+    }
+    sevenTVCache.set(channel.platform, channel.channelId, snapshot)
+    await manager.subscribeClient('viewer', [channel], () => true)
+    sevenTVCache.set(channel.platform, channel.channelId, snapshot, -1)
+    received.length = 0
+    await manager.subscribeClient('joiner', [channel], () => true)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(received).toEqual(['viewer', 'joiner'])
+    expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('refreshed')
+    expect(manager.getStats()).toMatchObject({ connectedClients: 2, emoteSetSubscriptions: 1 })
+  } finally {
+    for (const client of ['viewer', 'joiner']) manager.cleanupClient(client)
+    lookup.mockRestore()
+    connect.mockRestore()
   }
 })

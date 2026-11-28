@@ -4,12 +4,36 @@ import type { SevenTVEmote } from './emote.ts'
 
 export interface CachedEmoteSet {
   id: string
+  userId?: string
   name: string
   channelId: string
   platform: Platform
   emotes: Map<string, SevenTVEmote>
   fetchedAt: number
   ttl: number
+}
+
+export function updateSetEmote(
+  emotes: Map<string, SevenTVEmote>,
+  id: string,
+  update: Partial<SevenTVEmote>,
+): SevenTVEmote | undefined {
+  for (const [alias, emote] of emotes) {
+    if (emote.id !== id) continue
+    const changed = { ...emote, ...update }
+    const nextAlias = update.alias || alias
+    if (nextAlias !== alias) emotes.delete(alias)
+    emotes.set(nextAlias, changed)
+    return changed
+  }
+  return undefined
+}
+
+export function removeSetEmote(emotes: Map<string, SevenTVEmote>, id: string): boolean {
+  for (const [alias, emote] of emotes) {
+    if (emote.id === id) return emotes.delete(alias)
+  }
+  return false
 }
 
 interface CacheEntry {
@@ -82,19 +106,7 @@ export class SevenTVCache {
       return false
     }
 
-    // Find emote by ID
-    for (const [alias, emote] of entry.data.emotes) {
-      if (emote.id === emoteId) {
-        Object.assign(emote, update)
-        if (update.alias && update.alias !== alias) {
-          entry.data.emotes.delete(alias)
-          entry.data.emotes.set(update.alias, emote)
-        }
-        return true
-      }
-    }
-
-    return false
+    return updateSetEmote(entry.data.emotes, emoteId, update) !== undefined
   }
 
   addEmote(platform: Platform, channelId: string, emote: SevenTVEmote): boolean {
@@ -117,14 +129,7 @@ export class SevenTVCache {
       return false
     }
 
-    for (const [alias, emote] of entry.data.emotes) {
-      if (emote.id === emoteId) {
-        entry.data.emotes.delete(alias)
-        return true
-      }
-    }
-
-    return false
+    return removeSetEmote(entry.data.emotes, emoteId)
   }
 
   cleanup(): void {
