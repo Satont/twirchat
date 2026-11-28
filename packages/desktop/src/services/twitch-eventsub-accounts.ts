@@ -26,8 +26,10 @@ export function createTwitchEventSubAccounts(dependencies: Dependencies) {
   const watches = new Map<string, number>()
   const clients = new Map<string, SubscriptionTarget & { client: EventSubClient }>()
   let channelOwners = new Map<string, string>()
+  let stopped = false
 
   function refresh(restartPrimary = false): void {
+    if (stopped) return
     const primary = dependencies.activeAccount()
     const desired = new Map<string, SubscriptionTarget>()
     const owners = new Map<string, string>()
@@ -101,7 +103,7 @@ export function createTwitchEventSubAccounts(dependencies: Dependencies) {
     },
     watch(channelSlug: string, watch: boolean): void {
       const channel = channelSlug.trim().replace(/^#/, '').toLowerCase()
-      if (!channel) return
+      if (stopped || !channel) return
       const count = watches.get(channel) ?? 0
       if (watch) {
         watches.set(channel, count + 1)
@@ -110,6 +112,8 @@ export function createTwitchEventSubAccounts(dependencies: Dependencies) {
       else if (watches.delete(channel)) refresh()
     },
     stop(): void {
+      if (stopped) return
+      stopped = true
       for (const { client } of clients.values()) client.stop()
       clients.clear()
       channelOwners.clear()

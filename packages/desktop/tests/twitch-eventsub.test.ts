@@ -70,6 +70,7 @@ async function settle() {
 function fixture(override?: {
   senderUserId?: string
   receiveWhispers?: boolean
+  autoMod?: (event: TwitchAutoModEvent) => void
   unsubscribe?: (ids: string[]) => Promise<void>
   subscribe?: (
     session: string,
@@ -119,7 +120,10 @@ function fixture(override?: {
       await override?.unsubscribe?.(ids)
     },
     activity: (event) => activities.push(event),
-    autoMod: (event) => autoMod.push(event),
+    autoMod: (event) => {
+      autoMod.push(event)
+      override?.autoMod?.(event)
+    },
     moderationNotice: (message) => moderationNotices.push(message),
     senderNotice: (message) => senderNotices.push(message),
     whisper: (event) => whispers.push(event),
@@ -536,6 +540,54 @@ describe('Twitch EventSub lifecycle', () => {
     await Promise.all([closing, reopening])
     expect(f.registrations.filter((key) => key === 'session:creator')).toHaveLength(2)
   })
+})
+
+test('EventSub account shutdown cannot be undone by late watches or refresh', async () => {
+  const account = { id: 'primary', platformUserId: '100', username: 'creator' }
+  const connections: ReturnType<typeof fixture>[] = []
+  const cleared: string[] = []
+  let accountReads = 0
+  const router = createTwitchEventSubAccounts({
+    activeAccount: () => {
+      accountReads++
+      return account
+    },
+    channelAccount: () => account,
+    createClient() {
+      const connection = fixture({
+        autoMod(event) {
+          if (event.type !== 'clear' || !event.channelSlug) return
+          if (router.ownsChannel(account.id, event.channelSlug)) cleared.push(event.channelSlug)
+          router.refresh(true)
+        },
+      })
+      connections.push(connection)
+      return connection.client
+    },
+    clearAutoMod: () => {},
+  })
+  try {
+    router.watch('friend', true)
+    const first = required(connections[0])
+    const socket = required(first.sockets[0])
+    expect(router.ownsChannel(account.id, 'friend')).toBe(true)
+    const beforeStop = accountReads
+    router.stop()
+    router.refresh()
+    router.refresh(true)
+    router.watch('friend', false)
+    router.watch('late', true)
+    router.stop()
+    expect(socket.closed).toBe(true)
+    expect(cleared).toEqual(['creator', 'friend'])
+    expect(router.ownsChannel(account.id, 'friend')).toBe(false)
+    expect(router.ownsChannel(account.id, 'late')).toBe(false)
+    expect(accountReads).toBe(beforeStop)
+    expect(connections).toHaveLength(1)
+    expect(first.statuses.filter(({ status }) => status === 'disconnected')).toHaveLength(1)
+  } finally {
+    router.stop()
+  }
 })
 
 test('routes watched channels to their selected account and closes unused alternate sockets', async () => {

@@ -781,6 +781,7 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
     dispose: async () => {
       try {
         twitchActivityRefresh.stop()
+        twitchEventSub.stop()
         accountSessions.stopStartupConnections()
         await authServer.stop().catch((error: unknown) => {
           log.warn('OAuth server shutdown failed', { error: String(error) })
@@ -807,7 +808,6 @@ function boot(scheduleUpdateExit?: () => void): DesktopRuntime {
         twitchSenders.dispose()
         streamerMode.stop()
         providerRuntime.stop()
-        twitchEventSub.stop()
         backendConn.disconnect()
         await stopOverlay
       } finally {

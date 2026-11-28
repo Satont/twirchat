@@ -211,6 +211,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** An updater can launch the install helper only when the desktop composition has supplied an exit callback. The helper launch and restart arguments stay unchanged; after handoff, the owner requests normal window shutdown and waits for final session writes before disposing the backend. The normal quit and update paths share a single teardown and diagnostic flush.
 - **Safeguard:** If window cleanup stalls, start backend disposal after five seconds; if shutdown itself stalls, stop waiting before the install helper's 60-second limit. Tests cover handoff order, duplicate exit requests, stalled windows, and teardown failures. The singleton wiring takes effect on a fresh process; restarting a pre-change development process is required.
 
+### Round 40 — Retire Twitch EventSub account routing on shutdown
+
+- **Decision:** Stop the account coordinator when backend disposal begins. Late watches and account refreshes cannot recreate clients. The coordinator retains channel ownership while existing transports emit their final AutoMod clears, then releases it. Individual transports remain restartable during normal operation.
+- **Safeguard:** The regression verifies that shutdown closes the existing socket once and late commands neither read the active account nor create another connection.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
