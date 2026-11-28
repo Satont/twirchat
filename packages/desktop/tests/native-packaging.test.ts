@@ -4,8 +4,8 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { parseNativeSourceManifest } from '../scripts/build-gpuix-native'
 import { nativeArtifactName } from '../scripts/build-gpuix-native'
+import { parseNativeSourceManifest } from '../scripts/native-source'
 import { assertNativeBinaryTarget, stageNativeRuntime } from '../scripts/package-runtime-assets'
 import { GPUI_SOURCE_REVISION, GPUIX_SOURCE_REVISION } from '../src/services/native-runtime'
 import { literal } from './fixture-values'
@@ -118,6 +118,7 @@ test('rejects a source override whose revisions differ from the application pins
   const sourcePath = join(f.sourceRoot, 'source.json')
   const source = parseNativeSourceManifest(await Bun.file(sourcePath).json())
   await Bun.write(sourcePath, JSON.stringify({ ...source, gpuiRevision: '0'.repeat(40) }))
+  await Bun.write(join(f.sourceRoot, 'patches/test.patch'), 'tampered')
   await expect(stageNativeRuntime(f)).rejects.toThrow('source pins do not match')
   expect(await Bun.file(join(f.output, 'native', nativeArtifactName())).exists()).toBe(false)
 })

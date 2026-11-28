@@ -2,11 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 
-import {
-  boundedBuildJobs,
-  nativeArtifactName,
-  parseNativeSourceManifest,
-} from '../scripts/build-gpuix-native'
+import { boundedBuildJobs, nativeArtifactName } from '../scripts/build-gpuix-native'
+import { parseNativeSourceManifest, verifyNativeSource } from '../scripts/native-source'
 import {
   GPUIX_NATIVE_API_VERSION,
   validateNativeRuntimeManifest,
@@ -66,10 +63,18 @@ test('native source pins and patch checksums match the reviewed checkout contrac
       }),
     ]),
   )
-  for (const patch of manifest.patches) {
-    const bytes = new Uint8Array(await Bun.file(resolve(root, patch.path)).arrayBuffer())
-    expect(createHash('sha256').update(bytes).digest('hex')).toBe(patch.sha256)
-  }
+  // Compare with the pre-refactor format without pinning the test to a particular checkout.
+  const platform = 'linux'
+  const arch = 'x64'
+  const patches = await Promise.all(
+    manifest.patches.map(({ path }) => Bun.file(resolve(root, path)).bytes()),
+  )
+  const legacyIdentity = createHash('sha256')
+    .update(JSON.stringify({ manifest, platform, arch }))
+    .update(Buffer.concat(patches))
+    .digest('hex')
+    .slice(0, 16)
+  expect(await verifyNativeSource(root, manifest, { platform, arch })).toBe(legacyIdentity)
 })
 
 test('native source boundary rejects malformed pins, unsafe patch paths and unrecognized fields', () => {

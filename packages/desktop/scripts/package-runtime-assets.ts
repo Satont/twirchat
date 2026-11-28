@@ -13,7 +13,8 @@ import {
   validateNativeRuntimeManifest,
 } from '../src/services/native-runtime'
 import { PACKAGED_PAINT_WORKER, createPaintWorkerClient } from '../src/services/paint-worker-client'
-import { nativeArtifactName, parseNativeSourceManifest } from './build-gpuix-native'
+import { nativeArtifactName } from './build-gpuix-native'
+import { readNativeSourceManifest, verifyNativeSource } from './native-source'
 
 const packageManifestSchema = z.object({
   name: z.string(),
@@ -47,27 +48,10 @@ export async function stageNativeRuntime(options: {
   const artifactRoot = options.artifactRoot ?? join(desktop, 'dist/native')
   const name = nativeArtifactName()
   const path = join(artifactRoot, name)
-  const source = parseNativeSourceManifest(await Bun.file(join(sourceRoot, 'source.json')).json())
+  const source = await readNativeSourceManifest(sourceRoot)
   if (source.revision !== GPUIX_SOURCE_REVISION || source.gpuiRevision !== GPUI_SOURCE_REVISION)
     throw new Error('Native packaging source pins do not match this application.')
-  const patches = await Promise.all(
-    source.patches.map(async (patch) => {
-      if (
-        !['gpuix', 'gpui', 'cosmic-text'].includes(patch.root) ||
-        !/^patches\/[a-z\d-]+\.patch$/u.test(patch.path)
-      )
-        throw new Error('Invalid native patch path.')
-      const bytes = Buffer.from(await Bun.file(join(sourceRoot, patch.path)).arrayBuffer())
-      if (createHash('sha256').update(bytes).digest('hex') !== patch.sha256)
-        throw new Error(`Native patch checksum mismatch: ${patch.path}`)
-      return bytes
-    }),
-  )
-  const identity = createHash('sha256')
-    .update(JSON.stringify({ manifest: source, platform: process.platform, arch: process.arch }))
-    .update(Buffer.concat(patches))
-    .digest('hex')
-    .slice(0, 16)
+  const identity = await verifyNativeSource(sourceRoot, source)
   const rawManifest = z
     .object({ version: z.string(), rustToolchain: z.string() })
     .passthrough()
