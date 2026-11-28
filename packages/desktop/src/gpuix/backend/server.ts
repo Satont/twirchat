@@ -1,6 +1,5 @@
 import { dirname, join } from 'node:path'
 
-import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
 import {
   donationChannelKey,
   SHAREABLE_DONATION_PROVIDERS,
@@ -27,7 +26,6 @@ import type {
  * The result is cached on `globalThis` so `bun --hot` reloads re-mount the
  * React tree without re-booting (and re-connecting) the whole backend.
  */
-import { z } from 'zod'
 
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
 import { checkTwitchSession } from '../../auth/twitch'
@@ -61,7 +59,6 @@ import {
   spawnChannelPlayer,
 } from '../../services/channel-actions'
 import { channelAccount } from '../../services/chat-accounts'
-import { normalizedChatMessageSchema } from '../../services/persisted-schemas'
 import { createDesktopProviderRuntime } from '../../services/provider-runtime'
 import { buildSevenTvSystemMessage } from '../../services/seventv-system-message'
 import { createStreamerModeService } from '../../services/streamer-mode'
@@ -97,6 +94,7 @@ import {
 } from './api'
 import { recordChatMessage } from './chat-history'
 import type { DesktopBackend } from './contract'
+import { startDesktopDevServer } from './dev-server'
 import { createDesktopEvents, type DesktopEvents } from './events'
 import { readUiState } from './layout-api'
 import { browserCommand } from './open-url'
@@ -761,37 +759,11 @@ function boot(): DesktopRuntime {
       })
   }
 
-  // Dev-only chat injection endpoint.
-  if (nodeEnv !== 'production') {
-    Bun.serve({
-      port: DEV_SERVER_PORT,
-      async fetch(req) {
-        const url = new URL(req.url)
-        if (url.pathname === '/dev/inject-chat' && req.method === 'POST') {
-          const parsed = normalizedChatMessageSchema.safeParse(await req.json().catch(() => null))
-          if (!parsed.success) return new Response('Invalid chat message', { status: 400 })
-          events.emit('chat_message', parsed.data)
-          return new Response('ok')
-        }
-        if (url.pathname === '/dev/hook' && req.method === 'POST') {
-          // Dev-only: let the UI layer register debug actions (see main.tsx).
-          const parsed = z
-            .object({ action: z.string(), payload: z.unknown().optional() })
-            .safeParse(await req.json().catch(() => null))
-          if (!parsed.success) return new Response('Invalid debug action', { status: 400 })
-          const body = parsed.data
-          const hook = globalThis.__twirchatDevHook
-          if (!hook) return new Response('no hook', { status: 404 })
-          const result = await hook(body.action, body.payload)
-          return new Response(JSON.stringify(result ?? null), {
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        return new Response('not found', { status: 404 })
-      },
-    })
-    log.info(`[Dev] Test injection endpoint listening on port ${DEV_SERVER_PORT}`)
-  }
+  const devServer =
+    nodeEnv !== 'production'
+      ? startDesktopDevServer({ events, getDebugHook: () => globalThis.__twirchatDevHook })
+      : undefined
+  if (devServer) log.info(`[Dev] Test injection endpoint listening on port ${devServer.port}`)
 
   void plugins.initialize().catch((error) => {
     log.error('Could not load installed plugins', { error: String(error) })
@@ -805,6 +777,9 @@ function boot(): DesktopRuntime {
     shutdownPlugins,
     dispose: () => {
       disposed = true
+      void devServer?.stop().catch((error) => {
+        log.warn('Desktop dev server shutdown failed', { error: String(error) })
+      })
       clearInterval(twitchValidationTimer)
       donations.dispose()
       stopAutoChecks()
