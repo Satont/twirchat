@@ -36,7 +36,13 @@ interface ChannelSubscription {
   revision: number
 }
 
+interface JoinLookups {
+  pending: number
+  retired?: ChannelSubscription
+}
+
 export class SevenTVSubscriptionManager {
+  private joinLookups = new Map<string, JoinLookups>()
   private pendingByClient = new Map<string, Map<string, symbol>>()
   private clientSubscriptions = new Map<string, Set<ChannelSubscription>>()
   private channels = new Map<string, ChannelSubscription>()
@@ -169,11 +175,21 @@ export class SevenTVSubscriptionManager {
       this.attachClient(clientSecret, active)
       return
     }
-    const revision = active?.revision
-
     const cached = sevenTVCache.get(platform, channelId)
     let emoteSet = cached
     if (!cached || sevenTVCache.isExpired(platform, channelId)) {
+      const cohort: JoinLookups = this.joinLookups.get(channelKey) ?? { pending: 0 }
+      cohort.pending++
+      this.joinLookups.set(channelKey, cohort)
+      const baseline = active ?? cohort.retired
+      const revision = baseline?.revision
+      const snapshot = baseline?.emoteSet
+      const newerRetiredSnapshot = () => {
+        const retired = cohort.retired
+        if (retired && (retired.emoteSet !== snapshot || retired.revision !== revision))
+          return retired.emoteSet
+        return undefined
+      }
       try {
         const fetched = await this.fetchEmoteSet(platform, channelId, platformUserId)
         if (!isCurrent()) return
@@ -192,11 +208,10 @@ export class SevenTVSubscriptionManager {
         }
         const latest = sevenTVCache.get(platform, channelId)
         emoteSet =
-          latest && latest !== cached && !sevenTVCache.isExpired(platform, channelId)
+          newerRetiredSnapshot() ??
+          (latest && latest !== cached && !sevenTVCache.isExpired(platform, channelId)
             ? latest
-            : active && active.revision !== revision
-              ? active.emoteSet
-              : (fetched ?? latest ?? active?.emoteSet)
+            : (fetched ?? latest ?? baseline?.emoteSet))
         // A fresh channel with no set does not consume a user subscription slot.
         if (emoteSet === fetched && fetched?.id === null && !cached && !active) return
         if (fetched && emoteSet === fetched) sevenTVCache.set(platform, channelId, fetched)
@@ -208,18 +223,22 @@ export class SevenTVSubscriptionManager {
           return
         }
         log.error('Failed to fetch emote set', { channelId, channelKey, error: String(error) })
-        emoteSet = sevenTVCache.get(platform, channelId)
-        if (!emoteSet || sevenTVCache.isExpired(platform, channelId)) {
+        const latest = sevenTVCache.get(platform, channelId)
+        emoteSet = newerRetiredSnapshot() ?? latest
+        if (!latest || sevenTVCache.isExpired(platform, channelId)) {
           const fallback = emoteSet ?? cached
           if (fallback) this.sendEmoteSetToClient(clientSecret, platform, channelId, fallback)
           return
         }
+      } finally {
+        if (--cohort.pending === 0) this.joinLookups.delete(channelKey)
       }
     }
     if (!emoteSet) {
       log.error('No emote set found after fetch', { channelKey })
       return
     }
+    const retired = this.joinLookups.get(channelKey)?.retired
     const channel: ChannelSubscription = {
       key: channelKey,
       platform,
@@ -227,7 +246,7 @@ export class SevenTVSubscriptionManager {
       clients: new Set(),
       emoteSet,
       switchRequest: undefined,
-      revision: 0,
+      revision: retired?.emoteSet === emoteSet ? retired.revision : 0,
     }
     this.channels.set(channelKey, channel)
     if (emoteSet.id !== null)
@@ -274,6 +293,8 @@ export class SevenTVSubscriptionManager {
     subscriptions?.delete(channel)
     if (subscriptions?.size === 0) this.clientSubscriptions.delete(client)
     if (channel.clients.size !== 0) return
+    const lookups = this.joinLookups.get(channel.key)
+    if (lookups) lookups.retired = channel
     this.channels.delete(channel.key)
     if (channel.emoteSet.id !== null)
       this.release(this.emoteSetSubscriptions, channel.emoteSet.id, channel, emoteSetEvents)

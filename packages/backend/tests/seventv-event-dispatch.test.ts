@@ -625,6 +625,103 @@ test('a confirmed missing active set clears the catalog and keeps the user subsc
   }
 })
 
+test.each(['stale response', 'failed read'])(
+  'a delayed join keeps the newer detached channel after a %s',
+  async (outcome) => {
+    const events = new SevenTVEventClient()
+    const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+    const manager = new SevenTVSubscriptionManager(events)
+    const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+      platform: Platform
+      channelId: string
+    }
+    const stale = Promise.withResolvers<Response>()
+    const lookup = spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(connectionSnapshot('initial'))
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce(connectionSnapshot('replacement', ['NewAlias']))
+    const delivered: BackendToDesktopMessage[] = []
+    manager.sendToClient = (viewer, message) => {
+      if (viewer === 'delayed') delivered.push(message)
+    }
+    const join = (viewer: string) => manager.subscribeClient(viewer, [channel], () => true)
+    const expire = () => {
+      const snapshot = sevenTVCache.get(channel.platform, channel.channelId)
+      if (!snapshot) throw new Error('Expected a cached snapshot')
+      sevenTVCache.set(channel.platform, channel.channelId, snapshot, -1)
+      sevenTVCache.cleanup()
+    }
+    try {
+      await join('initial')
+      expire()
+      const delayed = join('delayed')
+      manager.cleanupClient('initial')
+      await join('replacement')
+      expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('replacement')
+      manager.cleanupClient('replacement')
+      if (outcome === 'stale response') {
+        expire()
+        stale.resolve(connectionSnapshot('stale'))
+      } else {
+        stale.resolve(new Response(null, { status: 503 }))
+      }
+      await delayed
+      expect(delivered).toEqual([
+        {
+          type: 'seventv_emote_set',
+          ...channel,
+          emotes: [expect.objectContaining({ alias: 'NewAlias' })],
+        },
+      ])
+      expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe(
+        outcome === 'stale response' ? undefined : 'replacement',
+      )
+      expect(manager.getStats()).toMatchObject({ connectedClients: 1, emoteSetSubscriptions: 1 })
+    } finally {
+      stale.resolve(connectionSnapshot('stale'))
+      for (const viewer of ['initial', 'replacement', 'delayed']) manager.cleanupClient(viewer)
+      connect.mockRestore()
+      lookup.mockRestore()
+    }
+  },
+)
+
+test('reattaching the same snapshot does not invalidate a newer join lookup', async () => {
+  const events = new SevenTVEventClient()
+  const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager(events)
+  const first = Promise.withResolvers<Response>()
+  const second = Promise.withResolvers<Response>()
+  const lookup = spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(connectionSnapshot(setId))
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValueOnce(second.promise)
+  const join = (viewer: string) =>
+    manager.subscribeClient(viewer, [{ platform: 'kick', channelId: 'dispatch-kick' }], () => true)
+  try {
+    await join('initial')
+    sevenTVCache.invalidate('kick', 'dispatch-kick')
+    const reattach = join('reattach')
+    events.onEvent?.(
+      sevenTVEventSchema.parse({ type: 'emote_set.update', body: { id: setId, pushed: [pushed] } }),
+    )
+    manager.cleanupClient('initial')
+    const refresh = join('refresh')
+    first.resolve(connectionSnapshot('stale'))
+    await reattach
+    manager.cleanupClient('reattach')
+    second.resolve(connectionSnapshot('fresh'))
+    await refresh
+    expect(sevenTVCache.get('kick', 'dispatch-kick')?.id).toBe('fresh')
+  } finally {
+    first.resolve(connectionSnapshot('stale'))
+    second.resolve(connectionSnapshot('fresh'))
+    for (const viewer of ['initial', 'reattach', 'refresh']) manager.cleanupClient(viewer)
+    lookup.mockRestore()
+    connect.mockRestore()
+  }
+})
+
 test('an expired active set refreshes for all viewers when another joins', async () => {
   const connect = spyOn(sevenTVEventClient, 'connect').mockResolvedValue(undefined)
   const manager = new SevenTVSubscriptionManager()

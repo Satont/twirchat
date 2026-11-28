@@ -243,8 +243,13 @@ The [architecture map](architecture.md) describes the current system. This log r
 
 ### Round 46 — Clear confirmed inactive 7TV sets without dropping viewers
 
-- **Decision:** Treat an explicit GraphQL `activeEmoteSet: null` for a known connection as a snapshot without a set ID, distinct from an empty identified set or an incomplete response. On a retained channel, publish an empty catalog through the existing wire message, release only the obsolete set interests, and keep viewers and the user interest for later activation. A cold channel with no history still does not acquire a user interest for a missing set.
+- **Decision:** Treat an explicit GraphQL `activeEmoteSet: null` for a known connection as a snapshot without a set ID, distinct from an empty identified set or an incomplete response. On a retained channel, publish an empty catalog through the existing wire message, release only the obsolete set interests, and keep viewers and the user interest for later activation. A channel without an active record or a cached snapshot still does not acquire a user interest for a missing set.
 - **Safeguard:** The regression contrasts omission with explicit null, verifies the empty snapshot for existing and late viewers, ignores old-set events, and restores the catalog through the existing user-update path. Existing channel and revision checks apply to empty snapshots as well.
+
+### Round 47 — Preserve the latest channel snapshot across overlapping joins
+
+- **Decision:** While a channel has pending join lookups, retain its most recently detached record independently of cache expiry. A lookup may refresh its original revision, but cannot overwrite a newer detached record or revision. The record is released when the last lookup settles; this does not extend the cache TTL.
+- **Safeguard:** A deferred join spans a channel replacement, the replacement's final detach, and cache cleanup. The waiting viewer receives the replacement catalog instead of the stale provider response.
 
 ## Next investigations
 
