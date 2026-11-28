@@ -181,6 +181,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** An upgraded EventAPI socket must receive a valid Hello within ten seconds. Hello clears that socket's deadline and hands liveness over to the existing heartbeat watchdog. Malformed Hello and early heartbeat frames do not satisfy the deadline. A missed Hello uses the same jittered retry as a remote close; new subscriptions cannot bypass a scheduled retry.
 - **Safeguard:** A loopback regression verifies that a malformed first session is retired without sending subscriptions, the next valid session restores the desired subscription exactly once, and an explicit connect does not skip the retry delay. Socket readiness reporting, the upstream and desktop message shapes, and reconnection without RESUME are unchanged. Backfill of missed events remains separate.
 
+### Round 34 — Give EventAPI retries a single scheduler
+
+- **Decision:** A remote close, a missing Hello, a heartbeat timeout, and an upstream reconnect opcode retire the socket through the same retry path. The existing jittered backoff is installed before disconnect notification; neither new demand nor a callback can open a second connection while the retry is pending. Desired subscriptions are unchanged and replay on a valid Hello.
+- **Safeguard:** Isolated loopback cases verify the retry delay and one replay after both a heartbeat timeout and an upstream reconnect request. Existing close-code handling and the reset-on-Hello policy are unchanged. Backfill is not part of this transport change.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

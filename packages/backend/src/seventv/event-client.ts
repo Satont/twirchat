@@ -68,7 +68,7 @@ export class SevenTVEventClient {
         this.helloTimer = setTimeout(() => {
           if (this.ws !== ws || this.receivedHello) return
           log.warn('Timed out waiting for 7TV Hello')
-          this.retryAfterClose()
+          this.retry()
         }, this.helloTimeoutMs)
         log.info('WebSocket connected')
       }
@@ -80,7 +80,7 @@ export class SevenTVEventClient {
       ws.onclose = (event) => {
         if (this.ws !== ws) return
         log.info('WebSocket closed', { code: event.code, reason: event.reason })
-        this.retryAfterClose(event.code)
+        this.retry(event.code)
       }
 
       ws.onerror = (error) => {
@@ -101,7 +101,7 @@ export class SevenTVEventClient {
     this.onDisconnected?.()
   }
 
-  private retryAfterClose(closeCode?: number): void {
+  private retry(closeCode?: number): void {
     this.cleanup()
     this.scheduleReconnect(closeCode)
     this.onDisconnected?.()
@@ -179,7 +179,7 @@ export class SevenTVEventClient {
         case 4: {
           // Reconnect
           log.info('Server requested reconnect')
-          this.reconnect()
+          this.retry()
           break
         }
         case 5: {
@@ -249,7 +249,7 @@ export class SevenTVEventClient {
       // If no heartbeat for 3 intervals, consider connection dead
       if (elapsed > this.heartbeatInterval * 3) {
         log.warn('Heartbeat timeout, reconnecting...')
-        this.reconnect()
+        this.retry()
       }
     }, checkInterval)
   }
@@ -287,15 +287,6 @@ export class SevenTVEventClient {
     if (this.receivedHello && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
     }
-  }
-
-  private reconnect(): void {
-    this.cleanup()
-    this.onDisconnected?.()
-    if (!this.shouldReconnect) return
-    this.connect().catch((error: unknown) =>
-      log.error('Connection failed', { error: String(error) }),
-    )
   }
 
   private scheduleReconnect(closeCode?: number): void {
