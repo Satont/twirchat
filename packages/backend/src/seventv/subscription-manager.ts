@@ -3,13 +3,15 @@ import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
-import { removeSetEmote, sevenTVCache, updateSetEmote, type CachedEmoteSet } from './cache'
+import { sevenTVCache, type CachedEmoteSet } from './cache'
 import { getEmoteSetById, getUserByConnection } from './client'
 import {
   createSevenTvEmote,
   createSevenTvEmoteFromEventValue,
   isSevenTvEventEmoteUpdate,
+  removeSetEmote,
   selectPreferredSevenTvImageUrl,
+  updateSetEmote,
 } from './emote'
 import type { SevenTVEmote } from './emote'
 import { sevenTVEventClient, type SevenTVEventClient } from './event-client'
@@ -416,10 +418,8 @@ export class SevenTVSubscriptionManager {
     return {
       channelId,
       emotes,
-      fetchedAt: Date.now(),
       ...(emoteSet ? { id: emoteSet.id, name: emoteSet.name } : { id: null, name: null }),
       platform,
-      ttl: 5 * 60 * 1000,
       userId,
       platformUserId,
     }

@@ -281,6 +281,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** The hosted Twitch resolver forwards the caller's signal through Helix. A retired caller stops waiting for the shared app grant without cancelling it for other callers. The Helix boundary still owns the eight-second timeout per attempt and the single 401 retry; user-profile reads retain their twelve-second section budget.
 - **Safeguard:** Tests cancel a caller during both cold grant acquisition and 401 refresh while another caller succeeds. Identity lookup tests verify that both caller cancellation and the Helix deadline reach the request.
 
+### Round 54 — Separate hosted 7TV cache expiry from catalog mutation
+
+- **Decision:** The cache owns snapshot expiry. Remove unused cache mutation methods and write-only snapshot timestamps; the subscription manager applies emote changes through the catalog helpers without refreshing the TTL.
+- **Safeguard:** Tests pin exact alias casing and confirm that the cache returns the same stale snapshot until cleanup, including the five-minute expiry boundary.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

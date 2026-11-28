@@ -103,3 +103,26 @@ function findPreferredImage<T extends { url?: string | null; name?: string | nul
 
   return images?.[0]
 }
+
+export function updateSetEmote(
+  emotes: Map<string, SevenTVEmote>,
+  id: string,
+  update: Partial<SevenTVEmote>,
+): SevenTVEmote | undefined {
+  for (const [alias, emote] of emotes) {
+    if (emote.id !== id) continue
+    const changed = { ...emote, ...update }
+    const nextAlias = update.alias || alias
+    if (nextAlias !== alias) emotes.delete(alias)
+    emotes.set(nextAlias, changed)
+    return changed
+  }
+  return undefined
+}
+
+export function removeSetEmote(emotes: Map<string, SevenTVEmote>, id: string): boolean {
+  for (const [alias, emote] of emotes) {
+    if (emote.id === id) return emotes.delete(alias)
+  }
+  return false
+}

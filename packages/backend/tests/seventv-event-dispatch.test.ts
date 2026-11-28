@@ -194,8 +194,6 @@ test('real object dispatches update both platform caches and attribute chat noti
         channelId: channel.channelId,
         platform: channel.platform,
         emotes: new Map(),
-        fetchedAt: Date.now(),
-        ttl: 60000,
       })
       await manager.subscribeClient(channel.client, [channel], () => true)
     }
@@ -297,8 +295,6 @@ test('a shared set keeps routing to each channel until its last viewer leaves', 
         platform,
         channelId,
         emotes: new Map(),
-        fetchedAt: Date.now(),
-        ttl: 60000,
       })
     }
     await manager.subscribeClient('both', [first, second], () => true)
@@ -873,8 +869,6 @@ test('an expired active set refreshes for all viewers when another joins', async
       platform: channel.platform,
       channelId: channel.channelId,
       emotes: new Map(),
-      fetchedAt: Date.now(),
-      ttl: 60000,
     }
     sevenTVCache.set(channel.platform, channel.channelId, snapshot)
     await manager.subscribeClient('viewer', [channel], () => true)
