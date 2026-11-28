@@ -748,11 +748,16 @@ async function resolveAvatarRemote(params: {
 
 // ── Moderation (port of internal/bridge/moderation_handlers.go) ────────────
 
-/**
- * Turns a failed backend response into a user-facing error: the route's
- * `{ error }` body when present, with expired platform OAuth called out.
- */
-async function backendFailure(action: string, res: Response): Promise<Error> {
+async function backendFailure(
+  action: string,
+  res: Response,
+  credentials: 'hosted' | 'platform-user',
+): Promise<Error> {
+  if (credentials === 'hosted') {
+    await res.body?.cancel().catch(() => {})
+    return new Error(t('runtime.api.httpStatus', { action, status: res.status }))
+  }
+
   let detail = ''
   try {
     const body = z.object({ error: z.string().optional() }).parse(await res.json())
@@ -1303,7 +1308,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, platform, text }),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.platformCommandFailed'), res)
+      if (!res.ok)
+        throw await backendFailure(
+          t('runtime.api.action.platformCommandFailed'),
+          res,
+          'platform-user',
+        )
       return platformCommandResultSchema.parse(await res.json())
     },
 
@@ -1339,7 +1349,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify({ ...body, platform }),
       })
       if (!res.ok)
-        throw await backendFailure(t('runtime.api.action.checkModerationPermissions'), res)
+        throw await backendFailure(
+          t('runtime.api.action.checkModerationPermissions'),
+          res,
+          'platform-user',
+        )
       return z.object({ canModerate: z.boolean() }).parse(await res.json())
     },
 
@@ -1368,7 +1382,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           durationSeconds: params.durationSeconds,
         }),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.moderationFailed'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.moderationFailed'), res, 'platform-user')
       const result = z
         .object({
           success: z.boolean(),
@@ -1385,7 +1400,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
       )
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadStreamInfo'), res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadStreamInfo'), res, 'hosted')
       return streamStatusResponseSchema.parse(await res.json())
     },
 
@@ -1415,7 +1430,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.updateStream'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.updateStream'), res, 'platform-user')
       return updateStreamResponseSchema.parse(await res.json())
     },
 
@@ -1423,7 +1439,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
       )
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.categorySearchFailed'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.categorySearchFailed'), res, 'hosted')
       return searchCategoriesResponseSchema.parse(await res.json())
     },
 
@@ -1439,7 +1456,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           })),
         }),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadChannelStatus'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.loadChannelStatus'), res, 'hosted')
       return channelsStatusResponseSchema.parse(await res.json())
     },
 
@@ -1475,7 +1493,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify(request),
       })
       if (!response.ok)
-        throw await backendFailure(t('runtime.api.action.loadUserProfile'), response)
+        throw await backendFailure(t('runtime.api.action.loadUserProfile'), response, 'hosted')
       const profile = userProfileSnapshotSchema.parse(await response.json())
       const [enriched, bannerUrl] = await Promise.all([
         accessToken
@@ -1505,7 +1523,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadAccountDetails'), res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.loadAccountDetails'), res, 'hosted')
       const metadata = userCardMetadataResponseSchema.parse(await res.json())
       return { ...metadata, ...(await details) }
     },

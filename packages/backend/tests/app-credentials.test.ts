@@ -39,6 +39,32 @@ afterEach(() => {
   mock.restore()
 })
 
+test('app grant HTTP failures discard provider bodies and expose safe errors', async () => {
+  const probes: (() => void)[] = []
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      expect([twitchTokenUrl, kickTokenUrl]).toContain(fetchUrl(input))
+      const response = new Response('Unauthorized: synthetic upstream detail', { status: 401 })
+      if (!response.body) throw new Error('Expected a fixture body')
+      const text = spyOn(response, 'text')
+      const cancel = spyOn(response.body, 'cancel')
+      probes.push(() => {
+        expect(text).not.toHaveBeenCalled()
+        expect(cancel).toHaveBeenCalledTimes(1)
+      })
+      return response
+    },
+    { preconnect: originalFetch.preconnect },
+  )
+  const errors = await Promise.allSettled([getHelixAuthorization(), createKickRead()])
+  expect(errors).toEqual([
+    { status: 'rejected', reason: new Error('Unable to obtain Twitch application credentials.') },
+    { status: 'rejected', reason: new Error('Unable to obtain Kick application credentials.') },
+  ])
+  expect(probes).toHaveLength(2)
+  for (const verify of probes) verify()
+})
+
 test('coalesces Twitch grants, caches by provider, and refreshes at the 60-second margin', async () => {
   const twitchGrant = Promise.withResolvers<Response>()
   let twitchGrants = 0

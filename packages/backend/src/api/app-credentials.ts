@@ -1,7 +1,9 @@
+import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
 import { config } from '../config.ts'
 
+const log = logger('app-credentials')
 // Leave time for the API request after a cold grant.
 const APP_GRANT_TIMEOUT_MS = 8000
 const TWITCH_REQUEST_TIMEOUT_MS = 8000
@@ -29,7 +31,9 @@ async function requestAppGrant({ provider, endpoint, clientId, clientSecret }: A
     signal: AbortSignal.timeout(APP_GRANT_TIMEOUT_MS),
   })
   if (!res.ok) {
-    throw new Error(`Failed to get ${provider} app token: ${res.status} ${await res.text()}`)
+    await res.body?.cancel().catch(() => {})
+    log.warn('App grant rejected', { provider, status: res.status })
+    throw new Error(`Unable to obtain ${provider} application credentials.`)
   }
   return appTokenResponse.parse(await res.json())
 }
