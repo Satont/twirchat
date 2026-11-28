@@ -32,7 +32,7 @@ interface ChannelSubscription {
   channelId: string
   clients: Set<string>
   emoteSet: CachedEmoteSet
-  switchRequest: symbol | undefined
+  switchRequest: { readonly target: string } | undefined
   revision: number
 }
 
@@ -661,13 +661,14 @@ export class SevenTVSubscriptionManager {
   }
 
   private async switchEmoteSet(channel: ChannelSubscription, id: string): Promise<void> {
-    const request = Symbol()
-    channel.switchRequest = request
+    if (channel.switchRequest?.target === id) return
     channel.revision++
     if (channel.emoteSet.id === id) {
       channel.switchRequest = undefined
       return
     }
+    const request = { target: id }
+    channel.switchRequest = request
     const { key, platform, channelId } = channel
     let emoteSet: Awaited<ReturnType<typeof this.fetchEmoteSetById>>
     try {

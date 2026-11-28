@@ -92,8 +92,8 @@ const connectionSnapshot = (id: string | null, aliases: string[] = []) =>
     },
   })
 const result = (id: string) => Response.json({ data: { emoteSets: { emoteSet: set(id) } } })
-const switchTo = (id: string) =>
-  sevenTVEventClient.onEvent?.(
+const switchTo = (id: string, events = sevenTVEventClient) =>
+  events.onEvent?.(
     sevenTVEventSchema.parse({
       type: 'user.update',
       body: {
@@ -421,6 +421,85 @@ test('set switches retain existing updates until the latest lookup commits', asy
     for (const client of ['first', 'returning', 'joiner']) manager.cleanupClient(client)
     globalThis.fetch = originalFetch
     unsubscribe.mockRestore()
+    connect.mockRestore()
+  }
+})
+
+test('duplicate active-set switches keep the lookup that already owns the target', async () => {
+  const events = new SevenTVEventClient()
+  const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager(events)
+  const pending = Promise.withResolvers<Response>()
+  const lookup = spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(connectionSnapshot('initial'))
+    .mockReturnValueOnce(pending.promise)
+    .mockResolvedValue(new Response(null, { status: 503 }))
+  const messages: BackendToDesktopMessage[] = []
+  manager.sendToClient = (_viewer, message) => messages.push(message)
+  const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  try {
+    await manager.subscribeClient('viewer', [channel], () => true)
+    messages.length = 0
+    switchTo('next', events)
+    switchTo('next', events)
+    pending.resolve(result('next'))
+    await Bun.sleep(0)
+    expect(sevenTVCache.get('kick', channel.channelId)?.id).toBe('next')
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(messages).toEqual([
+      { type: 'seventv_emote_set', ...channel, emotes: [] },
+      { type: 'seventv_system_message', ...channel, action: 'set_changed', setName: 'next' },
+    ])
+  } finally {
+    pending.resolve(result('next'))
+    manager.cleanupClient('viewer')
+    lookup.mockRestore()
+    connect.mockRestore()
+  }
+})
+
+test('returning to the active set retires the pending lookup for the same future target', async () => {
+  const events = new SevenTVEventClient()
+  const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager(events)
+  const retired = Promise.withResolvers<Response>()
+  const current = Promise.withResolvers<Response>()
+  const lookup = spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(connectionSnapshot('initial'))
+    .mockReturnValueOnce(retired.promise)
+    .mockReturnValueOnce(current.promise)
+  const messages: BackendToDesktopMessage[] = []
+  manager.sendToClient = (_viewer, message) => messages.push(message)
+  try {
+    await manager.subscribeClient(
+      'viewer',
+      [{ platform: 'kick', channelId: 'dispatch-kick' }],
+      () => true,
+    )
+    messages.length = 0
+    switchTo('next', events)
+    switchTo('initial', events)
+    switchTo('next', events)
+    expect(lookup).toHaveBeenCalledTimes(3)
+    retired.resolve(result('next'))
+    await Bun.sleep(0)
+    expect(messages).toEqual([])
+    expect(sevenTVCache.get('kick', 'dispatch-kick')?.id).toBe('initial')
+    current.resolve(result('next'))
+    await until(() => messages.length >= 2)
+    expect(messages.map(({ type }) => type)).toEqual([
+      'seventv_emote_set',
+      'seventv_system_message',
+    ])
+    expect(sevenTVCache.get('kick', 'dispatch-kick')?.id).toBe('next')
+  } finally {
+    retired.resolve(result('next'))
+    current.resolve(result('next'))
+    manager.cleanupClient('viewer')
+    lookup.mockRestore()
     connect.mockRestore()
   }
 })

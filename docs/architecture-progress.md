@@ -251,6 +251,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** While a channel has pending join lookups, retain its most recently detached record independently of cache expiry. A lookup may refresh its original revision, but cannot overwrite a newer detached record or revision. The record is released when the last lookup settles; this does not extend the cache TTL.
 - **Safeguard:** A deferred join spans a channel replacement, the replacement's final detach, and cache cleanup. The waiting viewer receives the replacement catalog instead of the stale provider response.
 
+### Round 48 — Keep one owner for a pending 7TV set switch
+
+- **Decision:** A pending switch carries its target and serves as its own identity fence. Repeated events for that target leave the existing lookup and revision untouched. A different target still supersedes the request, including a return to the currently active set.
+- **Safeguard:** A duplicate cannot discard a successful lookup by starting a second read that fails. An older response for a superseded target cannot publish even if a later switch names the same target again.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
