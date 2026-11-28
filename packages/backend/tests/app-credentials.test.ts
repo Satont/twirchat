@@ -78,6 +78,56 @@ test('coalesces Twitch grants, caches by provider, and refreshes at the 60-secon
   expect([twitchGrants, kickGrants]).toEqual([2, 1])
 })
 
+for (const [description, renewedToken] of [
+  ['with a different token', 'grant-2'],
+  ['with the same token', 'grant-1'],
+]) {
+  test(`a delayed Helix 401 cannot evict a newer grant ${description}`, async () => {
+    const firstAttempt = Promise.withResolvers<void>()
+    const delayedResponse = Promise.withResolvers<Response>()
+    const attempts: (string | null)[] = []
+    let grants = 0
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = fetchUrl(input)
+        if (url === twitchTokenUrl) {
+          grants++
+          return Response.json({
+            access_token: grants === 1 ? 'grant-1' : renewedToken,
+            expires_in: 3600,
+          })
+        }
+        if (url !== helixUrl) throw new Error(`Unexpected fetch: ${url}`)
+        const authorization = new Headers(init?.headers).get('Authorization')
+        attempts.push(authorization)
+        if (attempts.length === 1) {
+          firstAttempt.resolve()
+          return delayedResponse.promise
+        }
+        if (attempts.length === 2) return new Response(null, { status: 401 })
+        return Response.json(authorization)
+      },
+      { preconnect: originalFetch.preconnect },
+    )
+
+    const delayed = getHelixAuthorization()
+    await firstAttempt.promise
+    const refreshed = await getHelixAuthorization()
+    delayedResponse.resolve(new Response(null, { status: 401 }))
+    expect(await delayed).toBe(`Bearer ${renewedToken}`)
+    expect(refreshed).toBe(`Bearer ${renewedToken}`)
+    expect(await getHelixAuthorization()).toBe(`Bearer ${renewedToken}`)
+    expect(attempts).toEqual([
+      'Bearer grant-1',
+      'Bearer grant-1',
+      `Bearer ${renewedToken}`,
+      `Bearer ${renewedToken}`,
+      `Bearer ${renewedToken}`,
+    ])
+    expect(grants).toBe(2)
+  })
+}
+
 test('Helix preserves caller options, owns auth headers, and retries a 401 only once', async () => {
   const signal = new AbortController().signal
   const headers = { Authorization: 'override', 'Client-Id': 'override', 'X-Example': 'kept' }

@@ -38,14 +38,13 @@ async function requestAppGrant({
   return appTokenResponse.parse(await res.json())
 }
 
-let twitchAppToken: string | null = null
-let twitchAppTokenExpiresAt = 0
-let pendingTwitchAppToken: Promise<string> | null = null
-
-function invalidateTwitchAppToken(): void {
-  twitchAppToken = null
-  twitchAppTokenExpiresAt = 0
+interface TwitchAppGrant {
+  readonly token: string
+  readonly expiresAt: number
 }
+
+let twitchAppGrant: TwitchAppGrant | null = null
+let pendingTwitchAppGrant: Promise<TwitchAppGrant> | null = null
 
 function getTwitchHelixHeaders(token: string, headers?: RequestInit['headers']): Headers {
   const nextHeaders = new Headers(headers)
@@ -55,18 +54,18 @@ function getTwitchHelixHeaders(token: string, headers?: RequestInit['headers']):
   return nextHeaders
 }
 
-async function getTwitchAppToken(): Promise<string> {
-  if (twitchAppToken && Date.now() < twitchAppTokenExpiresAt - REFRESH_MARGIN_MS) {
-    return twitchAppToken
+async function getTwitchAppGrant(): Promise<TwitchAppGrant> {
+  if (twitchAppGrant?.token && Date.now() < twitchAppGrant.expiresAt - REFRESH_MARGIN_MS) {
+    return twitchAppGrant
   }
-  // Concurrent requests after a restart or expiry share one token request.
-  pendingTwitchAppToken ??= requestTwitchAppToken().finally(() => {
-    pendingTwitchAppToken = null
+  // Concurrent requests after a restart or expiry share one grant request.
+  pendingTwitchAppGrant ??= requestTwitchAppGrant().finally(() => {
+    pendingTwitchAppGrant = null
   })
-  return pendingTwitchAppToken
+  return pendingTwitchAppGrant
 }
 
-async function requestTwitchAppToken(): Promise<string> {
+async function requestTwitchAppGrant(): Promise<TwitchAppGrant> {
   const data = await requestAppGrant({
     provider: 'Twitch',
     endpoint: 'https://id.twitch.tv/oauth2/token',
@@ -75,20 +74,18 @@ async function requestTwitchAppToken(): Promise<string> {
     signal: AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 
-  twitchAppToken = data.access_token
-  twitchAppTokenExpiresAt = Date.now() + data.expires_in * 1000
-
-  return twitchAppToken
+  twitchAppGrant = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 }
+  return twitchAppGrant
 }
 
 export async function fetchTwitchHelixWithAppToken(
   input: string | URL,
   init: RequestInit = {},
 ): Promise<Response> {
-  const token = await getTwitchAppToken()
+  const grant = await getTwitchAppGrant()
   const response = await fetch(input, {
     ...init,
-    headers: getTwitchHelixHeaders(token, init.headers),
+    headers: getTwitchHelixHeaders(grant.token, init.headers),
     signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 
@@ -96,12 +93,13 @@ export async function fetchTwitchHelixWithAppToken(
     return response
   }
 
-  invalidateTwitchAppToken()
+  // A delayed rejection applies only to the grant used by that request.
+  if (twitchAppGrant === grant) twitchAppGrant = null
 
-  const refreshedToken = await getTwitchAppToken()
+  const refreshedGrant = await getTwitchAppGrant()
   return fetch(input, {
     ...init,
-    headers: getTwitchHelixHeaders(refreshedToken, init.headers),
+    headers: getTwitchHelixHeaders(refreshedGrant.token, init.headers),
     signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 }
