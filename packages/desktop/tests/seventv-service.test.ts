@@ -155,6 +155,26 @@ describe('sevenTVService', () => {
     })
   })
 
+  it('releases own subscriptions by canonical identity without dropping a watched co-owner', async () => {
+    const messages: DesktopToBackendMessage[] = []
+    sevenTVService.sendToBackend = (message) => messages.push(message)
+    await sevenTVService.subscribeToChannel('kick', '1', ['same-slug'], undefined, 'own:kick')
+    await sevenTVService.subscribeToChannel('kick', '2', ['same-slug'], undefined, 'own:kick')
+    await sevenTVService.subscribeToChannel('kick', '2', ['same-slug'], undefined, 'watched:two')
+    await sevenTVService.unsubscribeOwner('own:kick')
+    expect(sevenTVService.getSubscribedChannels().map(({ channelId }) => channelId)).toEqual(['2'])
+    expect(messages.filter(({ type }) => type === 'seventv_unsubscribe')).toEqual([
+      { type: 'seventv_unsubscribe', channelId: '1', platform: 'kick' },
+    ])
+    await sevenTVService.unsubscribeFromChannel('kick', 'same-slug', 'watched:two')
+    expect(sevenTVService.getSubscribedChannels()).toEqual([])
+    expect(messages.at(-1)).toEqual({
+      type: 'seventv_unsubscribe',
+      channelId: '2',
+      platform: 'kick',
+    })
+  })
+
   it('does not resubscribe late emote data after its final owner has closed', async () => {
     sevenTVService.sendToBackend = () => {}
     await sevenTVService.subscribeToChannel('twitch', 'closed', [], undefined, 'watched:closed')

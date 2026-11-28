@@ -23,11 +23,36 @@ export interface AccountSessionDependencies {
 export function createAccountSessions(dependencies: AccountSessionDependencies) {
   const queues = new Map<Platform, Promise<void>>()
   const startupAttempts = new Map<Platform, symbol>()
+  const disconnecting = new Map<Platform, Promise<void>>()
+  const lifetime = new AbortController()
   let startupStopped = false
+  let disposal: Promise<void> | undefined
+
+  function stopStartupConnections(): void {
+    startupStopped = true
+    startupAttempts.clear()
+  }
 
   function disconnect(platform: Platform): Promise<void> {
     startupAttempts.delete(platform)
-    return dependencies.disconnect(platform)
+    const pending = disconnecting.get(platform)
+    if (pending) return pending
+    const next = Promise.resolve()
+      .then(() => dependencies.disconnect(platform))
+      .finally(() => disconnecting.delete(platform))
+    disconnecting.set(platform, next)
+    return next
+  }
+
+  async function disconnectAll(platforms: readonly Platform[]): Promise<void> {
+    const results = await Promise.allSettled(platforms.map(disconnect))
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'rejected')
+        log.warn('Own chat shutdown failed', {
+          platform: platforms[index],
+          error: String(result.reason),
+        })
+    }
   }
 
   async function connectAtStartup(
@@ -52,7 +77,10 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
   }
 
   function enqueue(platform: Platform, operation: () => Promise<void>): Promise<void> {
-    const pending = (queues.get(platform) ?? Promise.resolve()).catch(() => {}).then(operation)
+    if (disposal) return Promise.resolve()
+    const pending = (queues.get(platform) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => (disposal ? undefined : operation()))
     queues.set(platform, pending)
     runInBackground(
       pending
@@ -79,7 +107,9 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     signal?.throwIfAborted()
     resolve(platform, accountId)
     if (!force && (dependencies.active(platform)?.id ?? null) === accountId) return
+    const connectionSignal = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal
     await disconnect(platform)
+    if (disposal) return
     signal?.throwIfAborted()
     const account = dependencies.select(platform, accountId)
     if (accountId === null) log.info('Active account deactivated', { platform })
@@ -90,25 +120,34 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
       } catch (error) {
         failures.push(String(error))
       }
+      if (disposal) return
       signal?.throwIfAborted()
       const connected = await Promise.allSettled([
-        dependencies.connectOwn(platform, account, signal),
-        dependencies.reconnectWatched(platform, signal),
+        dependencies.connectOwn(platform, account, connectionSignal),
+        dependencies.reconnectWatched(platform, connectionSignal),
       ])
       for (const result of connected)
         if (result.status === 'rejected') failures.push(String(result.reason))
     } finally {
-      if (!signal?.aborted) dependencies.changed(platform, true)
+      if (!connectionSignal.aborted) dependencies.changed(platform, true)
     }
+    if (disposal) return
     signal?.throwIfAborted()
     if (failures.length)
       throw new Error(t('notices.accounts.reconnectFailed', { failures: failures.join('; ') }))
   }
   return {
     connectAtStartup,
-    stopStartupConnections(): void {
-      startupStopped = true
-      startupAttempts.clear()
+    stopStartupConnections,
+    get isDisposed() {
+      return disposal !== undefined
+    },
+    dispose(platforms: readonly Platform[]): Promise<void> {
+      if (disposal) return disposal
+      stopStartupConnections()
+      disposal = disconnectAll(platforms)
+      lifetime.abort()
+      return disposal
     },
     select(
       platform: Platform,
@@ -116,6 +155,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
       force = false,
       signal?: AbortSignal,
     ): Promise<void> {
+      if (disposal) return Promise.resolve()
       try {
         resolve(platform, accountId)
       } catch (error) {
@@ -126,11 +166,14 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     reconnectOwn(platform: Platform): Promise<void> {
       return enqueue(platform, async () => {
         await disconnect(platform)
+        if (disposal) return
         await dependencies.refreshIdentity(platform)
-        await dependencies.connectOwn(platform, dependencies.active(platform))
+        if (disposal) return
+        await dependencies.connectOwn(platform, dependencies.active(platform), lifetime.signal)
       })
     },
     forget(accountId: string, isCurrent = () => true): Promise<void> {
+      if (disposal) return Promise.resolve()
       const requested = dependencies.find(accountId)
       if (!requested) return Promise.reject(new Error(t('notices.accounts.missing')))
       return enqueue(requested.platform, async () => {
@@ -138,9 +181,9 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
         if (!account || !isCurrent()) return
         if (dependencies.active(account.platform)?.id === accountId)
           await transition(account.platform, null, false)
-        if (!isCurrent()) return
+        if (disposal || !isCurrent()) return
         await dependencies.removeSession?.(account)
-        if (!isCurrent()) return
+        if (disposal || !isCurrent()) return
         dependencies.remove(accountId)
         log.info('Saved account removed', { platform: account.platform })
         dependencies.changed(account.platform, false)

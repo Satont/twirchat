@@ -189,10 +189,8 @@ function boot(): DesktopRuntime {
   const kickAdapter = new KickAdapter()
   const youtubeAdapter = new YouTubeAdapter()
   const vkPlayAdapter = new VkPlayAdapter()
-  aggregator.registerAdapter(twitchAdapter)
-  aggregator.registerAdapter(kickAdapter)
-  aggregator.registerAdapter(youtubeAdapter)
-  aggregator.registerAdapter(vkPlayAdapter)
+  const ownAdapters = [twitchAdapter, kickAdapter, youtubeAdapter, vkPlayAdapter]
+  for (const adapter of ownAdapters) aggregator.registerAdapter(adapter)
 
   const overlayServer = startOverlayServer()
 
@@ -332,10 +330,13 @@ function boot(): DesktopRuntime {
         ])
     },
     disconnect: async (platform) => {
-      const channel = currentStatuses.get(platform)?.channelLogin
-      await aggregator.getAdapter(platform)?.disconnect()
-      providerRuntime.setJoined(`own:${platform}`, platform, null)
-      if (channel) await sevenTVService.unsubscribeFromChannel(platform, channel, `own:${platform}`)
+      const owner = `own:${platform}`
+      try {
+        await aggregator.getAdapter(platform)?.disconnect()
+      } finally {
+        providerRuntime.setJoined(owner, platform, null)
+        await sevenTVService.unsubscribeOwner(owner)
+      }
     },
     refreshIdentity: async (platform) => {
       providerRuntime.refreshAccounts()
@@ -795,7 +796,10 @@ function boot(): DesktopRuntime {
       void shutdownPlugins().catch((error) => {
         log.warn('Plugin shutdown failed', { error: String(error) })
       })
-      await watchedChannelManager.dispose()
+      await Promise.all([
+        accountSessions.dispose(ownAdapters.map(({ platform }) => platform)),
+        watchedChannelManager.dispose(),
+      ])
       twitchHistory.dispose()
       twitchBadges.dispose()
       twitchSenders.dispose()

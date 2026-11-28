@@ -1241,6 +1241,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     joinChannel: async ({ platform, channelSlug }) => {
+      if (ctx.accountSessions?.isDisposed) return
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) {
         log.warn('No adapter registered for platform', { platform })
@@ -1250,13 +1251,18 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setJoined(`own:${platform}`, platform, channelSlug)
       adapter
         .connect(channelSlug)
-        .then(() => subscribeSevenTv(platform, channelSlug, adapter))
+        .then(() =>
+          ctx.accountSessions?.isDisposed
+            ? undefined
+            : subscribeSevenTv(platform, channelSlug, adapter),
+        )
         .catch((err) => {
           log.error('Failed to connect', { platform, channelSlug, error: String(err) })
         })
     },
 
     leaveChannel: async ({ platform, channelSlug }) => {
+      if (ctx.accountSessions?.isDisposed) return
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) return
       ChannelStore.remove(platform, channelSlug)
