@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 
-import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { getDbPath } from '../../runtime-config'
@@ -12,19 +12,9 @@ import { getDb } from '../../store/db'
 import { MessageStore, type ChatHistoryQuery } from '../../store/message-store'
 import { formatChatTranscript } from '../chat-tools'
 import { createChatFileLogger } from './chat-logging'
+import type { ChatLoggingSettings } from './chat-logging-settings'
 
 export type { ChatHistoryQuery }
-export interface ChatLoggingSettings {
-  twitchHistoryEnabled: boolean
-  enabled: boolean
-  directory: string
-  channels: { platform: Platform; channelId: string }[]
-  timestamps: boolean
-  rotation: 'daily' | 'session'
-  maxFileBytes: number
-  maxMessages: number
-  maxAgeDays: number
-}
 const SETTINGS_KEY = 'chat_logging_v1'
 export function defaultChatLoggingSettings(): ChatLoggingSettings {
   return {

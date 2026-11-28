@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path'
 
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
-import type { ChatLoggingSettings } from './chat-history'
+import type { ChatLoggingSettings } from './chat-logging-settings'
 
 interface LogEntry {
   root: string

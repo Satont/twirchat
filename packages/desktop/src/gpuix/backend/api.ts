@@ -42,13 +42,10 @@ import type {
   Badge,
   ChatSendReceipt,
   AppSettings,
-  LayoutNode,
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
-  SplitDirection,
   WatchedChannel,
-  WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 import type {
   ModerationSettings,
@@ -90,12 +87,12 @@ import {
   type ChatImagePreview,
 } from '../../services/chat-image-preview-cache'
 import { ChatToolsError, createChatToolsService } from '../../services/chat-tools'
+import type { CosmeticPaint } from '../../services/cosmetic-paint'
 import {
   getUserCosmetics,
   getPaintNameImage,
   type UserCosmetics,
   type UserCosmeticPreferences,
-  type CosmeticPaint,
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
 import {
@@ -126,12 +123,7 @@ import { createPotatCommandsClient } from '../../services/potat-commands'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
 import type { PrefixedBotCommand, PublicBotCommand } from '../../services/public-bot-commands'
 import { createSnapshotRequests } from '../../services/snapshot-requests'
-import type {
-  StreamerMode,
-  StreamerModeService,
-  StreamerModeSettings,
-  StreamerModeStatus,
-} from '../../services/streamer-mode'
+import type { StreamerModeService } from '../../services/streamer-mode'
 import {
   createSupibotCommandsClient,
   type SupibotCommandTarget,
@@ -200,14 +192,14 @@ import {
   getChatLoggingStatus as readChatLoggingStatus,
   flushChatLogs as flushRecordedChatLogs,
   type ChatHistoryQuery,
-  type ChatLoggingSettings,
 } from './chat-history'
+import type { ChatLoggingSettings } from './chat-logging-settings'
 import type { DesktopEvents } from './events'
 import * as imageUploader from './image-uploader'
-import { createLayoutApi } from './layout-api'
+import { createLayoutApi, type LayoutApi } from './layout-api'
 import { obsRemoteApi } from './obs-remote'
 import { readCachedReleaseNotes, writeCachedReleaseNotes } from './release-notes-cache'
-import { createStreamerModeApi } from './streamer-mode-api'
+import { createStreamerModeApi, type StreamerModeApi } from './streamer-mode-api'
 import * as translation from './translation'
 import type {
   TranslationSettings,
@@ -288,7 +280,7 @@ interface AuthRequest {
   windowScope: string
 }
 
-export interface DesktopApi {
+export interface DesktopApi extends LayoutApi, StreamerModeApi {
   obsRemote: typeof obsRemoteApi
   donationAlertsOAuthAvailable: boolean
   getDonationConnections(): Promise<DonationConnections>
@@ -300,10 +292,6 @@ export interface DesktopApi {
     provider: ShareableDonationProvider
     enabled: boolean
   }): Promise<DonationSharing>
-  getStreamerMode(): Promise<StreamerModeStatus>
-  setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
-  getStreamerModeSettings(): Promise<StreamerModeSettings>
-  setStreamerModeSettings(params: { settings: StreamerModeSettings }): Promise<StreamerModeStatus>
   reconnectChat(params: { watchedChannelId?: string; platform?: Platform }): Promise<void>
   reloadChatEmotes(params: {
     platform: Platform
@@ -538,13 +526,6 @@ export interface DesktopApi {
   getChatters(params: { targets: ChattersTarget[] }): Promise<{ results: ChannelChatters[] }>
   openExternalUrl(params: { url: string }): Promise<void>
   getChatImagePreview(url: string, signal: AbortSignal): Promise<ChatImagePreview | undefined>
-  /** GPUIX-only: generic UI preference stored in the settings KV table. */
-  getUiState(params: { key: string }): Promise<string | null>
-  setUiState(params: { key: string; value: string }): Promise<void>
-  /** Get the last seen app version (for update changelog). */
-  getLastSeenVersion(): Promise<string | null>
-  /** Set the last seen app version. */
-  setLastSeenVersion(params: { version: string }): Promise<void>
   /** Fetch release notes for a specific version from GitHub. */
   getReleaseNotes(params: { version: string }): Promise<{
     version: string
@@ -563,22 +544,6 @@ export interface DesktopApi {
     silent?: boolean
     icon?: string
   }): Promise<void>
-  getTabChannelIds(): Promise<string[] | null>
-  setTabChannelIds(params: { ids: string[] }): Promise<void>
-  getWatchedChannelsLayout(params: { tabId: string }): Promise<WatchedChannelsLayout | null>
-  setWatchedChannelsLayout(params: { tabId: string; layout: WatchedChannelsLayout }): Promise<void>
-  removeWatchedChannelsLayout(params: { tabId: string }): Promise<void>
-  removePanel(params: { tabId: string; panelId: string }): Promise<void>
-  assignChannelToPanel(params: {
-    tabId: string
-    panelId: string
-    channelId: string | null
-  }): Promise<void>
-  splitPanel(params: {
-    tabId: string
-    panelId: string
-    direction: SplitDirection
-  }): Promise<{ original: LayoutNode; newPanel: LayoutNode }>
 }
 
 export interface DesktopApiContext {

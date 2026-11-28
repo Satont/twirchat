@@ -95,9 +95,13 @@
   },
   "overrides": [
     {
-      "files": ["packages/desktop/src/auth/**/*.ts"],
+      "files": [
+        "packages/desktop/src/auth/**/*.ts",
+        "packages/desktop/src/gpuix/backend/**/*.ts",
+        "packages/desktop/src/services/**/*.ts"
+      ],
       "rules": {
-        "import/no-cycle": "error"
+        "import/no-cycle": ["error", { "ignoreTypes": false }]
       }
     },
     {

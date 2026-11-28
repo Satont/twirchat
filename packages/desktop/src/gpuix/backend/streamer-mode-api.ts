@@ -1,12 +1,18 @@
-import type { StreamerModeService } from '../../services/streamer-mode'
-import type { DesktopApi } from './api'
+import type {
+  StreamerMode,
+  StreamerModeService,
+  StreamerModeSettings,
+  StreamerModeStatus,
+} from '../../services/streamer-mode'
 
-export function createStreamerModeApi(
-  service: StreamerModeService | undefined,
-): Pick<
-  DesktopApi,
-  'getStreamerMode' | 'setStreamerMode' | 'getStreamerModeSettings' | 'setStreamerModeSettings'
-> {
+export interface StreamerModeApi {
+  getStreamerMode(): Promise<StreamerModeStatus>
+  setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
+  getStreamerModeSettings(): Promise<StreamerModeSettings>
+  setStreamerModeSettings(params: { settings: StreamerModeSettings }): Promise<StreamerModeStatus>
+}
+
+export function createStreamerModeApi(service: StreamerModeService | undefined): StreamerModeApi {
   function streamerMode(): StreamerModeService {
     if (!service) throw new Error('Streamer mode is unavailable.')
     return service

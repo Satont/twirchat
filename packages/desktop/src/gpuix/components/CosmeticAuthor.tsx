@@ -1,6 +1,7 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
-import type { CosmeticPaint, UserCosmetics } from '../../services/cosmetics'
+import type { CosmeticPaint } from '../../services/cosmetic-paint'
+import type { UserCosmetics } from '../../services/cosmetics'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
 import { t } from '../i18n'
 import { claimMessageRowClick, claimMessageRowContextMenu } from '../message-row-click'
