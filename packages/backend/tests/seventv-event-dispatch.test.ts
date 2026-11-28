@@ -59,30 +59,33 @@ const dispatch = () =>
   )
 const set = (id: string) => ({ id, name: id, emotes: { items: [] } })
 
-const connectionSnapshot = (id: string, aliases: string[] = []) =>
+const connectionSnapshot = (id: string | null, aliases: string[] = []) =>
   Response.json({
     data: {
       users: {
         userByConnection: {
           id: 'fixture-user',
           style: {
-            activeEmoteSet: {
-              ...set(id),
-              emotes: {
-                items: aliases.map((alias) => ({
-                  id: alias,
-                  alias,
-                  flags: { zeroWidth: false },
-                  emote: {
-                    id: alias,
-                    defaultName: alias,
-                    aspectRatio: 1,
-                    flags: { animated: false },
-                    images: [],
+            activeEmoteSet:
+              id === null
+                ? null
+                : {
+                    ...set(id),
+                    emotes: {
+                      items: aliases.map((alias) => ({
+                        id: alias,
+                        alias,
+                        flags: { zeroWidth: false },
+                        emote: {
+                          id: alias,
+                          defaultName: alias,
+                          aspectRatio: 1,
+                          flags: { animated: false },
+                          images: [],
+                        },
+                      })),
+                    },
                   },
-                })),
-              },
-            },
           },
         },
       },
@@ -525,6 +528,100 @@ test('reconnect refreshes retained viewers quietly and does not overwrite a newe
     manager.cleanupClient('viewer')
     lookup.mockRestore()
     await server.stop(true)
+  }
+})
+
+test('a cold channel without an active set does not acquire upstream interests', async () => {
+  const events = new SevenTVEventClient()
+  const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+  const manager = new SevenTVSubscriptionManager(events)
+  const lookup = spyOn(globalThis, 'fetch').mockResolvedValueOnce(connectionSnapshot(null))
+  try {
+    await manager.subscribeClient(
+      'viewer',
+      [{ platform: 'kick', channelId: 'dispatch-kick' }],
+      () => true,
+    )
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(connect).not.toHaveBeenCalled()
+    expect(events.subscriptionCount).toBe(0)
+    expect(manager.getStats().connectedClients).toBe(0)
+    expect(sevenTVCache.get('kick', 'dispatch-kick')).toBeUndefined()
+  } finally {
+    manager.cleanupClient('viewer')
+    connect.mockRestore()
+    lookup.mockRestore()
+  }
+})
+
+test('a confirmed missing active set clears the catalog and keeps the user subscription', async () => {
+  const events = new SevenTVEventClient()
+  const connect = spyOn(events, 'connect').mockResolvedValue(undefined)
+  const unsubscribe = spyOn(events, 'unsubscribe')
+  const manager = new SevenTVSubscriptionManager(events)
+  const channel = { platform: 'kick', channelId: 'dispatch-kick' } satisfies {
+    platform: Platform
+    channelId: string
+  }
+  const received: Array<{ viewer: string; message: BackendToDesktopMessage }> = []
+  manager.sendToClient = (viewer, message) => received.push({ viewer, message })
+  const lookup = spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    connectionSnapshot(setId, [emote.name]),
+  )
+  try {
+    await manager.subscribeClient('viewer', [channel], () => true)
+    received.length = 0
+    const missing = Response.json({
+      data: { users: { userByConnection: { id: 'fixture-user', style: {} } } },
+    })
+    lookup.mockResolvedValueOnce(missing)
+    events.onConnected?.(true)
+    await until(() => missing.bodyUsed)
+    await Bun.sleep(0)
+    expect(received).toEqual([])
+    expect(events.subscriptionCount).toBe(3)
+    lookup.mockResolvedValueOnce(connectionSnapshot(null))
+    events.onConnected?.(true)
+    await until(() => received.length > 0)
+    expect(received.splice(0)).toEqual([
+      { viewer: 'viewer', message: { type: 'seventv_emote_set', ...channel, emotes: [] } },
+    ])
+    expect(unsubscribe.mock.calls).toEqual([
+      ['emote_set.update', { object_id: setId }],
+      ['emote_set.delete', { object_id: setId }],
+    ])
+    expect(events.subscriptionCount).toBe(1)
+    await manager.subscribeClient('late-viewer', [channel], () => true)
+    expect(received.splice(0)).toEqual([
+      { viewer: 'late-viewer', message: { type: 'seventv_emote_set', ...channel, emotes: [] } },
+    ])
+    events.onEvent?.(
+      sevenTVEventSchema.parse({ type: 'emote_set.update', body: { id: setId, pushed: [pushed] } }),
+    )
+    expect(received).toEqual([])
+    lookup.mockResolvedValueOnce(result('restored'))
+    events.onEvent?.(
+      sevenTVEventSchema.parse({
+        type: 'user.update',
+        body: {
+          id: 'fixture-user',
+          updated: [{ key: 'connections', value: [{ key: 'emote_set_id', value: 'restored' }] }],
+        },
+      }),
+    )
+    await until(() => events.subscriptionCount === 3)
+    expect(sevenTVCache.get(channel.platform, channel.channelId)?.id).toBe('restored')
+    expect(
+      received
+        .filter(({ message }) => message.type === 'seventv_emote_set')
+        .map(({ viewer }) => viewer),
+    ).toEqual(['viewer', 'late-viewer'])
+  } finally {
+    events.disconnect()
+    for (const viewer of ['viewer', 'late-viewer']) manager.cleanupClient(viewer)
+    unsubscribe.mockRestore()
+    connect.mockRestore()
+    lookup.mockRestore()
   }
 })
 

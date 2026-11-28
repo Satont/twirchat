@@ -197,6 +197,8 @@ export class SevenTVSubscriptionManager {
             : active && active.revision !== revision
               ? active.emoteSet
               : (fetched ?? latest ?? active?.emoteSet)
+        // A fresh channel with no set does not consume a user subscription slot.
+        if (emoteSet === fetched && fetched?.id === null && !cached && !active) return
         if (fetched && emoteSet === fetched) sevenTVCache.set(platform, channelId, fetched)
       } catch (error) {
         if (!isCurrent()) return
@@ -228,7 +230,8 @@ export class SevenTVSubscriptionManager {
       revision: 0,
     }
     this.channels.set(channelKey, channel)
-    this.retain(this.emoteSetSubscriptions, emoteSet.id, channel, emoteSetEvents)
+    if (emoteSet.id !== null)
+      this.retain(this.emoteSetSubscriptions, emoteSet.id, channel, emoteSetEvents)
     if (emoteSet.userId) this.retain(this.userSubscriptions, emoteSet.userId, channel, userEvents)
     this.attachClient(clientSecret, channel)
   }
@@ -272,7 +275,8 @@ export class SevenTVSubscriptionManager {
     if (subscriptions?.size === 0) this.clientSubscriptions.delete(client)
     if (channel.clients.size !== 0) return
     this.channels.delete(channel.key)
-    this.release(this.emoteSetSubscriptions, channel.emoteSet.id, channel, emoteSetEvents)
+    if (channel.emoteSet.id !== null)
+      this.release(this.emoteSetSubscriptions, channel.emoteSet.id, channel, emoteSetEvents)
     if (channel.emoteSet.userId)
       this.release(this.userSubscriptions, channel.emoteSet.userId, channel, userEvents)
   }
@@ -315,8 +319,8 @@ export class SevenTVSubscriptionManager {
       throw new Error(`User not found on 7TV for ${platform}:${sevenTVPlatformId}`)
     }
 
-    const emoteSet = user.style?.activeEmoteSet
-    if (!emoteSet) {
+    const emoteSet = user.style.activeEmoteSet
+    if (emoteSet === undefined) {
       throw new Error('No active emote set found')
     }
 
@@ -330,6 +334,18 @@ export class SevenTVSubscriptionManager {
 
   private createSnapshot(
     emoteSet: NonNullable<Awaited<ReturnType<typeof getEmoteSetById>>['emoteSets']['emoteSet']>,
+    identity: Pick<CachedEmoteSet, 'channelId' | 'platform' | 'userId' | 'platformUserId'>,
+  ): CachedEmoteSet & { id: string }
+  private createSnapshot(
+    emoteSet: NonNullable<
+      Awaited<ReturnType<typeof getEmoteSetById>>['emoteSets']['emoteSet']
+    > | null,
+    identity: Pick<CachedEmoteSet, 'channelId' | 'platform' | 'userId' | 'platformUserId'>,
+  ): CachedEmoteSet
+  private createSnapshot(
+    emoteSet: NonNullable<
+      Awaited<ReturnType<typeof getEmoteSetById>>['emoteSets']['emoteSet']
+    > | null,
     {
       channelId,
       platform,
@@ -339,7 +355,7 @@ export class SevenTVSubscriptionManager {
   ): CachedEmoteSet {
     const emotes = new Map<string, SevenTVEmote>()
 
-    for (const item of emoteSet.emotes?.items ?? []) {
+    for (const item of emoteSet?.emotes?.items ?? []) {
       emotes.set(
         item.alias,
         createSevenTvEmote({
@@ -358,8 +374,7 @@ export class SevenTVSubscriptionManager {
       channelId,
       emotes,
       fetchedAt: Date.now(),
-      id: emoteSet.id,
-      name: emoteSet.name,
+      ...(emoteSet ? { id: emoteSet.id, name: emoteSet.name } : { id: null, name: null }),
       platform,
       ttl: 5 * 60 * 1000,
       userId,
@@ -370,7 +385,7 @@ export class SevenTVSubscriptionManager {
   private async fetchEmoteSetById(
     id: string,
     channel: ChannelSubscription,
-  ): Promise<CachedEmoteSet> {
+  ): Promise<CachedEmoteSet & { id: string }> {
     const result = await getEmoteSetById(id)
     const emoteSet = result.emoteSets?.emoteSet
     if (!emoteSet) throw new Error(`Emote set ${id} not found on 7TV`)
@@ -528,9 +543,9 @@ export class SevenTVSubscriptionManager {
         })
 
         for (const channel of emoteSetSub) {
+          if (channel.emoteSet.id !== body.id) continue
           const { platform, channelId } = channel
           channel.revision++
-
           channel.emoteSet.name = newName
 
           this.broadcastToChannel(channel, {
@@ -595,6 +610,7 @@ export class SevenTVSubscriptionManager {
       const { platform, channelId } = channel
       channel.revision++
       const setName = channel.emoteSet.name
+      if (setName === null) continue
 
       this.broadcastToChannel(channel, {
         action: 'set_deleted',
@@ -632,7 +648,7 @@ export class SevenTVSubscriptionManager {
       return
     }
     const { key, platform, channelId } = channel
-    let emoteSet: CachedEmoteSet
+    let emoteSet: Awaited<ReturnType<typeof this.fetchEmoteSetById>>
     try {
       emoteSet = await this.fetchEmoteSetById(id, channel)
     } catch (error) {
@@ -667,8 +683,10 @@ export class SevenTVSubscriptionManager {
     channel.emoteSet = emoteSet
     sevenTVCache.set(channel.platform, channel.channelId, emoteSet)
     if (previous.id !== emoteSet.id) {
-      this.release(this.emoteSetSubscriptions, previous.id, channel, emoteSetEvents)
-      this.retain(this.emoteSetSubscriptions, emoteSet.id, channel, emoteSetEvents)
+      if (previous.id !== null)
+        this.release(this.emoteSetSubscriptions, previous.id, channel, emoteSetEvents)
+      if (emoteSet.id !== null)
+        this.retain(this.emoteSetSubscriptions, emoteSet.id, channel, emoteSetEvents)
     }
     if (previous.userId !== emoteSet.userId) {
       if (previous.userId)
@@ -681,7 +699,7 @@ export class SevenTVSubscriptionManager {
     clientSecret: string,
     platform: Platform,
     channelId: string,
-    emoteSet: { id: string; emotes: Map<string, SevenTVEmote> },
+    emoteSet: Pick<CachedEmoteSet, 'emotes'>,
   ): void {
     this.sendToClient?.(clientSecret, {
       channelId,

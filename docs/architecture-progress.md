@@ -239,7 +239,12 @@ The [architecture map](architecture.md) describes the current system. This log r
 ### Round 45 — Reconcile hosted 7TV catalogs after upstream reconnect
 
 - **Decision:** After a replacement EventAPI session sends Hello, the subscription manager re-reads each retained channel's active set using its resolved platform identity. It uses the same snapshot commit and full-set message as live switches and expiry refreshes, without emitting synthetic chat notices. One batch runs at a time with up to three concurrent reads; a disconnect cancels its work.
-- **Safeguard:** A loopback EventAPI test changes the upstream set while disconnected and verifies that an existing viewer receives the new snapshot and upstream subscriptions change. A delayed snapshot cannot overwrite a newer dispatch. Recovery is best effort: a revision conflict allows one retry within the same channel deadline. A failed read, missing active set, or second conflict leaves the current snapshot intact. Reconciliation does not wait for upstream subscription acknowledgements or claim gap-free replay.
+- **Safeguard:** A loopback EventAPI test changes the upstream set while disconnected and verifies that an existing viewer receives the new snapshot and upstream subscriptions change. A delayed snapshot cannot overwrite a newer dispatch. Recovery is best effort: a revision conflict allows one retry within the same channel deadline. A failed or incomplete read, or a second conflict, leaves the current snapshot intact. Round 46 distinguishes confirmed absence from an incomplete read. Reconciliation does not wait for upstream subscription acknowledgements or claim gap-free replay.
+
+### Round 46 — Clear confirmed inactive 7TV sets without dropping viewers
+
+- **Decision:** Treat an explicit GraphQL `activeEmoteSet: null` for a known connection as a snapshot without a set ID, distinct from an empty identified set or an incomplete response. On a retained channel, publish an empty catalog through the existing wire message, release only the obsolete set interests, and keep viewers and the user interest for later activation. A cold channel with no history still does not acquire a user interest for a missing set.
+- **Safeguard:** The regression contrasts omission with explicit null, verifies the empty snapshot for existing and late viewers, ignores old-set events, and restores the catalog through the existing user-update path. Existing channel and revision checks apply to empty snapshots as well.
 
 ## Next investigations
 

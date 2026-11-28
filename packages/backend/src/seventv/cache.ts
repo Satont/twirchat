@@ -2,17 +2,18 @@ import type { Platform } from '@twirchat/shared'
 
 import type { SevenTVEmote } from './emote.ts'
 
-export interface CachedEmoteSet {
-  id: string
+interface SnapshotMetadata {
   userId?: string
   platformUserId?: string
-  name: string
   channelId: string
   platform: Platform
   emotes: Map<string, SevenTVEmote>
   fetchedAt: number
   ttl: number
 }
+
+export type CachedEmoteSet = SnapshotMetadata &
+  ({ id: string; name: string } | { id: null; name: null })
 
 export function updateSetEmote(
   emotes: Map<string, SevenTVEmote>,
