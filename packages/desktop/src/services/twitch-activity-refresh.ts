@@ -45,7 +45,7 @@ export class TwitchActivityRefreshClient {
 
   async watch(channelSlug: string, watch: boolean): Promise<void> {
     const key = channelSlug.trim().replace(/^#/, '').toLowerCase()
-    if (!key) return
+    if (this.stopped || !key) return
     const existing = this.channels.get(key)
     if (!watch) {
       if (!existing) return
@@ -55,7 +55,6 @@ export class TwitchActivityRefreshClient {
       this.channels.delete(key)
       return
     }
-    this.stopped = false
     if (existing) {
       existing.refs++
       return
@@ -77,8 +76,8 @@ export class TwitchActivityRefreshClient {
   }
 
   restart(): void {
+    if (this.stopped) return
     this.generation++
-    this.stopped = false
     for (const entry of this.channels.values()) {
       clearTimeout(entry.timer)
       entry.failures = 0
@@ -108,10 +107,12 @@ export class TwitchActivityRefreshClient {
   }
 
   stop(): void {
+    if (this.stopped) return
     this.generation++
     this.stopped = true
     for (const entry of this.channels.values()) clearTimeout(entry.timer)
     this.pending.clear()
+    this.channels.clear()
   }
 
   private schedule(entry: WatchedActivity, delay: number): void {
@@ -152,15 +153,14 @@ export class TwitchActivityRefreshClient {
 
   private async refresh(entry: WatchedActivity): Promise<void> {
     const generation = this.generation
+    const current = () =>
+      !this.stopped &&
+      generation === this.generation &&
+      this.channels.get(entry.channelSlug) === entry
     let interval = this.dependencies.intervalMs ?? 15000
     try {
       const capability = await this.capability(entry.channelSlug)
-      if (
-        this.stopped ||
-        generation !== this.generation ||
-        this.channels.get(entry.channelSlug) !== entry
-      )
-        return
+      if (!current()) return
       interval = capability.intervalMs ?? interval
       entry.intervalMs = interval
       if (!capability.snapshotSections.length || capability.mode === 'unavailable') {
@@ -172,12 +172,7 @@ export class TwitchActivityRefreshClient {
         entry.channelSlug,
         capability.snapshotSections,
       )
-      if (
-        this.channels.get(entry.channelSlug) !== entry ||
-        this.stopped ||
-        generation !== this.generation
-      )
-        return
+      if (!current()) return
       entry.channelId = snapshot.channelId
       const errors = Object.values(snapshot.errors).filter(
         (value): value is string => typeof value === 'string',
@@ -194,26 +189,23 @@ export class TwitchActivityRefreshClient {
         snapshot,
         sections: capability.snapshotSections,
       })
+      if (!current()) return
       this.dependencies.capability({
         ...capability,
         ...(errors.length ? { error: errors.join(' ').slice(0, 500) } : {}),
       })
     } catch (error) {
+      if (!current()) return
       entry.failures++
-      if (
-        this.channels.get(entry.channelSlug) === entry &&
-        !this.stopped &&
-        generation === this.generation
-      )
-        this.dependencies.capability({
-          channelSlug: entry.channelSlug,
-          mode: 'snapshot',
-          snapshotSections: [],
-          intervalMs: interval,
-          error: error instanceof Error ? error.message : 'Twitch snapshot refresh failed.',
-        })
+      this.dependencies.capability({
+        channelSlug: entry.channelSlug,
+        mode: 'snapshot',
+        snapshotSections: [],
+        intervalMs: interval,
+        error: error instanceof Error ? error.message : 'Twitch snapshot refresh failed.',
+      })
     }
     const factor = Math.max(entry.offline ? 4 : 1, 2 ** Math.min(entry.failures, 4))
-    if (generation === this.generation) this.schedule(entry, Math.min(300000, interval * factor))
+    if (current()) this.schedule(entry, Math.min(300000, interval * factor))
   }
 }

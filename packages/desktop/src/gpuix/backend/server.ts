@@ -779,6 +779,7 @@ function boot(): DesktopRuntime {
     plugins,
     shutdownPlugins,
     dispose: async () => {
+      twitchActivityRefresh.stop()
       accountSessions.stopStartupConnections()
       await authServer.stop().catch((error: unknown) => {
         log.warn('OAuth server shutdown failed', { error: String(error) })
@@ -806,7 +807,6 @@ function boot(): DesktopRuntime {
       streamerMode.stop()
       providerRuntime.stop()
       twitchEventSub.stop()
-      twitchActivityRefresh.stop()
       backendConn.disconnect()
       await stopOverlay
     },

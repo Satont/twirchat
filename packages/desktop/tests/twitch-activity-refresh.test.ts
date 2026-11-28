@@ -33,6 +33,64 @@ async function until(predicate: () => boolean) {
 }
 
 describe('active Twitch snapshot refresh', () => {
+  test('stop retires an initial capability lookup and cannot be undone by watch or restart', async () => {
+    const pending = Promise.withResolvers<Omit<TwitchActivityCapability, 'channelSlug'>>()
+    let plans = 0
+    const capabilities: string[] = []
+    const client = new TwitchActivityRefreshClient({
+      plan: () => {
+        plans++
+        return pending.promise
+      },
+      snapshot: async (channel) => snapshot(channel),
+      publish: () => {},
+      capability: ({ channelSlug }) => capabilities.push(channelSlug),
+    })
+    clients.push(client)
+    const watching = client.watch('old', true)
+    client.stop()
+    pending.resolve({ mode: 'snapshot', snapshotSections: ['polls'] })
+    await watching
+    client.restart()
+    await client.watch('new', true)
+    await client.watch('old', false)
+    expect(plans).toBe(1)
+    expect(capabilities).toEqual([])
+  })
+
+  test('stop during publication blocks the remaining notifications and queued refreshes', async () => {
+    const started = Promise.withResolvers<void>()
+    const pending = Promise.withResolvers<TwitchActivitiesSnapshot>()
+    const calls: string[] = []
+    const capabilities: string[] = []
+    let publications = 0
+    const client = new TwitchActivityRefreshClient({
+      intervalMs: 1,
+      maxConcurrency: 1,
+      plan: async () => ({ mode: 'snapshot', snapshotSections: ['polls'] }),
+      snapshot: (channel) => {
+        calls.push(channel)
+        started.resolve()
+        return pending.promise
+      },
+      publish: () => {
+        publications++
+        client.stop()
+      },
+      capability: ({ channelSlug }) => capabilities.push(channelSlug),
+    })
+    clients.push(client)
+    await client.watch('first', true)
+    await started.promise
+    await client.watch('queued', true)
+    await Bun.sleep(5)
+    capabilities.length = 0
+    pending.resolve(snapshot('first'))
+    await until(() => publications === 1)
+    await Bun.sleep(5)
+    expect(calls).toEqual(['first'])
+    expect(capabilities).toEqual([])
+  })
   test('slows offline-channel refresh and resumes immediately when the stream comes online', async () => {
     let calls = 0
     const client = new TwitchActivityRefreshClient({

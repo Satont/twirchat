@@ -196,6 +196,11 @@ The [architecture map](architecture.md) describes the current system. This log r
 - **Decision:** Both desktop YouTube transports pass their connection revision to the same delivery loop. A synchronous listener can retire the connection; the current item finishes notifying listeners, but subsequent messages, events, and moderation do not escape the old connection. The selected-account query still runs at batch entry, not between items.
 - **Safeguard:** Relay and OAuth fixtures reconnect from the first message and verify that only the replacement can deliver the rest of a batch. The existing native chat benchmark injects messages after this adapter, so it does not exercise this change.
 
+### Round 37 — Give Twitch fallback polling a terminal lifetime
+
+- **Decision:** Backend disposal stops Twitch activity polling before awaiting other services. `stop()` permanently retires the active watches and queued refreshes; a late watch or account-triggered restart cannot revive them. The explicit capability query remains available and does not schedule polling.
+- **Safeguard:** Deferred fixtures verify that stopping during the initial capability lookup suppresses publication, and stopping from a snapshot listener prevents the remaining notification and queued reads. EventSub shutdown and the final chat transcript flush remain separate work.
+
 ## Next investigations
 
 | Priority | Area                                | Evidence and next slice                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
