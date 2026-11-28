@@ -236,7 +236,8 @@ export class WatchedChannelManager {
    * Reconnect all watched channels for a given platform.
    * Called after login/logout so adapters pick up the new auth state.
    */
-  async reconnectByPlatform(platform: string): Promise<void> {
+  async reconnectByPlatform(platform: string, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     const matching = [...this.entries.values()].filter(
       (e) => e.watchedChannel.platform === platform,
     )
@@ -246,32 +247,38 @@ export class WatchedChannelManager {
     await Promise.all(
       Array.from({ length: Math.min(4, matching.length) }, async () => {
         while (index < matching.length) {
+          if (signal?.aborted) return
           const entry = matching[index++]
           if (!entry) return
           try {
-            await this.reconnect(entry.watchedChannel.id)
+            await this.reconnect(entry.watchedChannel.id, signal)
           } catch (error) {
+            if (signal?.aborted) return
             if (this.entries.get(entry.watchedChannel.id) === entry)
               failures.push(`${entry.watchedChannel.channelSlug}: ${String(error)}`)
           }
         }
       }),
     )
+    signal?.throwIfAborted()
     if (failures.length)
       throw new Error(`Watched chats could not reconnect: ${failures.join('; ')}`)
   }
 
-  reconnect(id: string): Promise<void> {
+  reconnect(id: string, signal?: AbortSignal): Promise<void> {
     const next = (this.reconnectQueues.get(id) ?? Promise.resolve())
       .catch(() => {})
       .then(async () => {
+        signal?.throwIfAborted()
         const entry = this.entries.get(id)
         if (!entry) throw new Error('This watched channel is no longer connected.')
         this.unbindAdapter(entry)
         await entry.adapter.disconnect()
+        signal?.throwIfAborted()
         if (this.entries.get(id) !== entry) return
         this.bindAdapter(entry)
         await entry.adapter.connect(entry.watchedChannel.channelSlug)
+        signal?.throwIfAborted()
         // The default account may have changed and now be the chat's chosen account.
         if (this.entries.get(id) === entry) this.syncSender(entry)
       })

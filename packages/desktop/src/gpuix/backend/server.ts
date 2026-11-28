@@ -353,7 +353,8 @@ function boot(): DesktopRuntime {
         throw new Error(status.error ?? t('runtime.server.accountChatConnectFailed'))
       subscribeSevenTvFor(platform, account.username, aggregator)
     },
-    reconnectWatched: (platform) => watchedChannelManager.reconnectByPlatform(platform),
+    reconnectWatched: (platform, signal) =>
+      watchedChannelManager.reconnectByPlatform(platform, signal),
     changed: (platform, identityChanged) =>
       events.emit('accounts_changed', { platform, identityChanged }),
   })

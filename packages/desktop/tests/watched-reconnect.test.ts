@@ -123,6 +123,84 @@ test('platform reconnect bounds parallel adapters and reports failures after att
   expect(visited).toHaveLength(9)
 })
 
+test('a cancelled platform reconnect starts neither queued channels nor connects after disconnect', async () => {
+  const adapters: FixtureAdapter[] = []
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  let disconnects = 0
+  class GatedAdapter extends FixtureAdapter {
+    override async disconnect() {
+      await super.disconnect()
+      if (++disconnects === 4) entered.resolve()
+      await release.promise
+    }
+  }
+  const manager = new WatchedChannelManager(
+    (message) => message,
+    () => {
+      const adapter = new GatedAdapter()
+      adapters.push(adapter)
+      return adapter
+    },
+  )
+  const channels = await Promise.all(
+    Array.from({ length: 6 }, (_, index) => manager.addChannel('twitch', `cancel-${index}`)),
+  )
+  await manager.setActiveChannels(channels.map(({ id }) => id))
+  const cancellation = new AbortController()
+  const batch = Promise.allSettled([manager.reconnectByPlatform('twitch', cancellation.signal)])
+  const reason = new Error('OAuth shutdown deadline')
+  try {
+    await Promise.race([entered.promise, batch])
+    expect(disconnects).toBe(4)
+    cancellation.abort(reason)
+    release.resolve()
+    expect(await batch).toEqual([{ status: 'rejected', reason }])
+    expect(adapters.map((adapter) => adapter.disconnects)).toEqual([1, 1, 1, 1, 0, 0])
+    expect(adapters.map((adapter) => adapter.connects)).toEqual([1, 1, 1, 1, 1, 1])
+    const channel = required(channels[0])
+    const adapter = required(adapters[0])
+    adapter.receive('while-unbound')
+    expect(manager.getMessages(channel.id)).toEqual([])
+    await manager.reconnect(channel.id)
+    expect(adapter.connects).toBe(2)
+    adapter.receive('after-manual-reconnect')
+    expect(manager.getMessages(channel.id).map(({ id }) => id)).toEqual(['after-manual-reconnect'])
+  } finally {
+    cancellation.abort(reason)
+    release.resolve()
+    await batch
+    await manager.setActiveChannels([])
+  }
+})
+
+test('a cancelled reconnect waiting behind an exact reconnect leaves the adapter alone', async () => {
+  const adapter = new FixtureAdapter()
+  const manager = new WatchedChannelManager(
+    (message) => message,
+    () => adapter,
+  )
+  const channel = await manager.addChannel('twitch', 'queued')
+  await manager.setActiveChannels([channel.id])
+  const gate = Promise.withResolvers<void>()
+  adapter.gate = gate.promise
+  const exact = manager.reconnect(channel.id)
+  const cancellation = new AbortController()
+  const batch = Promise.allSettled([manager.reconnectByPlatform('twitch', cancellation.signal)])
+  const reason = new Error('OAuth shutdown deadline')
+  cancellation.abort(reason)
+  gate.resolve()
+  try {
+    await exact
+    expect(await batch).toEqual([{ status: 'rejected', reason }])
+    expect(adapter.disconnects).toBe(1)
+    expect(adapter.connects).toBe(2)
+  } finally {
+    await batch
+    await manager.setActiveChannels([])
+  }
+})
+
 test('saving channels does not connect them, and activation ignores orphan catalog entries', async () => {
   const adapters: FixtureAdapter[] = []
   const manager = new WatchedChannelManager(

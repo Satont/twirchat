@@ -15,7 +15,7 @@ export interface AccountSessionDependencies {
   disconnect(platform: Platform): Promise<void>
   refreshIdentity(platform: Platform): Promise<void> | void
   connectOwn(platform: Platform, account: Account | null, signal?: AbortSignal): Promise<void>
-  reconnectWatched(platform: Platform): Promise<void>
+  reconnectWatched(platform: Platform, signal?: AbortSignal): Promise<void>
   changed(platform: Platform, identityChanged: boolean): void
 }
 
@@ -64,7 +64,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
       signal?.throwIfAborted()
       const connected = await Promise.allSettled([
         dependencies.connectOwn(platform, account, signal),
-        dependencies.reconnectWatched(platform),
+        dependencies.reconnectWatched(platform, signal),
       ])
       for (const result of connected)
         if (result.status === 'rejected') failures.push(String(result.reason))
