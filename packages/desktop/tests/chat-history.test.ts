@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -78,6 +78,73 @@ function legacy(path: string, dataColumn = true): void {
 }
 
 describe('durable chat history', () => {
+  for (const writable of [true, false]) {
+    test(`explicit desktop exit ${writable ? 'persists the final file log line' : 'survives a file log error'}`, async () => {
+      const dbPath = join(directory, 'shutdown.sqlite')
+      const logPath = join(directory, 'logs')
+      if (!writable) writeFileSync(logPath, 'A file cannot hold logs')
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          '--eval',
+          `
+          import { getDesktopBackend } from './src/gpuix/backend/server'
+          import { defaultChatLoggingSettings, recordChatMessage, saveChatLoggingSettings } from './src/gpuix/backend/chat-history'
+          import { exitAfterFlushingDiagnosticLogs } from './src/services/diagnostic-logging'
+          const backend = getDesktopBackend()
+          await saveChatLoggingSettings({ ...defaultChatLoggingSettings(), enabled: true, timestamps: false, directory: ${JSON.stringify(logPath)} })
+          recordChatMessage(${JSON.stringify(message('last'))})
+          await backend.dispose()
+          exitAfterFlushingDiagnosticLogs()
+        `,
+        ],
+        {
+          cwd: join(import.meta.dir, '..'),
+          env: {
+            ...process.env,
+            HOME: directory,
+            USERPROFILE: directory,
+            XDG_CONFIG_HOME: directory,
+            XDG_CACHE_HOME: directory,
+            XDG_DATA_HOME: directory,
+            DB_PATH: dbPath,
+            AUTH_SERVER_PORT: '0',
+            OVERLAY_SERVER_PORT: '0',
+            NODE_ENV: 'production',
+            LOG_LEVEL: 'warn',
+            TWIRCHAT_APP_VERSION: 'dev',
+            CHATRIX_BACKEND_URL: 'http://127.0.0.1:1',
+            CHATRIX_BACKEND_WS_URL: 'ws://127.0.0.1:1/ws',
+          },
+          stdout: 'pipe',
+          stderr: 'pipe',
+          signal: AbortSignal.timeout(3000),
+        },
+      )
+      const [code, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ])
+      if (code !== 0) throw new Error(`Desktop exit failed (${code}): ${stdout}\n${stderr}`)
+      const db = new Database(dbPath, { readonly: true })
+      try {
+        expect(db.query('SELECT id FROM chat_messages').all()).toEqual([{ id: 'last' }])
+      } finally {
+        db.close()
+      }
+      if (writable) {
+        const files = Array.from(
+          new Bun.Glob('**/*.log').scanSync({ cwd: logPath, absolute: true }),
+        )
+        expect(files).toHaveLength(1)
+        expect(await Bun.file(required(files[0])).text()).toBe('Алиса: ПРИВЕТ Мир last\n')
+      } else {
+        expect(stdout).toContain('Chat log flush failed during shutdown')
+      }
+    })
+  }
+
   test('migrates old identity keys atomically while preserving provider metadata', () => {
     const path = join(directory, 'legacy.sqlite')
     legacy(path)

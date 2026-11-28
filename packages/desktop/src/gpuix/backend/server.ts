@@ -92,7 +92,7 @@ import {
   requestTwitchActivitiesSnapshot,
   type DesktopApi,
 } from './api'
-import { recordChatMessage } from './chat-history'
+import { flushChatLogs, recordChatMessage } from './chat-history'
 import type { DesktopBackend } from './contract'
 import { startDesktopDevServer } from './dev-server'
 import { createDesktopEvents, type DesktopEvents } from './events'
@@ -779,36 +779,42 @@ function boot(): DesktopRuntime {
     plugins,
     shutdownPlugins,
     dispose: async () => {
-      twitchActivityRefresh.stop()
-      accountSessions.stopStartupConnections()
-      await authServer.stop().catch((error: unknown) => {
-        log.warn('OAuth server shutdown failed', { error: String(error) })
-      })
-      disposed = true
-      const stopOverlay = overlayServer.stop().catch((error: unknown) => {
-        log.warn('OBS overlay server shutdown failed', { error: String(error) })
-      })
-      void devServer?.stop().catch((error) => {
-        log.warn('Desktop dev server shutdown failed', { error: String(error) })
-      })
-      clearInterval(twitchValidationTimer)
-      donations.dispose()
-      stopAutoChecks()
-      void shutdownPlugins().catch((error) => {
-        log.warn('Plugin shutdown failed', { error: String(error) })
-      })
-      await Promise.all([
-        accountSessions.dispose(ownAdapters.map(({ platform }) => platform)),
-        watchedChannelManager.dispose(),
-      ])
-      twitchHistory.dispose()
-      twitchBadges.dispose()
-      twitchSenders.dispose()
-      streamerMode.stop()
-      providerRuntime.stop()
-      twitchEventSub.stop()
-      backendConn.disconnect()
-      await stopOverlay
+      try {
+        twitchActivityRefresh.stop()
+        accountSessions.stopStartupConnections()
+        await authServer.stop().catch((error: unknown) => {
+          log.warn('OAuth server shutdown failed', { error: String(error) })
+        })
+        disposed = true
+        const stopOverlay = overlayServer.stop().catch((error: unknown) => {
+          log.warn('OBS overlay server shutdown failed', { error: String(error) })
+        })
+        void devServer?.stop().catch((error) => {
+          log.warn('Desktop dev server shutdown failed', { error: String(error) })
+        })
+        clearInterval(twitchValidationTimer)
+        donations.dispose()
+        stopAutoChecks()
+        void shutdownPlugins().catch((error) => {
+          log.warn('Plugin shutdown failed', { error: String(error) })
+        })
+        await Promise.all([
+          accountSessions.dispose(ownAdapters.map(({ platform }) => platform)),
+          watchedChannelManager.dispose(),
+        ])
+        twitchHistory.dispose()
+        twitchBadges.dispose()
+        twitchSenders.dispose()
+        streamerMode.stop()
+        providerRuntime.stop()
+        twitchEventSub.stop()
+        backendConn.disconnect()
+        await stopOverlay
+      } finally {
+        await flushChatLogs().catch((error: unknown) => {
+          log.warn('Chat log flush failed during shutdown', { error: String(error) })
+        })
+      }
     },
   }
 }
