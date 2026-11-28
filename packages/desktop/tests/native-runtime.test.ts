@@ -28,6 +28,9 @@ test('native runtime resolution refuses mismatched targets and source revisions'
   expect(() =>
     validateNativeRuntimeManifest({ ...manifest(), upstreamSHA: '0'.repeat(40) }, 'linux-x64'),
   ).toThrow('does not match')
+  expect(() =>
+    validateNativeRuntimeManifest({ ...manifest(), gpuiSHA: '0'.repeat(40) }, 'linux-x64'),
+  ).toThrow('does not match')
 })
 test('native runtime resolution finds the packaged artifact and rejects truncation', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'twirchat-native-runtime-'))

@@ -113,6 +113,15 @@ test('rejects another target and stale patch identity', async () => {
   await Bun.write(`${f.path}.json`, JSON.stringify({ ...f.manifest, patchDigest: '0'.repeat(16) }))
   await expect(stageNativeRuntime(f)).rejects.toThrow('patch digest')
 })
+test('rejects a source override whose revisions differ from the application pins', async () => {
+  const f = await fixture()
+  const sourcePath = join(f.sourceRoot, 'source.json')
+  const source = parseNativeSourceManifest(await Bun.file(sourcePath).json())
+  await Bun.write(sourcePath, JSON.stringify({ ...source, gpuiRevision: '0'.repeat(40) }))
+  await expect(stageNativeRuntime(f)).rejects.toThrow('source pins do not match')
+  expect(await Bun.file(join(f.output, 'native', nativeArtifactName())).exists()).toBe(false)
+})
+
 test('refuses changed patch bytes before staging any addon', async () => {
   const f = await fixture()
   await Bun.write(join(f.sourceRoot, 'patches/test.patch'), 'tampered')

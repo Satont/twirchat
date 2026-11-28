@@ -7,6 +7,10 @@ import {
   nativeArtifactName,
   parseNativeSourceManifest,
 } from '../scripts/build-gpuix-native'
+import {
+  GPUIX_NATIVE_API_VERSION,
+  validateNativeRuntimeManifest,
+} from '../src/services/native-runtime'
 
 describe('pinned native build contract', () => {
   test('maps supported host platforms to stable packaged names', () => {
@@ -32,8 +36,16 @@ test('native source pins and patch checksums match the reviewed checkout contrac
   const raw: unknown = await Bun.file(resolve(root, 'source.json')).json()
   const manifest = parseNativeSourceManifest(raw)
   expect(JSON.stringify(manifest)).toBe(JSON.stringify(raw))
-  expect(manifest.revision).toBe('2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf')
-  expect(manifest.gpuiRevision).toBe('f77e5cfe9dad04288566f00c66ecf3c58d6f84b3')
+  const runtime = {
+    apiVersion: GPUIX_NATIVE_API_VERSION,
+    upstreamSHA: manifest.revision,
+    gpuiSHA: manifest.gpuiRevision,
+    target: 'linux-x64',
+    size: 4,
+    patchDigest: '1'.repeat(16),
+    sha256: '2'.repeat(64),
+  }
+  expect(validateNativeRuntimeManifest(runtime, 'linux-x64')).toEqual(runtime)
   expect(manifest.rustToolchain).toBe('1.97.1')
   expect(manifest.cosmicText.version).toBe('0.19.0')
   expect(manifest.patches.slice(0, 2).map((patch) => patch.root)).toEqual(['gpui', 'gpuix'])
@@ -65,8 +77,8 @@ test('native source boundary rejects malformed pins, unsafe patch paths and unre
     schema: 1,
     version: '0.11.0-twirchat.1',
     repository: 'https://github.com/remorses/gpuix.git',
-    revision: '2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf',
-    gpuiRevision: 'f77e5cfe9dad04288566f00c66ecf3c58d6f84b3',
+    revision: 'a'.repeat(40),
+    gpuiRevision: 'b'.repeat(40),
     rustToolchain: '1.97.1',
     patches: [{ path: 'patches/native.patch', root: 'gpui', sha256: 'a'.repeat(64) }],
     cosmicText: { version: '0.19.0', sha256: 'b'.repeat(64) },
