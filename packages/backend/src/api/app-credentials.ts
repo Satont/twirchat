@@ -2,7 +2,8 @@ import { z } from 'zod'
 
 import { config } from '../config.ts'
 
-// Bun.serve answers in `routes` must finish well within its idleTimeout.
+// Leave time for the API request after a cold grant.
+const APP_GRANT_TIMEOUT_MS = 8000
 const TWITCH_REQUEST_TIMEOUT_MS = 8000
 const REFRESH_MARGIN_MS = 60_000
 const appTokenResponse = z.object({ access_token: z.string(), expires_in: z.number() })
@@ -12,16 +13,9 @@ interface AppGrantRequest {
   endpoint: string
   clientId: string
   clientSecret: string
-  signal?: AbortSignal
 }
 
-async function requestAppGrant({
-  provider,
-  endpoint,
-  clientId,
-  clientSecret,
-  signal,
-}: AppGrantRequest) {
+async function requestAppGrant({ provider, endpoint, clientId, clientSecret }: AppGrantRequest) {
   const res = await fetch(endpoint, {
     body: new URLSearchParams({
       client_id: clientId,
@@ -30,7 +24,7 @@ async function requestAppGrant({
     }),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     method: 'POST',
-    ...(signal ? { signal } : {}),
+    signal: AbortSignal.timeout(APP_GRANT_TIMEOUT_MS),
   })
   if (!res.ok) {
     throw new Error(`Failed to get ${provider} app token: ${res.status} ${await res.text()}`)
@@ -71,7 +65,6 @@ async function requestTwitchAppGrant(): Promise<TwitchAppGrant> {
     endpoint: 'https://id.twitch.tv/oauth2/token',
     clientId: config.TWITCH_CLIENT_ID,
     clientSecret: config.TWITCH_CLIENT_SECRET,
-    signal: AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
   })
 
   twitchAppGrant = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 }
@@ -106,12 +99,20 @@ export async function fetchTwitchHelixWithAppToken(
 
 let kickAppToken: string | null = null
 let kickAppTokenExpiresAt = 0
+let pendingKickAppToken: Promise<string> | null = null
 
 async function getKickAppToken(): Promise<string> {
   if (kickAppToken && Date.now() < kickAppTokenExpiresAt - REFRESH_MARGIN_MS) {
     return kickAppToken
   }
 
+  pendingKickAppToken ??= requestKickAppToken().finally(() => {
+    pendingKickAppToken = null
+  })
+  return pendingKickAppToken
+}
+
+async function requestKickAppToken(): Promise<string> {
   const data = await requestAppGrant({
     provider: 'Kick',
     endpoint: 'https://id.kick.com/oauth/token',
