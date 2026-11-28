@@ -77,30 +77,45 @@ async function requestTwitchAppGrant(): Promise<TwitchAppGrant> {
   return twitchAppGrant
 }
 
+async function waitForTwitchAppGrant(
+  signal: AbortSignal | null | undefined,
+): Promise<TwitchAppGrant> {
+  if (!signal) return getTwitchAppGrant()
+  signal.throwIfAborted()
+  const cancelled = Promise.withResolvers<never>()
+  const onAbort = () => cancelled.reject(signal.reason)
+  signal.addEventListener('abort', onAbort, { once: true })
+  try {
+    return await Promise.race([getTwitchAppGrant(), cancelled.promise])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+interface TwitchHelixRequestInit extends RequestInit {
+  timeoutMs?: number
+}
+
 export async function fetchTwitchHelixWithAppToken(
   input: string | URL,
-  init: RequestInit = {},
+  { signal, timeoutMs = TWITCH_REQUEST_TIMEOUT_MS, ...init }: TwitchHelixRequestInit = {},
 ): Promise<Response> {
-  const grant = await getTwitchAppGrant()
-  const response = await fetch(input, {
-    ...init,
-    headers: getTwitchHelixHeaders(grant.token, init.headers),
-    signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
-  })
-
-  if (response.status !== 401) {
-    return response
+  const request = (grant: TwitchAppGrant) => {
+    signal?.throwIfAborted()
+    const deadline = AbortSignal.timeout(timeoutMs)
+    return fetch(input, {
+      ...init,
+      headers: getTwitchHelixHeaders(grant.token, init.headers),
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+    })
   }
+  const grant = await waitForTwitchAppGrant(signal)
+  const response = await request(grant)
+  if (response.status !== 401) return response
 
   // A delayed rejection applies only to the grant used by that request.
   if (twitchAppGrant === grant) twitchAppGrant = null
-
-  const refreshedGrant = await getTwitchAppGrant()
-  return fetch(input, {
-    ...init,
-    headers: getTwitchHelixHeaders(refreshedGrant.token, init.headers),
-    signal: init.signal ?? AbortSignal.timeout(TWITCH_REQUEST_TIMEOUT_MS),
-  })
+  return request(await waitForTwitchAppGrant(signal))
 }
 
 let kickAppToken: string | null = null

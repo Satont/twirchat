@@ -340,7 +340,7 @@ export class SevenTVSubscriptionManager {
     let sevenTVPlatformId = channelId
     if (platform === 'twitch') {
       const twitchIdentifier = isTwitchUserId(platformUserId) ? platformUserId : channelId
-      const resolvedPlatformId = await resolveTwitchUserId(twitchIdentifier)
+      const resolvedPlatformId = await resolveTwitchUserId(twitchIdentifier, signal)
       if (!resolvedPlatformId) {
         throw new Error(`Twitch user not found for identifier: ${twitchIdentifier}`)
       }

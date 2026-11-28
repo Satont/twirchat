@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 
 import { createKickRead, fetchTwitchHelixWithAppToken } from '../src/api/app-credentials'
+import { resolveTwitchUserId } from '../src/api/twitch-users'
 import { fetchUrl } from './literal'
 
 const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
@@ -118,6 +119,104 @@ test('coalesces Twitch grants, caches by provider, and refreshes at the 60-secon
   })
   expect([twitchGrants, kickGrants]).toEqual([2, 1])
 })
+
+test.each(['cold grant', '401 refresh'])(
+  'a cancelled Helix caller leaves the shared %s running',
+  async (phase) => {
+    const refresh = phase === '401 refresh'
+    const controller = new AbortController()
+    const reason = new DOMException('Caller retired', 'AbortError')
+    const pendingGrant = Promise.withResolvers<Response>()
+    const grantStarted = Promise.withResolvers<AbortSignal | null | undefined>()
+    const attempts: (string | null)[] = []
+    let grants = 0
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = fetchUrl(input)
+        if (url === twitchTokenUrl) {
+          grants++
+          if (refresh && grants === 1)
+            return Response.json({ access_token: 'old', expires_in: 3600 })
+          grantStarted.resolve(init?.signal)
+          return pendingGrant.promise
+        }
+        if (url !== helixUrl) throw new Error(`Unexpected fetch: ${url}`)
+        const authorization = new Headers(init?.headers).get('Authorization')
+        attempts.push(authorization)
+        return authorization === 'Bearer old'
+          ? new Response(null, { status: 401 })
+          : Response.json(authorization)
+      },
+      { preconnect: originalFetch.preconnect },
+    )
+    const retired = fetchTwitchHelixWithAppToken(helixUrl, { signal: controller.signal })
+    const outcome = Promise.allSettled([retired])
+    const survivor = getHelixAuthorization()
+    const survivorOutcome = Promise.allSettled([survivor])
+    try {
+      const grantSignal = await grantStarted.promise
+      controller.abort(reason)
+      const result = await Promise.race([outcome, Bun.sleep(50).then(() => null)])
+      const settled = result?.[0]
+      expect(settled?.status === 'rejected' ? settled.reason : undefined).toBe(reason)
+      expect(grantSignal?.aborted).toBe(false)
+      expect(grants).toBe(refresh ? 2 : 1)
+      pendingGrant.resolve(Response.json({ access_token: 'new', expires_in: 3600 }))
+      expect(await survivor).toBe('Bearer new')
+      expect(attempts).toEqual(
+        refresh ? ['Bearer old', 'Bearer old', 'Bearer new'] : ['Bearer new'],
+      )
+    } finally {
+      pendingGrant.resolve(Response.json({ access_token: 'new', expires_in: 3600 }))
+      await Promise.all([outcome, survivorOutcome])
+    }
+  },
+)
+
+test.each(['caller', 'deadline'])(
+  'Twitch identity resolution aborts a Helix read on %s cancellation',
+  async (source) => {
+    const caller = new AbortController()
+    const deadline = new AbortController()
+    const started = Promise.withResolvers<AbortSignal>()
+    const originalTimeout = AbortSignal.timeout.bind(AbortSignal)
+    const timeout = spyOn(AbortSignal, 'timeout')
+      .mockImplementationOnce(originalTimeout)
+      .mockReturnValueOnce(deadline.signal)
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = fetchUrl(input)
+        if (url === twitchTokenUrl)
+          return Response.json({ access_token: 'grant', expires_in: 3600 })
+        expect(url).toBe(`${helixUrl}?login=viewer`)
+        const signal = init?.signal
+        if (!signal) throw new Error('Expected a Helix signal')
+        started.resolve(signal)
+        return new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+      },
+      { preconnect: originalFetch.preconnect },
+    )
+    const outcome = Promise.allSettled([resolveTwitchUserId('viewer', caller.signal)])
+    try {
+      const signal = await Promise.race([started.promise, outcome.then(() => null)])
+      expect(timeout.mock.calls).toEqual([[8000], [8000]])
+      const reason = new DOMException(
+        'Identity lookup stopped',
+        source === 'caller' ? 'AbortError' : 'TimeoutError',
+      )
+      if (source === 'caller') caller.abort(reason)
+      else deadline.abort(reason)
+      expect(signal?.reason).toBe(reason)
+      const [settled] = await outcome
+      expect(settled?.status === 'rejected' ? settled.reason : undefined).toBe(reason)
+    } finally {
+      caller.abort()
+      deadline.abort()
+    }
+  },
+)
 
 test('Kick shares a cold or expiring grant across callers', async () => {
   let grant = Promise.withResolvers<string>()
@@ -250,7 +349,7 @@ test('Helix preserves caller options, owns auth headers, and retries a 401 only 
       }
       if (url !== helixUrl) throw new Error(`Unexpected fetch: ${url}`)
       const sent = new Headers(init?.headers)
-      expect(init?.signal).toBe(signal)
+      expect(init?.signal?.aborted).toBe(false)
       expect(init?.method).toBe('HEAD')
       expect(sent.get('Client-Id')).toBe('test-twitch-client-id')
       expect(sent.get('X-Example')).toBe('kept')

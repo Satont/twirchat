@@ -273,8 +273,13 @@ The [architecture map](architecture.md) describes the current system. This log r
 
 ### Round 52 — Cancel 7TV GraphQL reads for retired desktop joins
 
-- **Decision:** Each client/channel reservation owns the pending lookup and its cancellation signal. Unsubscribe or a newer command cancels only the matching reservation; socket close or replacement cancels the old socket's pending work. Committed channel subscriptions still survive overlapping sockets, and a late close cannot cancel the replacement's lookup. Twitch identity resolution keeps its separate request lifetime; cancellation prevents a subsequent 7TV read.
+- **Decision:** Each client/channel reservation owns the pending lookup and its cancellation signal. Unsubscribe or a newer command cancels only the matching reservation; socket close or replacement cancels the old socket's pending work. Committed channel subscriptions still survive overlapping sockets, and a late close cannot cancel the replacement's lookup. Cancellation prevents a subsequent 7TV read; Round 53 also propagates it into Twitch identity resolution.
 - **Safeguard:** Offline WebSocket tests verify cancellation before the provider responds, preserve unrelated batch entries, and check both abort-aware and late abort-ignoring results.
+
+### Round 53 — Carry 7TV retirement through Twitch identity lookup
+
+- **Decision:** The hosted Twitch resolver forwards the caller's signal through Helix. A retired caller stops waiting for the shared app grant without cancelling it for other callers. The Helix boundary still owns the eight-second timeout per attempt and the single 401 retry; user-profile reads retain their twelve-second section budget.
+- **Safeguard:** Tests cancel a caller during both cold grant acquisition and 401 refresh while another caller succeeds. Identity lookup tests verify that both caller cancellation and the Helix deadline reach the request.
 
 ## Next investigations
 
